@@ -1,7 +1,9 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
 import BookCta from '../../components/BookCta.astro';
 import TrustStrip from '../../components/TrustStrip.astro';
+import Photo from '../../components/Photo.astro';
 import { ROUTES, ROUTE_GROUPS, inr } from '../../data/routes';
 import { VEHICLES } from '../../data/vehicles';
 import { POLICY, SITE } from '../../data/site';
@@ -13,20 +15,30 @@ const itemList = {
   name: 'Taxi routes from Bagdogra, NJP and Siliguri',
   itemListElement: ROUTES.map((r, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE.url}/taxi/${r.slug}/`, name: `${r.fromShort} to ${r.toShort} taxi` })),
 };
+const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', innova: 'car-innova', traveller: 'car-traveller' };
 ---
 
 <BaseLayout title={title} description={description} crumbs={[{ name: 'Taxi fares', path: '/taxi/' }]} schema={[itemList]}>
-  <div class="wrap mt-6">
-    <h1 class="text-3xl font-extrabold sm:text-4xl">Taxi fares from Bagdogra Airport, NJP and Siliguri</h1>
-    <p class="answer mt-5 max-w-3xl">
+  <PageHero image="airport" eyebrow={`${ROUTES.length} routes · updated ${SITE.faresUpdatedLabel}`} title="Taxi fares from Bagdogra Airport, NJP and Siliguri" compact />
+  <div class="wrap section">
+    <p class="answer max-w-3xl">
       Every fare below is a fixed, one-way price per car, including fuel, tolls, parking, driver allowance and GST. The only extra is {inr(POLICY.nightCharge)} for pickups between {POLICY.nightChargeFrom} and {POLICY.nightChargeTo}. Fares were last updated in <time datetime={SITE.faresUpdated}>{SITE.faresUpdatedLabel}</time>.
     </p>
+
+    <div class="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {VEHICLES.map((v) => (
+        <div class="card flex items-center gap-3 overflow-hidden p-2 pr-4">
+          <div class="h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-mist"><Photo name={carPhoto[v.key]} class="h-full w-full object-cover" sizes="80px" /></div>
+          <div class="min-w-0"><strong class="block truncate text-ink">{v.name}</strong><span class="block text-xs text-muted">{v.seats} seats · {v.bags}</span></div>
+        </div>
+      ))}
+    </div>
 
     {ROUTE_GROUPS.map((group) => {
       const rows = ROUTES.filter((r) => r.group === group);
       return rows.length > 0 && (
         <section class="mt-12" aria-label={group}>
-          <h2 class="mb-4 text-2xl font-bold">{group}</h2>
+          <h2 class="mb-4 text-2xl font-extrabold">{group}</h2>
           <div class="table-scroll">
             <table>
               <thead>
@@ -47,8 +59,8 @@ const itemList = {
       );
     })}
 
-    <section class="mt-12"><TrustStrip /></section>
+    <section class="mt-14"><TrustStrip /></section>
     <p class="mt-8 max-w-3xl">Need a route that isn’t listed, a round trip or a car for several days? <a href="/contact/">Ask us for a quote</a>. We reply within 15 minutes, day or night.</p>
-    <BookCta />
+    <BookCta image="teesta" />
   </div>
 </BaseLayout>

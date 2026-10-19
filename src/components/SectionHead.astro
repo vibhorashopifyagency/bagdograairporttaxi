@@ -1,0 +1,28 @@
+---
+/** Eyebrow, heading and optional lead or link, so every section opens the same way. */
+interface Props {
+  eyebrow?: string;
+  title: string;
+  id: string;
+  lead?: string;
+  linkHref?: string;
+  linkLabel?: string;
+  light?: boolean;
+  center?: boolean;
+}
+const { eyebrow, title, id, lead, linkHref, linkLabel, light = false, center = false } = Astro.props;
+---
+
+<div class:list={['flex flex-wrap items-end justify-between gap-x-8 gap-y-4', center && 'justify-center text-center']}>
+  <div class:list={['max-w-2xl', center && 'mx-auto']}>
+    {eyebrow && <p class:list={['eyebrow', light && '!text-lime']}>{eyebrow}</p>}
+    <h2 id={id} class:list={['mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]', light && 'text-white']}>{title}</h2>
+    {lead && <p class:list={['mt-3 text-lg leading-relaxed', light ? 'text-white/70' : 'text-body']}>{lead}</p>}
+  </div>
+  {linkHref && (
+    <a href={linkHref} class:list={['inline-flex items-center gap-1.5 font-semibold no-underline', light ? 'text-white hover:text-lime' : 'text-lime-text hover:text-ink']}>
+      {linkLabel ?? 'See all'}
+      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
+    </a>
+  )}
+</div>

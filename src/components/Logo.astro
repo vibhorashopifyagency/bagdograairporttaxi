@@ -1,12 +1,14 @@
 ---
+interface Props { dark?: boolean }
+const { dark = false } = Astro.props;
 ---
 
-<a href="/" class="flex items-center gap-2 font-bold text-ink no-underline">
-  <svg class="h-9 w-9" viewBox="0 0 40 40" aria-hidden="true">
-    <rect width="40" height="40" rx="10" fill="#0b5d4b" />
-    <path d="M6 28 15 15l5 7 4-5 10 11Z" fill="#d7ebe4" />
-    <path d="m15 15 2.6 3.7-2.6-1.2-2.4 1.6Z" fill="#fff" />
-    <circle cx="29" cy="11" r="3" fill="#f4a62a" />
+<a href="/" class:list={['flex shrink-0 items-center gap-2.5 font-bold no-underline', dark ? 'text-white' : 'text-ink']}>
+  <svg class="h-10 w-10" viewBox="0 0 40 40" aria-hidden="true">
+    <rect width="40" height="40" rx="11" fill={dark ? '#a1e005' : '#111111'} />
+    <path d="M6 28 15 15l5 7 4-5 10 11Z" fill={dark ? '#111111' : '#a1e005'} />
+    <path d="m15 15 2.6 3.7-2.6-1.2-2.4 1.6Z" fill={dark ? '#f4fbe4' : '#ffffff'} />
+    <circle cx="29" cy="11" r="3" fill={dark ? '#111111' : '#ffb300'} />
   </svg>
-  <span class="leading-tight">Bagdogra <span class="block text-xs font-semibold tracking-wide text-pine uppercase">Airport Taxi</span></span>
+  <span class="font-[family-name:var(--font-display)] text-[1.05rem] leading-tight tracking-tight whitespace-nowrap">Bagdogra <span class:list={['block font-sans text-[0.65rem] font-bold tracking-[0.14em] uppercase', dark ? 'text-lime' : 'text-lime-text']}>Airport Taxi</span></span>
 </a>

@@ -1,63 +1,71 @@
 ---
 import Logo from './Logo.astro';
+import Icon from './Icon.astro';
 import GoogleRatingBadge from './GoogleRatingBadge.astro';
-import { BUSINESS, SITE, POLICY } from '../data/site';
+import { BUSINESS, SITE, POLICY, waLink } from '../data/site';
 import { ROUTES } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 const topRoutes = ROUTES.slice(0, 8);
 const year = new Date().getFullYear();
 ---
 
-<footer class="mt-20 border-t border-line bg-mist pb-24 sm:pb-0">
-  <div class="wrap grid gap-10 py-12 md:grid-cols-2 lg:grid-cols-4">
+<footer class="mt-24 bg-ink pb-24 text-white/70 sm:pb-0">
+  <div class="wrap grid gap-10 py-14 md:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
     <div>
-      <Logo />
-      <p class="mt-4 text-sm">Private airport taxis and tour packages from Bagdogra across North Bengal and Sikkim.</p>
-      <address class="mt-4 text-sm not-italic leading-relaxed">
-        <strong class="text-ink">{SITE.name}</strong><br />
+      <Logo dark />
+      <p class="mt-4 max-w-sm text-sm leading-relaxed text-white/55">Private airport taxis and tour packages from Bagdogra across Darjeeling, Sikkim, the Dooars and Bhutan. A local office, one phone number, fixed fares.</p>
+      <address class="mt-5 text-sm not-italic leading-relaxed text-white/55">
+        <strong class="text-white">{SITE.name}</strong><br />
         {BUSINESS.address.street}, {BUSINESS.address.locality}<br />
         {BUSINESS.address.district}, {BUSINESS.address.region} {BUSINESS.address.postalCode}<br />
-        <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a><br />
-        <a href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a><br />
         {BUSINESS.hours}
       </address>
-      {BUSINESS.gstin && <p class="mt-2 text-xs text-muted">GSTIN {BUSINESS.gstin}</p>}
-      {BUSINESS.registrations.map((r) => <p class="mt-1 text-xs text-muted">{r.name}{r.id && ` · ${r.id}`}</p>)}
-      <GoogleRatingBadge variant="inline" class="mt-4" />
+      <div class="mt-5 flex flex-wrap gap-2">
+        <a href={BUSINESS.phoneHref} class="btn-light min-h-10 px-4 py-2 text-sm"><Icon name="phone" class="h-4 w-4" />{BUSINESS.phone}</a>
+        <a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="btn-light min-h-10 px-4 py-2 text-sm"><Icon name="whatsapp" class="h-4 w-4" />WhatsApp</a>
+      </div>
+      {BUSINESS.gstin && <p class="mt-3 text-xs text-white/55">GSTIN {BUSINESS.gstin}</p>}
+      {BUSINESS.registrations.map((r) => <p class="mt-1 text-xs text-white/55">{r.name}{r.id && ` · ${r.id}`}</p>)}
+      <GoogleRatingBadge variant="inline" dark class="mt-5" />
     </div>
     <div>
-      <h2 class="text-sm font-semibold tracking-wide uppercase">Popular taxi routes</h2>
-      <ul class="mt-3 space-y-2 text-sm">
-        {topRoutes.map((r) => <li><a href={`/taxi/${r.slug}/`}>{r.fromShort} to {r.toShort}</a></li>)}
-        <li><a href="/taxi/" class="font-semibold">All fares</a></li>
+      <h2 class="text-xs font-bold tracking-[0.14em] text-lime uppercase">Popular taxi routes</h2>
+      <ul class="mt-4 space-y-2.5 text-sm">
+        {topRoutes.map((r) => <li><a href={`/taxi/${r.slug}/`} class="text-white/70 no-underline hover:text-white">{r.fromShort} to {r.toShort}</a></li>)}
+        <li><a href="/taxi/" class="font-semibold text-white no-underline hover:text-lime">All {ROUTES.length} fares</a></li>
       </ul>
     </div>
     <div>
-      <h2 class="text-sm font-semibold tracking-wide uppercase">Tour packages</h2>
-      <ul class="mt-3 space-y-2 text-sm">
-        {PACKAGES.slice(0, 7).map((p) => <li><a href={`/tour-packages/${p.slug}/`}>{p.name}</a></li>)}
-        <li><a href="/tour-packages/" class="font-semibold">All {PACKAGES.length} packages</a></li>
+      <h2 class="text-xs font-bold tracking-[0.14em] text-lime uppercase">Tour packages</h2>
+      <ul class="mt-4 space-y-2.5 text-sm">
+        {PACKAGES.slice(0, 7).map((p) => <li><a href={`/tour-packages/${p.slug}/`} class="text-white/70 no-underline hover:text-white">{p.name}</a></li>)}
+        <li><a href="/tour-packages/" class="font-semibold text-white no-underline hover:text-lime">All {PACKAGES.length} packages</a></li>
       </ul>
     </div>
     <div>
-      <h2 class="text-sm font-semibold tracking-wide uppercase">Help</h2>
-      <ul class="mt-3 space-y-2 text-sm">
-        <li><a href="/cancellation-refund-policy/">Cancellation and refunds</a></li>
-        <li><a href="/faq/">FAQ</a></li>
-        <li><a href="/guides/sikkim-permit-guide/">Sikkim permit guide</a></li>
-        <li><a href="/guides/bagdogra-airport-transport-guide/">Bagdogra Airport transport guide</a></li>
-        <li><a href="/guides/best-time-to-visit-darjeeling-sikkim/">Best time to visit</a></li>
-        <li><a href="/guides/nathula-pass-guide/">Nathula Pass guide</a></li>
-        <li><a href="/guides/offbeat-places-north-bengal-sikkim/">Offbeat places</a></li>
-        <li><a href="/about/">About us</a></li>
-        <li><a href="/contact/">Contact</a></li>
-        <li><a href="/privacy/">Privacy</a></li>
-        <li><a href="/terms/">Terms</a></li>
+      <h2 class="text-xs font-bold tracking-[0.14em] text-lime uppercase">Help</h2>
+      <ul class="mt-4 space-y-2.5 text-sm">
+        <li><a href="/cancellation-refund-policy/" class="text-white/70 no-underline hover:text-white">Cancellation and refunds</a></li>
+        <li><a href="/faq/" class="text-white/70 no-underline hover:text-white">FAQ</a></li>
+        <li><a href="/guides/sikkim-permit-guide/" class="text-white/70 no-underline hover:text-white">Sikkim permit guide</a></li>
+        <li><a href="/guides/bagdogra-airport-transport-guide/" class="text-white/70 no-underline hover:text-white">Bagdogra Airport transport guide</a></li>
+        <li><a href="/guides/best-time-to-visit-darjeeling-sikkim/" class="text-white/70 no-underline hover:text-white">Best time to visit</a></li>
+        <li><a href="/guides/nathula-pass-guide/" class="text-white/70 no-underline hover:text-white">Nathula Pass guide</a></li>
+        <li><a href="/guides/offbeat-places-north-bengal-sikkim/" class="text-white/70 no-underline hover:text-white">Offbeat places</a></li>
+        <li><a href="/about/" class="text-white/70 no-underline hover:text-white">About us</a></li>
+        <li><a href="/contact/" class="text-white/70 no-underline hover:text-white">Contact</a></li>
       </ul>
-      <p class="mt-4 rounded-lg bg-white p-3 text-xs">Free cancellation up to {POLICY.freeCancelHours} hours before pickup. Refunds in {POLICY.refundDays} working days.</p>
+      <p class="mt-5 rounded-xl border border-white/10 bg-white/5 p-3 text-xs leading-relaxed text-white/55">Free cancellation up to {POLICY.freeCancelHours} hours before pickup. Refunds in {POLICY.refundDays} working days.</p>
     </div>
   </div>
-  <div class="border-t border-line">
-    <p class="wrap py-5 text-xs text-muted">© {year} {SITE.name}. Fares in Indian rupees, updated {SITE.faresUpdatedLabel}.</p>
+  <div class="border-t border-white/10">
+    <div class="wrap flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-5 text-xs text-white/55">
+      <p>© {year} {SITE.name}. Fares in Indian rupees, updated {SITE.faresUpdatedLabel}.</p>
+      <ul class="flex flex-wrap gap-x-5 gap-y-1">
+        <li><a href="/privacy/" class="text-white/55 no-underline hover:text-white">Privacy</a></li>
+        <li><a href="/terms/" class="text-white/55 no-underline hover:text-white">Terms</a></li>
+        <li><a href="/photo-credits/" class="text-white/55 no-underline hover:text-white">Photo credits</a></li>
+      </ul>
+    </div>
   </div>
 </footer>

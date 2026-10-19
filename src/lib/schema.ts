@@ -63,7 +63,7 @@ export function businessGraph() {
       areaServed: AREA_SERVED,
       foundingDate: BUSINESS.foundingYear,
       sameAs: BUSINESS.sameAs,
-      aggregateRating: GOOGLE.hasRating
+      aggregateRating: GOOGLE.hasSchema
         ? {
             '@type': 'AggregateRating',
             ratingValue: GOOGLE.rating,
@@ -208,6 +208,8 @@ export function article(opts: { headline: string; description: string; path: str
 
 /** The Google reviews shown in the slider, attached to the business. */
 export function googleReviews() {
+  // Sample cards are never marked up; only Google's own reviews are.
+  if (!GOOGLE.hasSchema) return [];
   return GOOGLE.reviews.map((r) => ({
     '@type': 'Review',
     itemReviewed: { '@id': ORG_ID },

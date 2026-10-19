@@ -1,9 +1,9 @@
 @import 'tailwindcss';
 
 /*
- * Inter, self-hosted (the same file vibhora.com ships). One variable face
- * covers 400 to 800, it is preloaded from BaseLayout by this exact path, and
- * no third-party font origin sits on the critical path. SIL OFL 1.1.
+ * Inter, self-hosted. One variable face covers 400 to 800, it is preloaded
+ * from BaseLayout by this exact path, and no third-party font origin sits on
+ * the critical path. SIL OFL 1.1.
  */
 @font-face {
   font-family: 'Inter';
@@ -16,8 +16,7 @@
     U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Bricolage Grotesque for display headings: characterful, warm, a travel
- * poster feel without an image. SIL OFL 1.1, self-hosted, preloaded. */
+/* Bricolage Grotesque for display headings. SIL OFL 1.1, self-hosted. */
 @font-face {
   font-family: 'Bricolage';
   font-style: normal;
@@ -30,35 +29,39 @@
 }
 
 /*
- * Design tokens. Deep tea-garden green for trust, a warm saffron for the one
- * action that matters on each screen (book), white surfaces and generous
- * spacing. Every text/background pair below passes WCAG AA.
+ * Design tokens. Deep tea-garden green for trust, saffron for the one action
+ * that matters on each screen (book), warm cream surfaces so sections
+ * alternate instead of running together, and photography doing the talking.
+ * Every text/background pair below passes WCAG AA.
  */
 @theme {
-  --color-ink: #10201c;
-  --color-body: #34443f;
-  --color-muted: #5b6b66;
-  --color-pine: #0b5d4b;
-  --color-pine-dark: #07443a;
-  --color-pine-50: #eef6f3;
-  --color-pine-100: #d7ebe4;
-  --color-saffron: #f4a62a;
-  --color-saffron-dark: #d98a0b;
-  --color-mist: #f6f8f7;
-  --color-line: #dbe4e1;
-  --color-wa: #0d7a40;
+  /* From the live site: --color-dark #111111, --theme-color #a1e005, --color-yellow #FFB300,
+   * --theme-bg-light #F9F9F9, --body-text-color #757F95. Lime is the brand mark and the one
+   * action colour; black carries the premium feel; warm greys keep it approachable. */
+  --color-ink: #111111;
+  --color-ink-soft: #181818;
+  --color-ink-700: #2a2f36;
+  --color-body: #3d4451;
+  --color-muted: #6b7384;
+  --color-lime: #a1e005;
+  --color-lime-hover: #8fcb00;
+  --color-lime-text: #4f7a00;
+  --color-lime-50: #f4fbe4;
+  --color-lime-100: #e4f6b6;
+  --color-amber: #ffb300;
+  --color-cream: #f9f9f9;
+  --color-sand: #f1f1ee;
+  --color-mist: #f4f5f7;
+  --color-line: #e8e8e8;
+  --color-wa: #128c5a;
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', Roboto, 'Noto Sans', sans-serif;
-
   --font-display: 'Bricolage', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-sunrise: #ffb36b;
-  --color-blush: #ffd8b8;
-  --color-sky: #e7f1ff;
-  --color-glacier: #5a8fb0;
-
-  --radius-card: 18px;
+  --radius-card: 20px;
+  --shadow-card: 0 1px 2px rgb(17 17 17 / 4%), 0 10px 30px -14px rgb(17 17 17 / 14%);
+  --shadow-float: 0 2px 6px rgb(17 17 17 / 8%), 0 30px 60px -24px rgb(17 17 17 / 35%);
 }
 
 @layer base {
@@ -69,6 +72,7 @@
   body {
     @apply bg-white font-sans text-body antialiased;
     font-feature-settings: 'cv11', 'ss01';
+    overflow-x: hidden;
   }
   h1, h2, h3, h4 {
     @apply text-ink;
@@ -77,14 +81,17 @@
     text-wrap: balance;
   }
   a {
-    @apply text-pine underline-offset-2;
+    @apply text-lime-text underline-offset-2;
   }
   /* Links inside running text are underlined so they don't rely on colour. */
   p a, li a, dd a, address a, .prose-site a {
     @apply underline decoration-1;
   }
+  img {
+    @apply max-w-full;
+  }
   :focus-visible {
-    outline: 3px solid var(--color-saffron);
+    outline: 3px solid var(--color-lime);
     outline-offset: 2px;
   }
   @media (prefers-reduced-motion: reduce) {
@@ -97,31 +104,45 @@
   .wrap {
     @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
   }
+  .section {
+    @apply py-14 sm:py-20;
+  }
   .btn {
     @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold no-underline transition-colors;
   }
   .btn-book {
-    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold no-underline transition-colors bg-saffron text-ink hover:bg-saffron-dark;
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold no-underline transition-colors bg-lime text-ink shadow-[0_8px_20px_-8px_rgb(161_224_5/60%)] hover:bg-lime-hover;
   }
   .btn-wa {
-    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold no-underline transition-colors bg-wa text-white hover:bg-pine-dark;
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold no-underline transition-colors bg-wa text-white hover:bg-ink-soft;
   }
   .btn-ghost {
-    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold no-underline transition-colors border border-line bg-white text-ink hover:border-pine;
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold no-underline transition-colors border border-line bg-white text-ink hover:border-ink hover:text-ink;
+  }
+  .btn-light {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold no-underline transition-colors border border-white/30 bg-white/10 text-white backdrop-blur hover:bg-white/20;
   }
   .eyebrow {
-    @apply text-sm font-semibold tracking-wide text-pine uppercase;
+    @apply text-xs font-bold tracking-[0.14em] text-lime-text uppercase;
+  }
+  .lead {
+    @apply text-lg leading-relaxed text-body;
   }
   .card {
     @apply rounded-[var(--radius-card)] border border-line bg-white;
-    box-shadow: 0 1px 2px rgb(16 32 28 / 4%), 0 8px 24px -12px rgb(16 32 28 / 12%);
+    box-shadow: var(--shadow-card);
   }
   .lift {
-    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
   }
   .lift:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 2px 4px rgb(16 32 28 / 6%), 0 18px 40px -16px rgb(11 93 75 / 35%);
+    transform: translateY(-4px);
+    box-shadow: 0 2px 4px rgb(17 17 17 / 6%), 0 24px 48px -20px rgb(17 17 17 / 35%);
+  }
+  .lift:hover .zoom { transform: scale(1.05); }
+  .zoom { transition: transform .6s cubic-bezier(.2,.7,.2,1); }
+  .photo-fade {
+    background: linear-gradient(to top, rgb(17 17 17 / 92%) 0%, rgb(17 17 17 / 45%) 45%, rgb(17 17 17 / 0%) 100%);
   }
   .prose-site {
     @apply max-w-3xl text-[1.0625rem] leading-relaxed;
@@ -142,18 +163,21 @@
     @apply mb-4 list-decimal space-y-1.5 pl-5;
   }
   .answer {
-    @apply rounded-xl border-l-4 border-pine bg-pine-50 p-4 text-[1.0625rem] leading-relaxed text-ink sm:p-5;
+    @apply rounded-2xl border border-line bg-lime-50 p-4 text-[1.0625rem] leading-relaxed text-ink sm:p-5;
   }
   .table-scroll {
-    @apply overflow-x-auto rounded-xl border border-line;
+    @apply overflow-x-auto rounded-2xl border border-line bg-white;
   }
   .table-scroll table {
     @apply w-full min-w-[520px] border-collapse text-left text-sm sm:text-base;
   }
   .table-scroll th {
-    @apply bg-mist px-4 py-3 font-semibold text-ink;
+    @apply bg-cream px-4 py-3 font-semibold text-ink;
   }
   .table-scroll td {
     @apply border-t border-line px-4 py-3;
+  }
+  .chip-light {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm font-medium text-white backdrop-blur;
   }
 }

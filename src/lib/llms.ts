@@ -24,7 +24,7 @@ const header = () => [
   '',
   `${SITE.name} is a local taxi and tour operator based at ${BUSINESS.address.locality}, ${BUSINESS.address.region}, India, near Bagdogra Airport (IXB). Phone and WhatsApp: ${BUSINESS.phone}. ${BUSINESS.hours}. Fares are fixed, per car, one way, and include fuel, tolls, parking, driver allowance and GST; last updated ${SITE.faresUpdatedLabel}.`,
   '',
-  ...(GOOGLE.hasRating ? [`Google rating: ${GOOGLE.rating} out of 5 from ${GOOGLE.count} reviews (${GOOGLE.url}).`, ''] : []),
+  ...(GOOGLE.hasSchema ? [`Google rating: ${GOOGLE.rating} out of 5 from ${GOOGLE.count} reviews (${GOOGLE.url}).`, ''] : GOOGLE.hasRating ? [`Google rating: ${GOOGLE.rating} out of 5 (${GOOGLE.url}).`, ''] : []),
   `Key policies: ${POLICY.advancePercent}% advance to confirm; ${POLICY.freeWaitMinutes} minutes free waiting after landing; free cancellation up to ${POLICY.freeCancelHours} hours before pickup; refunds within ${POLICY.refundDays} working days; night charge ${inr(POLICY.nightCharge)} from ${POLICY.nightChargeFrom} to ${POLICY.nightChargeTo}.`,
 ];
 

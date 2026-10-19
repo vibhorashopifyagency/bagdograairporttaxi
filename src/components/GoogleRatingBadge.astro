@@ -1,8 +1,8 @@
 ---
 /**
  * The Google rating, in the look travellers already trust from Maps: the "G",
- * the score, yellow stars and the review count, linking to the listing.
- * Renders nothing until real reviews have been fetched.
+ * the score, yellow stars and (once fetched) the review count, linking to the
+ * listing. Renders nothing while no rating is known.
  */
 import GoogleLogo from './GoogleLogo.astro';
 import Stars from './Stars.astro';
@@ -10,38 +10,41 @@ import { GOOGLE } from '../data/reviews';
 interface Props {
   /** `card` for a section header, `chip` for a hero or price block, `inline` for the footer. */
   variant?: 'card' | 'chip' | 'inline';
+  /** For dark backgrounds. */
+  dark?: boolean;
   class?: string;
 }
-const { variant = 'card', class: cls = '' } = Astro.props;
-const count = GOOGLE.count.toLocaleString('en-IN');
+const { variant = 'card', dark = false, class: cls = '' } = Astro.props;
+const count = GOOGLE.count > 0 ? GOOGLE.count.toLocaleString('en-IN') : '';
+const countLabel = count ? `${count} Google reviews` : 'on Google';
 ---
 
 {GOOGLE.hasRating && (
   variant === 'card' ? (
-    <a href={GOOGLE.url} target="_blank" rel="noopener" class={`card group flex items-center gap-4 p-4 no-underline hover:border-pine ${cls}`}>
+    <a href={GOOGLE.url} target="_blank" rel="noopener" class={`card group flex items-center gap-4 p-4 no-underline hover:border-ink ${cls}`}>
       <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-line"><GoogleLogo class="h-7 w-7" /></span>
       <span>
-        <span class="block text-sm font-semibold text-muted">Google reviews</span>
+        <span class="block text-sm font-semibold text-muted">Google rating</span>
         <span class="flex items-center gap-2">
           <strong class="font-[family-name:var(--font-display)] text-3xl leading-none text-ink">{GOOGLE.rating.toFixed(1)}</strong>
           <Stars rating={GOOGLE.rating} class="h-5 w-5" />
         </span>
-        <span class="mt-1 block text-sm text-muted group-hover:text-pine">Based on {count} reviews</span>
+        <span class="mt-1 block text-sm text-muted group-hover:text-lime-text">{count ? `Based on ${count} reviews` : 'See the listing on Google'}</span>
       </span>
     </a>
   ) : variant === 'chip' ? (
-    <a href={GOOGLE.url} target="_blank" rel="noopener" class={`inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm font-semibold text-ink no-underline shadow-sm ring-1 ring-line backdrop-blur hover:ring-pine ${cls}`}>
+    <a href={GOOGLE.url} target="_blank" rel="noopener" class={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold no-underline shadow-sm ring-1 backdrop-blur ${dark ? 'bg-white/15 text-white ring-white/20 hover:bg-white/25' : 'bg-white/95 text-ink ring-line hover:ring-ink'} ${cls}`}>
       <GoogleLogo class="h-4 w-4" />
       <span>{GOOGLE.rating.toFixed(1)}</span>
       <Stars rating={GOOGLE.rating} class="h-3.5 w-3.5" />
-      <span class="font-normal text-muted">{count} Google reviews</span>
+      <span class={`font-normal ${dark ? 'text-white/85' : 'text-muted'}`}>{countLabel}</span>
     </a>
   ) : (
     <a href={GOOGLE.url} target="_blank" rel="noopener" class={`inline-flex items-center gap-1.5 text-sm no-underline ${cls}`}>
       <GoogleLogo class="h-4 w-4" />
-      <strong class="text-ink">{GOOGLE.rating.toFixed(1)}</strong>
+      <strong class={dark ? 'text-white' : 'text-ink'}>{GOOGLE.rating.toFixed(1)}</strong>
       <Stars rating={GOOGLE.rating} class="h-3.5 w-3.5" />
-      <span class="text-muted">({count} on Google)</span>
+      <span class={dark ? 'text-white/55' : 'text-muted'}>({count ? `${count} reviews on Google` : 'on Google'})</span>
     </a>
   )
 )}

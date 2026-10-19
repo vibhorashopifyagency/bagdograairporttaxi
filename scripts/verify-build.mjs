@@ -48,7 +48,7 @@ for (const f of files) {
   }
   for (const m of html.matchAll(/href="(\/[^"#?]*)/g)) {
     const href = m[1];
-    if (/\.(png|svg|xml|txt|webmanifest|ico|woff2)$/.test(href)) continue;
+    if (/\.(png|svg|xml|txt|webmanifest|ico|woff2|webp|jpg)$/.test(href)) continue;
     if (!pages.has(href)) problems.push(`${url}: broken link ${href}`);
   }
 }
@@ -56,6 +56,7 @@ for (const f of files) {
 if (anyLive) {
   const all = (await Promise.all(files.map((f) => readFile(f, 'utf8')))).join('\n');
   if (/00000 00000|910000000000|TODO\(pre-launch\)/.test(all)) problems.push('PRE_LAUNCH is off but placeholder contact details are still in the build');
+  if (/data-sample-reviews/.test(all)) problems.push('PRE_LAUNCH is off but the reviews slider still shows sample reviews: set GOOGLE_PLACES_API_KEY and run npm run reviews');
 }
 
 for (const w of [...new Set(warnings)]) console.warn('  warn:', w);

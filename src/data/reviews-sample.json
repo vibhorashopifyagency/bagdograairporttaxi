@@ -1,0 +1,13 @@
+{
+  "_note": "SAMPLE REVIEWS. Shown only while src/data/google-reviews.json is empty, labelled as samples on the page, never emitted as Review schema, and the build refuses to go live with them. Replaced automatically once GOOGLE_PLACES_API_KEY is set (see docs/launch-checklist.md).",
+  "rating": 4.9,
+  "ratingSource": "Google Business Profile listing, read on 20 Oct 2026",
+  "reviews": [
+    { "author": "Priya S.", "rating": 5, "relative": "2 weeks ago", "text": "Our flight landed 40 minutes late and the driver was still waiting at arrivals with a name board. Clean Innova, careful driving on the hill road to Darjeeling, and the fare was exactly what the website said." },
+    { "author": "Rohan M.", "rating": 5, "relative": "a month ago", "text": "Booked Bagdogra to Gangtok on WhatsApp the night before. Got the driver's name and car number in the morning. He knew every tea stop on the way and helped us with the Tsomgo permit the next day." },
+    { "author": "Ananya D.", "rating": 5, "relative": "a month ago", "text": "Did the 5-night Darjeeling and Gangtok package with my parents. Same driver for the whole trip, hotels as promised, and the office replied within minutes every time we messaged." },
+    { "author": "Vikram T.", "rating": 5, "relative": "2 months ago", "text": "Pelling is a long drive but the driver took it steady and stopped wherever we wanted photos. Fixed fare, tolls included, no last-minute extras." },
+    { "author": "Meera K.", "rating": 4, "relative": "3 months ago", "text": "Good, reliable service from NJP to Kalimpong. Car was a little older than expected but clean and the driver was polite and on time." },
+    { "author": "Arjun B.", "rating": 5, "relative": "3 months ago", "text": "We had to cancel a day before because of a family emergency and the advance was refunded in three days without any argument. Will book again." }
+  ]
+}

@@ -12,53 +12,57 @@ const fares = Object.fromEntries(ROUTES.map((r) => [r.slug, r.fares]));
 const first = ROUTES[0];
 ---
 
-<form action="/book/" method="get" class="qf rounded-[22px] bg-white/95 p-5 shadow-2xl ring-1 ring-black/5 backdrop-blur sm:p-6">
-  <p class="flex items-center gap-2 text-sm font-semibold text-pine"><Icon name="shield" class="h-4 w-4" /> Instant fixed fare, no surprises</p>
-  <label class="mt-3 block text-sm font-semibold text-ink" for="qf-route">Where are you going?</label>
-  <select id="qf-route" name="route" class="mt-1.5 h-12 w-full rounded-xl border border-line bg-white px-3 text-base text-ink">
+<form action="/book/" method="get" class="qf w-full min-w-0 rounded-[24px] bg-white p-5 shadow-[var(--shadow-float)] sm:p-6">
+  <p class="flex items-center gap-2 text-sm font-semibold text-lime-text"><Icon name="shield" class="h-4 w-4" /> Instant fixed fare, no surprises</p>
+  <label class="mt-4 block text-sm font-semibold text-ink" for="qf-route">Where are you going?</label>
+  <select id="qf-route" name="route" class="mt-1.5 h-12 w-full min-w-0 rounded-xl border border-line bg-white px-3 text-base text-ink">
     {ROUTE_GROUPS.map((g) => (
       <optgroup label={g}>{ROUTES.filter((r) => r.group === g).map((r) => <option value={r.slug}>{r.fromShort} → {r.toShort}</option>)}</optgroup>
     ))}
   </select>
-  <fieldset class="mt-4">
+  <fieldset class="mt-4 min-w-0">
     <legend class="text-sm font-semibold text-ink">Car</legend>
     <div class="mt-1.5 grid grid-cols-2 gap-2">
       {VEHICLES.map((v, i) => (
-        <label class="qf-car">
+        <label class="qf-car min-w-0">
           <input type="radio" name="vehicle" value={v.key} checked={i === 0} class="sr-only" />
-          <span><strong>{v.name}</strong><small>{v.seats} seats</small></span>
+          <span><strong class="truncate">{v.name}</strong><small>{v.seats} seats</small></span>
         </label>
       ))}
     </div>
   </fieldset>
-  <div class="mt-4 flex items-end justify-between rounded-xl bg-pine-50 px-4 py-3">
+  <div class="mt-4 flex items-end justify-between gap-3 rounded-xl bg-cream px-4 py-3">
     <span class="text-sm text-muted">One way, all inclusive<br /><span class="text-xs">Updated {SITE.faresUpdatedLabel}</span></span>
-    <output id="qf-price" class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink" for="qf-route">{inr(first.fares.sedan)}</output>
+    <output id="qf-price" class="font-[family-name:var(--font-display)] text-3xl font-extrabold whitespace-nowrap text-ink" for="qf-route">{inr(first.fares.sedan)}</output>
   </div>
   <button class="btn-book mt-4 w-full" type="submit">Book this taxi <Icon name="arrow" /></button>
-  <p class="mt-3 text-center text-xs text-muted">Pay only {POLICY.advancePercent}% now · Free cancellation up to {POLICY.freeCancelHours} h</p>
+  <p class="mt-3 text-center text-xs text-muted">Pay only <output id="qf-adv" for="qf-route" class="font-semibold text-ink">{inr(Math.round(first.fares.sedan * POLICY.advancePercent / 100))}</output> now · Free cancellation up to {POLICY.freeCancelHours} h · Price locked at booking</p>
 </form>
 
-<script type="application/json" id="qf-data" set:html={JSON.stringify(fares)} />
+<script type="application/json" id="qf-data" set:html={JSON.stringify({ fares, advance: POLICY.advancePercent })} />
 <script>
-  const fares: Record<string, Record<string, number>> = JSON.parse(document.getElementById('qf-data')!.textContent!);
+  const { fares, advance }: { fares: Record<string, Record<string, number>>; advance: number } = JSON.parse(document.getElementById('qf-data')!.textContent!);
   const form = document.querySelector<HTMLFormElement>('.qf')!;
   const out = document.getElementById('qf-price')!;
+  const adv = document.getElementById('qf-adv')!;
   const update = () => {
     const route = (form.elements.namedItem('route') as HTMLSelectElement).value;
     const car = (form.querySelector('input[name=vehicle]:checked') as HTMLInputElement).value;
-    out.textContent = '₹' + fares[route][car].toLocaleString('en-IN');
+    const fare = fares[route][car];
+    out.textContent = '₹' + fare.toLocaleString('en-IN');
+    adv.textContent = '₹' + Math.round((fare * advance) / 100).toLocaleString('en-IN');
   };
   form.addEventListener('change', update);
 </script>
 
 <style>
   .qf-car span {
-    display: flex; flex-direction: column; border: 1px solid var(--color-line); border-radius: 12px;
+    display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--color-line); border-radius: 12px;
     padding: .55rem .75rem; cursor: pointer; color: var(--color-ink); line-height: 1.2;
   }
+  .qf-car strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .qf-car small { color: var(--color-muted); font-size: .75rem; }
-  .qf-car input:checked + span { border-color: var(--color-pine); background: var(--color-pine); color: #fff; }
-  .qf-car input:checked + span small { color: var(--color-pine-100); }
-  .qf-car input:focus-visible + span { outline: 3px solid var(--color-saffron); outline-offset: 2px; }
+  .qf-car input:checked + span { border-color: var(--color-ink); background: var(--color-ink); color: #fff; }
+  .qf-car input:checked + span small { color: var(--color-lime-100); }
+  .qf-car input:focus-visible + span { outline: 3px solid var(--color-lime); outline-offset: 2px; }
 </style>

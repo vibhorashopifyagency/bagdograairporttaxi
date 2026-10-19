@@ -38,12 +38,12 @@ export const SITE = {
 export const BUSINESS = {
   legalName: 'Bagdogra Airport Taxi', // TODO(pre-launch): registered business name
   foundingYear: '2015', // TODO(pre-launch): confirm year started
-  phone: '+91 00000 00000', // TODO(pre-launch): one main number, used everywhere
-  phoneHref: 'tel:+910000000000', // TODO(pre-launch)
-  whatsapp: '910000000000', // TODO(pre-launch): digits only, with country code
-  email: 'book@bagdograairporttaxi.com', // TODO(pre-launch): confirm mailbox exists
+  phone: '+91 82930 14308', // From the Google Business Profile (20 Oct 2026). TODO(pre-launch): confirm this is the one number to publish
+  phoneHref: 'tel:+918293014308',
+  whatsapp: '918293014308', // TODO(pre-launch): confirm WhatsApp runs on the main number
+  email: 'bagdograairporttaxi@gmail.com', // As shown on the current live site
   address: {
-    street: 'Airport More, Bagdogra', // TODO(pre-launch): real office street address
+    street: 'Behind Ashok Nagar Club, Lower Ashok Nagar', // As on the Google Business Profile
     locality: 'Bagdogra',
     district: 'Darjeeling',
     region: 'West Bengal',

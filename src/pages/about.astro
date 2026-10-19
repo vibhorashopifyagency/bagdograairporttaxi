@@ -1,10 +1,16 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
 import TrustStrip from '../components/TrustStrip.astro';
 import BookCta from '../components/BookCta.astro';
 import ReviewsSlider from '../components/ReviewsSlider.astro';
+import Photo from '../components/Photo.astro';
+import Icon from '../components/Icon.astro';
 import { BUSINESS, ORG_ID, SITE } from '../data/site';
+import { ROUTES } from '../data/routes';
+import { PACKAGES } from '../data/packages';
 const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.url}/about/`, about: { '@id': ORG_ID } };
+const since = new Date().getFullYear() - Number(BUSINESS.foundingYear);
 ---
 
 <BaseLayout
@@ -13,10 +19,11 @@ const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.u
   crumbs={[{ name: 'About', path: '/about/' }]}
   schema={[about]}
 >
-  <div class="wrap mt-6">
-    <div class="prose-site">
-      <h1 class="text-3xl font-extrabold sm:text-4xl">A local team at Bagdogra, not a call centre</h1>
-      <p class="answer mt-5">{SITE.name} is a taxi and tour operator based at {BUSINESS.address.locality}, a few minutes from the airport. Since {BUSINESS.foundingYear} we have driven travellers from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling, North Sikkim and the Dooars with our own drivers and cars.</p>
+  <PageHero image="tea-worker" eyebrow={`Bagdogra · since ${BUSINESS.foundingYear}`} title="A local team at Bagdogra, not a call centre" />
+
+  <div class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-14">
+    <div class="prose-site min-w-0">
+      <p class="answer">{SITE.name} is a taxi and tour operator based at {BUSINESS.address.locality}, a few minutes from the airport. Since {BUSINESS.foundingYear} we have driven travellers from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling, North Sikkim and the Dooars with our own drivers and cars.</p>
       <h2>What we promise every traveller</h2>
       <ul>
         <li>One fixed fare, shown before you pay, the same on every page of this site.</li>
@@ -24,6 +31,12 @@ const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.u
         <li>A real office you can visit, and one phone number that is answered 24 hours a day.</li>
         <li>A written cancellation and refund policy, not "flexible" or "contact us".</li>
       </ul>
+      <div class="not-prose my-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="overflow-hidden rounded-2xl"><Photo name="airport" class="aspect-square w-full object-cover" sizes="200px" /></div>
+        <div class="overflow-hidden rounded-2xl"><Photo name="car-innova" class="aspect-square w-full object-cover" sizes="200px" /></div>
+        <div class="overflow-hidden rounded-2xl"><Photo name="hero" class="aspect-square w-full object-cover" sizes="200px" /></div>
+        <div class="overflow-hidden rounded-2xl"><Photo name="toy-train" class="aspect-square w-full object-cover" sizes="200px" /></div>
+      </div>
       <h2>Business details</h2>
       <ul>
         <li>Name: {BUSINESS.legalName}</li>
@@ -34,10 +47,25 @@ const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.u
         <li>Hours: {BUSINESS.hours}</li>
       </ul>
     </div>
-    <section class="mt-12"><TrustStrip /></section>
+    <aside class="space-y-4 lg:sticky lg:top-24 lg:self-start">
+      <dl class="card grid grid-cols-3 gap-2 p-5 text-center">
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{since}+</dd><dt class="text-xs text-muted">years</dt></div>
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{ROUTES.length}</dd><dt class="text-xs text-muted">fixed routes</dt></div>
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{PACKAGES.length}</dd><dt class="text-xs text-muted">packages</dt></div>
+      </dl>
+      <div class="card p-5">
+        <h2 class="text-lg font-bold">Talk to us</h2>
+        <div class="mt-4 space-y-3">
+          <a class="btn-wa w-full" href={`https://wa.me/${BUSINESS.whatsapp}`} rel="noopener"><Icon name="whatsapp" /> WhatsApp</a>
+          <a class="btn-ghost w-full" href={BUSINESS.phoneHref}><Icon name="phone" class="h-4 w-4 text-lime-text" /> {BUSINESS.phone}</a>
+          <a class="btn-ghost w-full" href={BUSINESS.mapsUrl} rel="noopener"><Icon name="map" class="h-4 w-4 text-lime-text" /> Find us on Google Maps</a>
+        </div>
+      </div>
+    </aside>
   </div>
-  <ReviewsSlider heading="Reviews from our travellers" />
+  <div class="wrap mt-16"><TrustStrip /></div>
+  <div class="mt-16"><ReviewsSlider heading="Reviews from our travellers" /></div>
   <div class="wrap">
-    <BookCta />
+    <BookCta image="hero" />
   </div>
 </BaseLayout>

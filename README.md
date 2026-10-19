@@ -11,6 +11,7 @@ npm install
 npm run dev       # http://localhost:4321
 npm run build     # builds to dist/, then runs scripts/verify-build.mjs
 npm run preview
+npm run photos    # re-fetch and resize the photographs (only after editing scripts/fetch-photos.mjs)
 ```
 
 Node 22.12 or newer.
@@ -25,6 +26,9 @@ Node 22.12 or newer.
 | Tour packages | `src/data/packages.ts` |
 | Destination guides | `src/data/destinations.ts` |
 | Site-wide FAQs | `src/data/faqs.ts` |
+| Which photo goes with which place, package, route or guide | `src/lib/photos.ts` |
+| Photo list, licences and alt text (generated) | `scripts/fetch-photos.mjs`, `src/data/photos.json` |
+| Sample reviews shown until the Google feed is connected | `src/data/reviews-sample.json` |
 | JSON-LD builders | `src/lib/schema.ts` |
 | llms.txt / llms-full.txt content | `src/lib/llms.ts` |
 

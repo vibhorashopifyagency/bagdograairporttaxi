@@ -1,5 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import { guidePhoto } from '../../lib/photos';
 import FaqList from '../../components/FaqList.astro';
 import BookCta from '../../components/BookCta.astro';
 import { guideBySlug } from '../../data/guides';
@@ -24,11 +26,10 @@ const faqs = [
   schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
   ogType="article"
 >
-  <article class="wrap mt-6">
+  <PageHero image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
+  <article class="wrap mt-10">
     <header class="max-w-3xl">
-      <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">{g.title}</h1>
-      <p class="mt-2 text-sm text-muted">Updated <time datetime={g.updated}>{g.updatedLabel}</time> by the Bagdogra Airport Taxi team</p>
-      <p class="answer mt-5">The fastest door-to-door way from Bagdogra Airport to the hills is a private taxi: {inr(darj.fares.sedan)} to Darjeeling in about 3 hours and {inr(gtk.fares.sedan)} to Gangtok in about 5. Shared jeeps from Siliguri cost far less a seat but are slower and stop at town stands. App cabs serve the plains only.</p>
+      <p class="answer">The fastest door-to-door way from Bagdogra Airport to the hills is a private taxi: {inr(darj.fares.sedan)} to Darjeeling in about 3 hours and {inr(gtk.fares.sedan)} to Gangtok in about 5. Shared jeeps from Siliguri cost far less a seat but are slower and stop at town stands. App cabs serve the plains only.</p>
     </header>
     <div class="prose-site mt-8">
       <h2>Every option compared</h2>

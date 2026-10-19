@@ -43,12 +43,28 @@ The site shows these numbers next to every Book button. Confirm or change:
       hidden and the booking page says the link is sent on WhatsApp.
 
 ## 6. Photos
-- [ ] Real photos of the fleet, drivers and office (About page and car cards)
-- [ ] Destination photos to replace the illustrated tiles (WebP, ~1200 px)
+The site ships with licensed Wikimedia Commons photographs of every
+destination and car type, fetched and resized by `scripts/fetch-photos.mjs`
+and credited on `/photo-credits/` (CC BY and CC BY-SA require that page to
+stay linked from the footer).
+- [ ] Replace the stock car photos with photos of the actual fleet: drop the
+      files into `public/img/` as `car-sedan-{400,800,1600}.webp` (same for
+      `car-suv`, `car-innova`, `car-traveller`) and update the entries in
+      `src/data/photos.json` (set `artist` to the business name and `license`
+      to `All rights reserved`)
+- [ ] Add photos of the office and drivers on the About page the same way
+- [ ] Run `npm run og` after changing the hero photo so the share card matches
 
 ## 7. Google reviews (built, needs an API key)
-The rating badge, the reviews slider and the `AggregateRating` / `Review`
-schema are built. They stay hidden until reviews are fetched from Google.
+The rating badge and the reviews slider are live on the page. Until the API
+key is set they show the listing's real 4.9 rating with **sample review
+cards**, labelled as samples (`src/data/reviews-sample.json`). No rating or
+review schema is emitted from samples, and the build refuses to go live
+while they are still showing. The phone number and address in `site.ts` were
+taken from the Google listing on 20 Oct 2026; confirm them. The email is the one
+on the current live site. Note the live site shows hours as Mon–Sat 08:00–22:00
+while `BUSINESS.hours` says open 24 hours: pick one and keep it the same on
+the site and the Google listing.
 - [ ] In Google Cloud, create a Maps Platform API key with **Places API (New)**
       enabled (restrict it to that API)
 - [ ] Set `GOOGLE_PLACES_API_KEY` in the host's build environment

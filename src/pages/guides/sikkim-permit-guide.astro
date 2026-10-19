@@ -1,5 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import { guidePhoto } from '../../lib/photos';
 import FaqList from '../../components/FaqList.astro';
 import BookCta from '../../components/BookCta.astro';
 import { guideBySlug } from '../../data/guides';
@@ -22,11 +24,10 @@ const faqs = [
   schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
   ogType="article"
 >
-  <article class="wrap mt-6">
+  <PageHero image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
+  <article class="wrap mt-10">
     <header class="max-w-3xl">
-      <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">{g.title}</h1>
-      <p class="mt-2 text-sm text-muted">Updated <time datetime={g.updated}>{g.updatedLabel}</time> by the Bagdogra Airport Taxi team</p>
-      <p class="answer mt-5">Indian citizens need no permit for Gangtok, Pelling or Namchi. A protected-area permit is needed for Tsomgo Lake, Nathula, Zuluk and North Sikkim, and it is arranged by a registered tour operator with a photo ID and two photos per person. Foreign nationals need a free Restricted Area Permit for all of Sikkim.</p>
+      <p class="answer">Indian citizens need no permit for Gangtok, Pelling or Namchi. A protected-area permit is needed for Tsomgo Lake, Nathula, Zuluk and North Sikkim, and it is arranged by a registered tour operator with a photo ID and two photos per person. Foreign nationals need a free Restricted Area Permit for all of Sikkim.</p>
     </header>
     <div class="prose-site mt-8">
       <h2>Permit needed or not, place by place (Indian citizens)</h2>

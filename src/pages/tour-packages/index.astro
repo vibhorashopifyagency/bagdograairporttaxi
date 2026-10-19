@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
 import PackageCard from '../../components/PackageCard.astro';
 import BookCta from '../../components/BookCta.astro';
 import TrustStrip from '../../components/TrustStrip.astro';
@@ -20,14 +21,14 @@ const itemList = {
   crumbs={[{ name: 'Tour packages', path: '/tour-packages/' }]}
   schema={[itemList]}
 >
-  <div class="wrap mt-6">
-    <h1 class="text-3xl font-extrabold sm:text-4xl">Darjeeling, Sikkim, Dooars and Bhutan tour packages from Bagdogra</h1>
-    <p class="answer mt-5 max-w-3xl">
+  <PageHero image="tsomgo" eyebrow={`${PACKAGES.length} packages · from ${inr(min)} per person`} title="Darjeeling, Sikkim, Dooars and Bhutan tour packages from Bagdogra" compact />
+  <div class="wrap section">
+    <p class="answer max-w-3xl">
       All {PACKAGES.length} packages start and end at Bagdogra Airport or NJP station, with one private car and driver for the whole trip, hotels with breakfast and dinner, and permits where needed. Prices start at {inr(min)} per person with two sharing. We are a local Bagdogra operator, so you deal directly with the people who run the trip.
     </p>
-    <div class="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">{PACKAGES.map((p) => <PackageCard pkg={p} />)}</div>
-    <section class="mt-12"><TrustStrip /></section>
+    <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">{PACKAGES.map((p) => <PackageCard pkg={p} />)}</div>
+    <section class="mt-14"><TrustStrip /></section>
     <p class="mt-8 max-w-3xl">Want a different plan? We build custom tours for any number of days, starting from Kolkata, Delhi, Mumbai, Bengaluru or anywhere you fly in from. <a href="/contact/">Tell us your dates</a>.</p>
-    <BookCta waText="Hi, I would like a quote for a tour package." heading="Get a custom tour quote" />
+    <BookCta waText="Hi, I would like a quote for a tour package." heading="Get a custom tour quote" image="north-sikkim" />
   </div>
 </BaseLayout>

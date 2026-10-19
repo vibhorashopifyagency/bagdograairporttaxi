@@ -6,11 +6,12 @@ import PackageCard from '../components/PackageCard.astro';
 import FaqList from '../components/FaqList.astro';
 import BookCta from '../components/BookCta.astro';
 import Icon from '../components/Icon.astro';
-import HeroScene from '../components/HeroScene.astro';
+import Photo from '../components/Photo.astro';
 import QuickFare from '../components/QuickFare.astro';
 import DestinationTile from '../components/DestinationTile.astro';
 import GoogleRatingBadge from '../components/GoogleRatingBadge.astro';
 import ReviewsSlider from '../components/ReviewsSlider.astro';
+import SectionHead from '../components/SectionHead.astro';
 import { ROUTES, inr, lowestFare } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 import { DESTINATIONS } from '../data/destinations';
@@ -22,112 +23,196 @@ import { faqPage, googleReviews } from '../lib/schema';
 const featured = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport').slice(0, 8);
 const darj = ROUTES[0];
 const gtk = ROUTES[1];
+const anchors = featured.slice(0, 3);
 const steps = [
   { title: 'Pick your route and car', text: 'See the full fare before you pay anything.' },
   { title: `Pay ${POLICY.advancePercent}% advance securely`, text: 'UPI, card or net banking. Instant WhatsApp confirmation.' },
   { title: 'Get your driver’s details', text: 'Name, photo and car number the evening before.' },
   { title: 'Meet at arrivals', text: 'Your driver waits with a name board, even if the flight is late.' },
 ];
+const compare = [
+  ['Fare', 'Fixed and shown before you fly, tolls and GST included', 'Fixed, but you only learn it at the counter'],
+  ['Waiting', 'Driver at arrivals with your name board, flight tracked', 'Queue at the counter after every landing'],
+  ['Car and driver', 'You choose the car; driver’s name and number sent the evening before', 'Whatever is next in line'],
+  ['Payment', `${POLICY.advancePercent}% now by UPI or card, the rest after the trip`, 'Full fare up front, usually cash'],
+  ['If plans change', `Free cancellation up to ${POLICY.freeCancelHours} hours before, refund in ${POLICY.refundDays} working days`, 'No booking to cancel, no car held for you'],
+];
+const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', innova: 'car-innova', traveller: 'car-traveller' };
+const since = new Date().getFullYear() - Number(BUSINESS.foundingYear);
 ---
 
 <BaseLayout title={SITE.title} description={SITE.description} schema={[faqPage(GENERAL_FAQS, '/'), ...googleReviews()]}>
-  <section class="relative isolate overflow-hidden">
-    <HeroScene />
-    <div class="wrap relative grid gap-10 pt-10 pb-40 sm:pt-16 sm:pb-64 lg:grid-cols-[1.1fr_420px] lg:items-start lg:pb-72">
-      <div>
-        <p class="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-sm font-semibold text-pine-dark backdrop-blur">
-          <span class="h-2 w-2 rounded-full bg-wa"></span> Drivers at Bagdogra Airport 24 hours a day
+  <!-- Hero: one photograph, one promise, one form. -->
+  <section class="relative isolate overflow-hidden bg-ink text-white">
+    <Photo name="hero" class="absolute inset-0 h-full w-full object-cover object-[center_40%]" sizes="100vw" loading="eager" fetchpriority="high" alt="" />
+    <div class="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-ink/25" aria-hidden="true"></div>
+    <div class="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-ink/90 to-transparent" aria-hidden="true"></div>
+    <div class="wrap relative grid min-w-0 grid-cols-1 gap-10 pt-12 pb-28 sm:pt-16 sm:pb-36 lg:grid-cols-[1.1fr_400px] lg:items-center lg:pt-20 lg:pb-40">
+      <div class="min-w-0">
+        <p class="inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur">
+          <span class="inline-flex items-center gap-2"><span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-lime opacity-75"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-lime"></span></span>Drivers at Bagdogra Airport 24 hours a day</span>
         </p>
-        <h1 class="mt-4 text-[2.6rem] leading-[1.02] font-extrabold text-ink sm:text-6xl">
-          Your ride into the <span class="text-pine">Himalayas</span> starts at arrivals.
+        <h1 class="mt-5 text-[2.75rem] leading-[1.02] font-extrabold text-white sm:text-6xl lg:text-[4.25rem]">
+          Your ride into the <span class="text-lime">Himalayas</span> starts at arrivals.
         </h1>
-        <p class="mt-5 max-w-xl text-lg text-ink/80">
+        <p class="mt-6 max-w-xl text-lg leading-relaxed text-white/85">
           Fixed-fare taxis from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling and the Dooars. A verified local driver meets you with a name board, waits free for {POLICY.freeWaitMinutes} minutes if you land late, and you can cancel free up to {POLICY.freeCancelHours} hours before.
         </p>
-        <div class="mt-7 flex flex-wrap gap-3">
-          <a href="/taxi/" class="btn-ghost">See all {ROUTES.length} fares</a>
-          <a href={waLink('Hi, I would like to book a taxi from Bagdogra Airport.')} rel="noopener" class="btn-wa"><Icon name="whatsapp" /> WhatsApp</a>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="/book/" class="btn-book">Book a taxi <Icon name="arrow" /></a>
+          <a href={waLink('Hi, I would like to book a taxi from Bagdogra Airport.')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> WhatsApp us</a>
         </div>
-        <ul class="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-ink/80">
-          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-pine" /> Tolls, parking and GST included</li>
-          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-pine" /> UPI and card</li>
-          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-pine" /> Same car into Gangtok</li>
+        <ul class="mt-7 flex flex-wrap gap-2" aria-label="Popular fares">
+          {anchors.map((r) => <li><a href={`/taxi/${r.slug}/`} class="chip-light no-underline hover:bg-white/25">{r.toShort} <strong class="text-lime">{inr(lowestFare(r))}</strong></a></li>)}
+          <li><a href="/taxi/" class="chip-light no-underline hover:bg-white/25">All {ROUTES.length} fares →</a></li>
         </ul>
-        <GoogleRatingBadge variant="chip" class="mt-6" />
+        <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-medium text-white/85">
+          <GoogleRatingBadge variant="chip" dark />
+          <span class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Tolls, parking and GST included</span>
+          <span class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Same car into Gangtok</span>
+        </div>
       </div>
       <QuickFare />
     </div>
   </section>
 
-  <section class="wrap relative -mt-20 sm:-mt-28">
+  <section class="wrap relative -mt-16 sm:-mt-20">
     <TrustStrip />
   </section>
 
-  <section class="wrap mt-16" aria-labelledby="quick-answer">
-    <p class="eyebrow">Fares at a glance</p>
-    <h2 id="quick-answer" class="mt-2 text-3xl font-bold sm:text-4xl">How much is a taxi from Bagdogra Airport?</h2>
-    <p class="answer mt-4 max-w-3xl">
+  <!-- Fares at a glance -->
+  <section class="wrap section" aria-labelledby="quick-answer">
+    <SectionHead eyebrow="Fares at a glance" id="quick-answer" title="How much is a taxi from Bagdogra Airport?" linkHref="/taxi/" linkLabel={`All ${ROUTES.length} fares`} />
+    <p class="answer mt-6 max-w-3xl">
       A private taxi from Bagdogra Airport costs {inr(darj.fares.sedan)} to Darjeeling ({darj.km} km, {darj.duration}) and {inr(gtk.fares.sedan)} to Gangtok ({gtk.km} km, {gtk.duration}) in a sedan, one way. An Innova Crysta costs {inr(darj.fares.innova)} and {inr(gtk.fares.innova)}. Every fare includes tolls, parking, driver allowance and GST.
     </p>
-    <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {featured.map((r) => <RouteCard route={r} />)}
+    </div>
+    <p class="mt-5 text-sm text-muted">Night pickups ({POLICY.nightChargeFrom} to {POLICY.nightChargeTo}) add {inr(POLICY.nightCharge)}. That is the only extra, ever.</p>
+  </section>
+
+  <!-- Book ahead vs the airport counter -->
+  <section class="bg-cream section" aria-labelledby="cmp">
+    <div class="wrap">
+      <SectionHead eyebrow="Why book before you land" id="cmp" title="Booking ahead versus the airport prepaid counter" lead="The counter is fine if you are flexible. If you want a known fare, a named driver and no queue after a long flight, book ahead." center />
+      <div class="mx-auto mt-10 max-w-4xl overflow-hidden rounded-[var(--radius-card)] border border-line bg-white shadow-[var(--shadow-card)]">
+        <div class="grid grid-cols-[1fr_1.4fr_1.1fr] bg-ink text-white sm:grid-cols-[1fr_1.6fr_1.2fr]">
+          <div class="p-3 text-xs font-semibold tracking-wide uppercase sm:p-4"><span class="sr-only">What</span></div>
+          <div class="p-3 text-sm font-bold sm:p-4 sm:text-base"><span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-lime"></span>Booked with us</span></div>
+          <div class="p-3 text-sm font-bold text-white/70 sm:p-4 sm:text-base">Prepaid counter</div>
+        </div>
+        {compare.map(([k, us, them]) => (
+          <div class="grid grid-cols-[1fr_1.4fr_1.1fr] border-t border-line text-sm sm:grid-cols-[1fr_1.6fr_1.2fr]">
+            <div class="p-3 font-semibold text-ink sm:p-4">{k}</div>
+            <div class="flex gap-2 bg-lime-50/60 p-3 text-ink sm:p-4"><Icon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-lime-text" />{us}</div>
+            <div class="p-3 text-muted sm:p-4">{them}</div>
+          </div>
+        ))}
+      </div>
+      <div class="mt-8 flex flex-wrap justify-center gap-3">
+        <a href="/book/" class="btn-book">Lock in my fare <Icon name="arrow" /></a>
+        <a href="/guides/bagdogra-airport-transport-guide/" class="btn-ghost">Compare every option</a>
+      </div>
     </div>
   </section>
 
-  <section class="relative mt-20 overflow-hidden bg-pine-dark py-16 text-white" aria-labelledby="how">
-    <svg class="absolute inset-x-0 top-0 h-16 w-full text-white" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 0h1440v20l-180 25-200-20-220 30-240-28-200 22-200-24L0 30Z" /></svg>
-    <div class="wrap relative pt-6">
-      <p class="eyebrow !text-saffron">Secure booking in four steps</p>
-      <h2 id="how" class="mt-2 text-3xl font-bold text-white sm:text-4xl">Booked in a minute. Confirmed on WhatsApp.</h2>
-      <ol class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+  <!-- Why us: photo and the plain facts -->
+  <section class="wrap section" aria-labelledby="why">
+    <div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
+      <div class="relative">
+        <div class="overflow-hidden rounded-[28px] shadow-[var(--shadow-float)]">
+          <Photo name="airport" class="aspect-[4/3] w-full object-cover" sizes="(min-width: 1024px) 560px, 100vw" />
+        </div>
+        <div class="absolute -right-3 -bottom-5 w-44 overflow-hidden rounded-2xl border-4 border-white shadow-[var(--shadow-float)] sm:-right-6 sm:w-56">
+          <Photo name="car-innova" class="aspect-[4/3] w-full object-cover" sizes="224px" />
+        </div>
+      </div>
+      <div>
+        <p class="eyebrow">A local office, not a call centre</p>
+        <h2 id="why" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Drivers who know every bend between the airport and the hills</h2>
+        <p class="mt-4 text-lg leading-relaxed">
+          We are based at {BUSINESS.address.locality}, minutes from the terminal, and have been driving travellers up to Darjeeling, Gangtok and beyond since {BUSINESS.foundingYear}. One phone number, answered around the clock, and a fare that is the same on every page of this site.
+        </p>
+        <dl class="mt-8 grid grid-cols-3 gap-4">
+          <div><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Years on the road</dt><dd class="mt-1 font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{since}+</dd></div>
+          <div><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Fixed routes</dt><dd class="mt-1 font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{ROUTES.length}</dd></div>
+          <div><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Tour packages</dt><dd class="mt-1 font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{PACKAGES.length}</dd></div>
+        </dl>
+        <ul class="mt-8 space-y-3">
+          {[
+            'Police-verified drivers trained for mountain roads',
+            'Flight tracking: your driver adjusts to delays without being asked',
+            'Written cancellation and refund policy, no small print',
+            'Permits for Tsomgo, Nathula and North Sikkim arranged for you',
+          ].map((t) => <li class="flex gap-3"><span class="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-lime text-ink"><Icon name="check" class="h-3 w-3" /></span><span>{t}</span></li>)}
+        </ul>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="/about/" class="btn-ghost">About us</a>
+          <a href={BUSINESS.phoneHref} class="btn-ghost"><Icon name="phone" class="h-4 w-4 text-lime-text" /> {BUSINESS.phone}</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How booking works -->
+  <section class="relative isolate overflow-hidden bg-ink section text-white" aria-labelledby="how">
+    <Photo name="pelling" class="absolute inset-0 h-full w-full object-cover opacity-35" sizes="100vw" alt="" />
+    <div class="absolute inset-0 bg-gradient-to-b from-ink via-ink/70 to-ink" aria-hidden="true"></div>
+    <div class="wrap relative">
+      <SectionHead eyebrow="Secure booking in four steps" id="how" title="Booked in a minute. Confirmed on WhatsApp." light center />
+      <ol class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map((s, i) => (
-          <li class="relative rounded-2xl border border-white/15 bg-white/5 p-5">
-            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-saffron font-[family-name:var(--font-display)] text-lg font-extrabold text-ink">{i + 1}</span>
-            <h3 class="mt-4 text-lg font-semibold text-white">{s.title}</h3>
-            <p class="mt-1 text-sm text-pine-100">{s.text}</p>
+          <li class="relative rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-lg font-extrabold text-ink">{i + 1}</span>
+            <h3 class="mt-5 text-lg font-semibold text-white">{s.title}</h3>
+            <p class="mt-1.5 text-sm leading-relaxed text-white/70">{s.text}</p>
           </li>
         ))}
       </ol>
-      <a href="/book/" class="btn-book mt-10">Start booking <Icon name="arrow" /></a>
+      <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
+        <a href="/book/" class="btn-book">Start booking <Icon name="arrow" /></a>
+        <span class="text-sm text-white/70">Only {POLICY.advancePercent}% now. Free cancellation up to {POLICY.freeCancelHours} hours before.</span>
+      </div>
     </div>
   </section>
 
-  <section class="wrap mt-16" aria-labelledby="pk">
-    <div class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p class="eyebrow">Tour packages from Bagdogra</p>
-        <h2 id="pk" class="mt-2 text-3xl font-bold sm:text-4xl">Darjeeling, Sikkim and Dooars tours</h2>
-      </div>
-      <a href="/tour-packages/" class="font-semibold">All packages</a>
-    </div>
-    <div class="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {PACKAGES.slice(0, 6).map((p) => <PackageCard pkg={p} />)}
+  <!-- Packages -->
+  <section class="wrap section" aria-labelledby="pk">
+    <SectionHead eyebrow="Tour packages from Bagdogra" id="pk" title="Darjeeling, Sikkim and Dooars tours" lead="One private car and driver for the whole trip, hotels with breakfast and dinner, permits arranged. Day-wise plans you can read before you pay." linkHref="/tour-packages/" linkLabel={`All ${PACKAGES.length} packages`} />
+    <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+      {PACKAGES.slice(0, 6).map((p, i) => <PackageCard pkg={p} badge={i === 0 ? 'Our pick for a first visit' : undefined} />)}
     </div>
   </section>
 
   <ReviewsSlider />
 
-  <section class="wrap mt-16" aria-labelledby="fleet">
-    <p class="eyebrow">Our cars</p>
-    <h2 id="fleet" class="mt-2 text-3xl font-bold sm:text-4xl">Choose the right car for the hills</h2>
-    <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  <!-- Cars -->
+  <section class="wrap section" aria-labelledby="fleet">
+    <SectionHead eyebrow="Our cars" id="fleet" title="Choose the right car for the hills" lead="Every car is commercially registered, insured and cleaned before each pickup. Child seats on request." />
+    <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
       {VEHICLES.map((v) => (
-        <div class="card p-5">
-          <Icon name="car" class="h-7 w-7 text-pine" />
-          <h3 class="mt-2 text-lg font-semibold">{v.name}</h3>
-          <p class="text-sm text-muted">{v.models}</p>
-          <p class="mt-3 text-sm"><strong class="text-ink">{v.seats} seats</strong> · {v.bags}</p>
-          <p class="mt-2 text-sm">{v.bestFor}</p>
+        <div class="card overflow-hidden">
+          <div class="aspect-[16/10] overflow-hidden bg-mist"><Photo name={carPhoto[v.key]} class="h-full w-full object-cover" /></div>
+          <div class="p-5">
+            <h3 class="text-lg font-bold">{v.name}</h3>
+            <p class="text-sm text-muted">{v.models}</p>
+            <p class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm"><strong class="text-ink">{v.seats} seats</strong><span class="text-muted">{v.bags}</span></p>
+            <p class="mt-2 text-sm leading-snug">{v.bestFor}</p>
+            <p class="mt-3 text-sm">Darjeeling from <strong class="text-ink">{inr(darj.fares[v.key])}</strong></p>
+          </div>
         </div>
       ))}
     </div>
   </section>
 
-  <section class="wrap mt-16" aria-labelledby="dest">
-    <p class="eyebrow">Where we drive</p>
-    <h2 id="dest" class="mt-2 text-3xl font-bold sm:text-4xl">Destinations across North Bengal and Sikkim</h2>
-    <div class="mt-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
-      {DESTINATIONS.map((d) => <DestinationTile d={d} />)}
+  <!-- Destinations -->
+  <section class="bg-cream section" aria-labelledby="dest">
+    <div class="wrap">
+      <SectionHead eyebrow="Where we drive" id="dest" title="Destinations across North Bengal, Sikkim and Bhutan" linkHref="/destinations/" linkLabel="All guides" />
+      <div class="mt-10 grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-4">
+        {DESTINATIONS.map((d) => <DestinationTile d={d} />)}
+      </div>
     </div>
   </section>
 
