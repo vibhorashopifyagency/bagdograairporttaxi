@@ -1,0 +1,36 @@
+---
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import { BUSINESS, NAV } from '../data/site';
+const path = Astro.url.pathname;
+const isActive = (href: string) => path === href || path.startsWith(href);
+---
+
+<a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-white focus:p-3">Skip to content</a>
+<header class="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
+  <div class="wrap flex h-16 items-center justify-between gap-4">
+    <Logo />
+    <nav aria-label="Main" class="hidden lg:block">
+      <ul class="flex items-center gap-6 text-[0.95rem]">
+        {NAV.map((n) => (
+          <li><a href={n.href} class:list={['font-medium no-underline hover:text-pine', isActive(n.href) ? 'text-pine' : 'text-ink']} aria-current={isActive(n.href) ? 'page' : undefined}>{n.label}</a></li>
+        ))}
+      </ul>
+    </nav>
+    <div class="flex items-center gap-2">
+      <a href={BUSINESS.phoneHref} class="hidden items-center gap-1.5 font-semibold text-ink no-underline md:flex"><Icon name="phone" class="h-4 w-4 text-pine" />{BUSINESS.phone}</a>
+      <a href="/book/" class="btn-book hidden min-h-10 px-5 py-2 sm:inline-flex">Book a taxi</a>
+      <details class="relative lg:hidden">
+        <summary class="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-line" aria-label="Menu">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+        </summary>
+        <nav aria-label="Mobile" class="absolute right-0 mt-2 w-64 rounded-xl border border-line bg-white p-2 shadow-lg">
+          <ul>
+            {NAV.map((n) => <li><a href={n.href} class="block rounded-lg px-3 py-3 font-medium text-ink no-underline hover:bg-mist">{n.label}</a></li>)}
+            <li><a href="/book/" class="mt-1 block rounded-lg bg-saffron px-3 py-3 text-center font-semibold text-ink no-underline">Book a taxi</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </div>
+</header>

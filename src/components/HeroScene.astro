@@ -1,0 +1,112 @@
+---
+/**
+ * The homepage hero, drawn in SVG instead of a photo: dawn over the
+ * Kanchenjunga range, tea-garden hills, prayer flags and a car winding up
+ * the hill road. About 3 kB inline, no image request, so it paints with the
+ * HTML and keeps LCP on the headline. The car's motion is CSS and stops for
+ * anyone who prefers reduced motion.
+ */
+---
+
+<svg class="hero-scene" viewBox="0 0 1440 720" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="hs-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfe3f5" />
+      <stop offset=".45" stop-color="#fde4cc" />
+      <stop offset=".75" stop-color="#ffc993" />
+    </linearGradient>
+    <radialGradient id="hs-sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff6e0" />
+      <stop offset=".35" stop-color="#ffe2b0" stop-opacity=".9" />
+      <stop offset="1" stop-color="#ffc993" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="hs-far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9fb8d3" />
+      <stop offset="1" stop-color="#c9d7e6" />
+    </linearGradient>
+  </defs>
+  <rect width="1440" height="720" fill="url(#hs-sky)" />
+  <circle cx="1120" cy="360" r="210" fill="url(#hs-sun)" />
+  <circle cx="1120" cy="360" r="52" fill="#fff3d6" />
+
+  <!-- Kanchenjunga range with snow -->
+  <path fill="url(#hs-far)" d="M0 470 120 420l90 22 120-92 70 40 110-120 60 52 80-38 120-140 70 66 60-30 110 112 90-46 130 104 80-30 130 90 0 160H0Z" />
+  <path fill="#fff" opacity=".92" d="m510 180 120-140 70 66 60-30 34 34-40-6-34 22-38-28-46 30-30-24-48 40Zm-270 172 120-120 60 52-30-6-30 16-40-24-34 30-22-10Zm660 4 90-46 40 30-28 4-28-10-30 22Z" />
+
+  <!-- Mid hills -->
+  <path fill="#86ab9f" d="M0 520 150 470l130 30 160-80 150 60 120-50 170 70 140-40 160 60 120-40 140 40v200H0Z" />
+
+  <!-- Prayer flags strung across the top -->
+  <g class="flags">
+    <path d="M-20 4 Q350.0 48 720 4" fill="none" stroke="#6b5a4a" stroke-width="1.2" />
+    <path fill="#2f7fd1" d="M14 9h14l-7 18Z" />
+    <path fill="#ffffff" d="M55 13h14l-7 18Z" />
+    <path fill="#e04f3f" d="M96 16h14l-7 18Z" />
+    <path fill="#2f9e62" d="M137 19h14l-7 18Z" />
+    <path fill="#f2c230" d="M179 22h14l-7 18Z" />
+    <path fill="#2f7fd1" d="M220 24h14l-7 18Z" />
+    <path fill="#ffffff" d="M261 25h14l-7 18Z" />
+    <path fill="#e04f3f" d="M302 26h14l-7 18Z" />
+    <path fill="#2f9e62" d="M343 26h14l-7 18Z" />
+    <path fill="#f2c230" d="M384 26h14l-7 18Z" />
+    <path fill="#2f7fd1" d="M425 25h14l-7 18Z" />
+    <path fill="#ffffff" d="M466 24h14l-7 18Z" />
+    <path fill="#e04f3f" d="M507 22h14l-7 18Z" />
+    <path fill="#2f9e62" d="M549 19h14l-7 18Z" />
+    <path fill="#f2c230" d="M590 16h14l-7 18Z" />
+    <path fill="#2f7fd1" d="M631 13h14l-7 18Z" />
+    <path fill="#ffffff" d="M672 9h14l-7 18Z" />
+    <path d="M720 4 Q1090.0 48 1460 4" fill="none" stroke="#6b5a4a" stroke-width="1.2" />
+    <path fill="#2f7fd1" d="M754 9h14l-7 18Z" />
+    <path fill="#ffffff" d="M795 13h14l-7 18Z" />
+    <path fill="#e04f3f" d="M836 16h14l-7 18Z" />
+    <path fill="#2f9e62" d="M877 19h14l-7 18Z" />
+    <path fill="#f2c230" d="M919 22h14l-7 18Z" />
+    <path fill="#2f7fd1" d="M960 24h14l-7 18Z" />
+    <path fill="#ffffff" d="M1001 25h14l-7 18Z" />
+    <path fill="#e04f3f" d="M1042 26h14l-7 18Z" />
+    <path fill="#2f9e62" d="M1083 26h14l-7 18Z" />
+    <path fill="#f2c230" d="M1124 26h14l-7 18Z" />
+    <path fill="#2f7fd1" d="M1165 25h14l-7 18Z" />
+    <path fill="#ffffff" d="M1206 24h14l-7 18Z" />
+    <path fill="#e04f3f" d="M1247 22h14l-7 18Z" />
+    <path fill="#2f9e62" d="M1289 19h14l-7 18Z" />
+    <path fill="#f2c230" d="M1330 16h14l-7 18Z" />
+    <path fill="#2f7fd1" d="M1371 13h14l-7 18Z" />
+    <path fill="#ffffff" d="M1412 9h14l-7 18Z" />
+  </g>
+
+  <!-- Tea-garden hills -->
+  <path fill="#3e7f6c" d="M0 580 200 520l180 40 200-70 220 80 200-50 220 60 220-40v280H0Z" />
+  <g fill="none" stroke="#5f9a86" stroke-width="5" stroke-linecap="round" opacity=".7">
+    <path d="M30 600q90-30 180-26" /><path d="M20 630q120-36 240-30" /><path d="M420 590q110-40 220-30" /><path d="M400 625q140-44 280-34" />
+    <path d="M900 600q120-30 240-18" /><path d="M880 640q150-36 300-22" />
+  </g>
+
+  <!-- Foreground and the hill road -->
+  <path fill="#0b5d4b" d="M0 650 260 610l240 30 240-50 260 50 220-30 220 40v120H0Z" />
+  <path id="hs-road" fill="none" stroke="#f1e2c4" stroke-width="14" stroke-linecap="round" d="M1440 700C1240 690 1150 640 980 650S720 700 560 660 360 600 250 560 120 520 40 470" />
+  <path fill="none" stroke="#c9a96e" stroke-width="2" stroke-dasharray="10 12" d="M1440 700C1240 690 1150 640 980 650S720 700 560 660 360 600 250 560 120 520 40 470" />
+  <g class="hs-car">
+    <rect x="-16" y="-9" width="32" height="14" rx="4" fill="#f4a62a" />
+    <rect x="-9" y="-16" width="18" height="9" rx="3" fill="#f4a62a" />
+    <rect x="-6" y="-14" width="12" height="5" rx="1.5" fill="#cfe3f5" />
+    <circle cx="-9" cy="6" r="4" fill="#10201c" /><circle cx="9" cy="6" r="4" fill="#10201c" />
+  </g>
+</svg>
+
+<style>
+  .hero-scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .hs-car {
+    offset-path: path('M1440 700C1240 690 1150 640 980 650S720 700 560 660 360 600 250 560 120 520 40 470');
+    offset-rotate: auto 180deg;
+    animation: hs-drive 18s linear infinite;
+  }
+  @keyframes hs-drive { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+  .flags { transform-origin: 720px 0; animation: hs-sway 6s ease-in-out infinite alternate; }
+  @keyframes hs-sway { to { transform: rotate(.8deg) translateY(2px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .hs-car { animation: none; offset-distance: 38%; }
+    .flags { animation: none; }
+  }
+</style>

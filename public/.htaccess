@@ -1,0 +1,21 @@
+# Apache / cPanel hosting
+ErrorDocument 404 /404.html
+Options -Indexes
+RewriteEngine On
+# Force https and the bare domain
+RewriteCond %{HTTPS} off [OR]
+RewriteCond %{HTTP_HOST} ^www\. [NC]
+RewriteRule ^ https://bagdograairporttaxi.com%{REQUEST_URI} [L,R=301]
+# Old .php URLs (301)
+RewriteRule ^index\.php$ / [L,R=301]
+RewriteRule ^about\.php$ /about/ [L,R=301]
+RewriteRule ^contact\.php$ /contact/ [L,R=301]
+RewriteRule ^404\.php$ / [L,R=301]
+RewriteRule ^(.+)\.php$ / [L,R=301]
+<IfModule mod_headers.c>
+  <FilesMatch "\.(woff2|png|svg|webp|js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

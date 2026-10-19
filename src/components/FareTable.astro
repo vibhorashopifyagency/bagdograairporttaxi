@@ -1,0 +1,33 @@
+---
+import type { Route } from '../data/routes';
+import { inr } from '../data/routes';
+import { VEHICLES } from '../data/vehicles';
+import { POLICY, SITE } from '../data/site';
+interface Props {
+  route: Route;
+}
+const { route } = Astro.props;
+---
+
+<div class="table-scroll">
+  <table>
+    <caption class="sr-only">{route.fromShort} to {route.toShort} taxi fare by vehicle, one way</caption>
+    <thead>
+      <tr><th scope="col">Vehicle</th><th scope="col">Seats</th><th scope="col">Fare (one way)</th><th scope="col"><span class="sr-only">Book</span></th></tr>
+    </thead>
+    <tbody>
+      {VEHICLES.map((v) => (
+        <tr>
+          <th scope="row" class="!bg-white font-semibold">{v.name}<span class="block text-xs font-normal text-muted">{v.models}</span></th>
+          <td>{v.seats}</td>
+          <td class="text-lg font-bold text-ink">{inr(route.fares[v.key])}</td>
+          <td><a class="font-semibold" href={`/book/?route=${route.slug}&vehicle=${v.key}`}>Book<span class="sr-only"> {v.name}</span></a></td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+<p class="mt-2 text-sm text-muted">
+  Fares updated <time datetime={SITE.faresUpdated}>{SITE.faresUpdatedLabel}</time>. Includes fuel, tolls, parking, driver allowance and GST.
+  Night pickup ({POLICY.nightChargeFrom}–{POLICY.nightChargeTo}) adds {inr(POLICY.nightCharge)}.
+</p>

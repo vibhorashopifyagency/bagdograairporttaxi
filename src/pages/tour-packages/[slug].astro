@@ -1,0 +1,93 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import TrustStrip from '../../components/TrustStrip.astro';
+import PackageCard from '../../components/PackageCard.astro';
+import Icon from '../../components/Icon.astro';
+import { PACKAGES, type TourPackage } from '../../data/packages';
+import { destinationBySlug } from '../../data/destinations';
+import { inr } from '../../data/routes';
+import { POLICY } from '../../data/site';
+import { faqPage, tourTrip } from '../../lib/schema';
+
+export function getStaticPaths() {
+  return PACKAGES.map((pkg) => ({ params: { slug: pkg.slug }, props: { pkg } }));
+}
+const { pkg } = Astro.props as { pkg: TourPackage };
+const path = `/tour-packages/${pkg.slug}/`;
+const faqs = [
+  {
+    q: `How much does the ${pkg.name} tour cost?`,
+    a: `From ${inr(pkg.fromPrice)} ${pkg.priceNote}, for ${pkg.nights} nights and ${pkg.days} days starting and ending at Bagdogra Airport or NJP. The price depends on season, hotel category and group size.`,
+  },
+  ...pkg.faqs,
+  {
+    q: 'How do I confirm the package?',
+    a: `Pay ${POLICY.advancePercent}% of the package price as an advance to hold hotels and the car. You get a written itinerary and invoice on WhatsApp and email. The balance is due before the trip starts.`,
+  },
+];
+const others = PACKAGES.filter((p) => p.slug !== pkg.slug).slice(0, 3);
+const dests = pkg.destinations.map(destinationBySlug).filter(Boolean);
+---
+
+<BaseLayout
+  title={`${pkg.short} Tour Package ${pkg.nights}N/${pkg.days}D from ${inr(pkg.fromPrice)}`}
+  description={`${pkg.nights}N/${pkg.days}D ${pkg.short} tour from Bagdogra, from ${inr(pkg.fromPrice)} per person. Private car, hotels, day-wise itinerary and clear inclusions.`}
+  crumbs={[{ name: 'Tour packages', path: '/tour-packages/' }, { name: pkg.name, path }]}
+  schema={[tourTrip(pkg, path), faqPage(faqs, path)]}
+>
+  <article class="wrap mt-6">
+    <header class="max-w-3xl">
+      <p class="eyebrow">{pkg.nights} nights / {pkg.days} days · from Bagdogra or NJP</p>
+      <h1 class="mt-2 text-3xl leading-tight font-extrabold sm:text-4xl">{pkg.name} tour package</h1>
+      <p class="answer mt-5">{pkg.summary}</p>
+      <div class="mt-5 flex flex-wrap items-center gap-4">
+        <p class="text-muted">from <strong class="text-3xl text-ink">{inr(pkg.fromPrice)}</strong> {pkg.priceNote}</p>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-1.5">{pkg.bestFor.map((b) => <span class="rounded-full bg-pine-50 px-3 py-1 text-sm text-pine-dark">Best for: {b}</span>)}</div>
+      <div class="mt-6 flex flex-wrap gap-3">
+        <a class="btn-book" href={`/book/?package=${pkg.slug}`}>Get this package</a>
+        <a class="btn-ghost" href="#itinerary">See day-wise plan</a>
+      </div>
+    </header>
+
+    <section id="itinerary" class="mt-12 max-w-3xl" aria-labelledby="it-h">
+      <h2 id="it-h" class="text-2xl font-bold">Day-wise itinerary</h2>
+      <ol class="mt-5 space-y-4 border-l-2 border-pine-100 pl-6">
+        {pkg.itinerary.map((d, i) => (
+          <li class="relative">
+            <span class="absolute -left-[2.15rem] flex h-7 w-7 items-center justify-center rounded-full bg-pine text-xs font-bold text-white">{i + 1}</span>
+            <h3 class="font-semibold">Day {i + 1}: {d.title}</h3>
+            <p class="mt-1">{d.detail}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="mt-12 grid max-w-4xl gap-6 md:grid-cols-2" aria-label="Inclusions and exclusions">
+      <div class="card p-5">
+        <h2 class="text-xl font-bold">Included</h2>
+        <ul class="mt-3 space-y-2">{pkg.includes.map((x) => <li class="flex gap-2"><Icon name="check" class="mt-0.5 h-5 w-5 shrink-0 text-pine" />{x}</li>)}</ul>
+      </div>
+      <div class="card p-5">
+        <h2 class="text-xl font-bold">Not included</h2>
+        <ul class="mt-3 space-y-2">{pkg.excludes.map((x) => <li class="flex gap-2"><span class="w-5 shrink-0 text-center text-muted" aria-hidden="true">–</span>{x}</li>)}</ul>
+      </div>
+    </section>
+
+    {dests.length > 0 && (
+      <p class="mt-8 max-w-3xl">Read more about the places on this trip: {dests.map((d, i) => <>{i > 0 && ', '}<a href={`/destinations/${d!.slug}/`}>{d!.name}</a></>)}.</p>
+    )}
+
+    <section class="mt-12"><TrustStrip /></section>
+    <div class="max-w-3xl"><FaqList faqs={faqs} /></div>
+
+    <section class="mt-12" aria-labelledby="more-h">
+      <h2 id="more-h" class="mb-4 text-2xl font-bold">Other tour packages</h2>
+      <div class="grid gap-4 md:grid-cols-3">{others.map((p) => <PackageCard pkg={p} />)}</div>
+    </section>
+
+    <BookCta bookHref={`/book/?package=${pkg.slug}`} waText={`Hi, I am interested in the ${pkg.name} tour package (${pkg.nights}N/${pkg.days}D).`} heading="Plan this trip with us" />
+  </article>
+</BaseLayout>

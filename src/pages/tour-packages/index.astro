@@ -1,0 +1,33 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PackageCard from '../../components/PackageCard.astro';
+import BookCta from '../../components/BookCta.astro';
+import TrustStrip from '../../components/TrustStrip.astro';
+import { PACKAGES } from '../../data/packages';
+import { inr } from '../../data/routes';
+import { SITE } from '../../data/site';
+const min = Math.min(...PACKAGES.map((p) => p.fromPrice));
+const itemList = {
+  '@type': 'ItemList',
+  name: 'Tour packages from Bagdogra',
+  itemListElement: PACKAGES.map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE.url}/tour-packages/${p.slug}/`, name: p.name })),
+};
+---
+
+<BaseLayout
+  title={`Sikkim and North Bengal Tour Packages from ${inr(min)}`}
+  description={`Darjeeling, Gangtok, North Sikkim and Dooars tour packages from Bagdogra or NJP. From ${inr(min)} per person with private car, hotels and day-wise plans.`}
+  crumbs={[{ name: 'Tour packages', path: '/tour-packages/' }]}
+  schema={[itemList]}
+>
+  <div class="wrap mt-6">
+    <h1 class="text-3xl font-extrabold sm:text-4xl">Darjeeling, Sikkim and Dooars tour packages from Bagdogra</h1>
+    <p class="answer mt-5 max-w-3xl">
+      Every package starts and ends at Bagdogra Airport or NJP station, with one private car and driver for the whole trip, hotels with breakfast and dinner, and permits where needed. Prices start at {inr(min)} per person with two sharing. We are a local Bagdogra operator, so you deal directly with the people who run the trip.
+    </p>
+    <div class="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">{PACKAGES.map((p) => <PackageCard pkg={p} />)}</div>
+    <section class="mt-12"><TrustStrip /></section>
+    <p class="mt-8 max-w-3xl">Want a different plan? We build custom tours for any number of days, starting from Kolkata, Delhi, Mumbai, Bengaluru or anywhere you fly in from. <a href="/contact/">Tell us your dates</a>.</p>
+    <BookCta waText="Hi, I would like a quote for a tour package." heading="Get a custom tour quote" />
+  </div>
+</BaseLayout>

@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { GUIDES } from '../../data/guides';
+---
+
+<BaseLayout
+  title="Travel Guides for Bagdogra, Darjeeling and Sikkim"
+  description="Practical, up-to-date guides from a local Bagdogra taxi operator: Sikkim permits, getting from Bagdogra Airport to the hills, and more."
+  crumbs={[{ name: 'Travel guides', path: '/guides/' }]}
+>
+  <div class="wrap mt-6">
+    <h1 class="text-3xl font-extrabold sm:text-4xl">Travel guides</h1>
+    <p class="mt-4 max-w-3xl text-lg">Answers to the questions our drivers hear every day, kept current.</p>
+    <div class="mt-10 grid gap-4 md:grid-cols-2">
+      {GUIDES.map((g) => (
+        <a href={`/guides/${g.slug}/`} class="card group p-6 no-underline hover:border-pine">
+          <span class="block text-xl font-semibold text-ink group-hover:text-pine">{g.title}</span>
+          <span class="mt-2 block">{g.description}</span>
+          <span class="mt-3 block text-sm text-muted">Updated {g.updatedLabel}</span>
+        </a>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

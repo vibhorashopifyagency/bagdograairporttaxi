@@ -1,0 +1,34 @@
+---
+/**
+ * An illustrated tile per destination: a colour pair that suits the place and
+ * a mountain silhouette, so the grid looks like a set of travel posters before
+ * real photographs exist. Swap the SVG for an <Image> once photos arrive.
+ */
+import type { Destination } from '../data/destinations';
+interface Props { d: Destination }
+const { d } = Astro.props;
+const palettes: Record<string, [string, string, string]> = {
+  darjeeling: ['#ffcf9f', '#e98a5b', '#2f6f61'],
+  gangtok: ['#cfe3f5', '#7fa7cf', '#2b4f6e'],
+  kalimpong: ['#ffe2b3', '#f4a62a', '#5c4a2e'],
+  mirik: ['#d9f0e8', '#7ec4ad', '#0b5d4b'],
+  kurseong: ['#f5e6ff', '#b59ad6', '#4b3a6b'],
+  pelling: ['#e7f1ff', '#9fb8d3', '#34506b'],
+  'north-sikkim': ['#eef6ff', '#c3d5ea', '#4c6a8a'],
+  dooars: ['#e4f4d4', '#8cc06b', '#2f5a24'],
+};
+const [sky, mid, ground] = palettes[d.slug] ?? palettes.darjeeling;
+---
+
+<a href={`/destinations/${d.slug}/`} class="lift group relative block aspect-[4/5] overflow-hidden rounded-[var(--radius-card)] no-underline" style={`background:linear-gradient(180deg, ${sky}, ${mid})`}>
+  <svg class="absolute inset-x-0 bottom-0 h-3/5 w-full" viewBox="0 0 400 300" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 160 80 90l50 40 70-90 60 70 50-40 90 90v230H0Z" fill="#fff" opacity=".55" />
+    <path d="M0 200 90 150l80 40 90-60 140 90v80H0Z" fill={ground} opacity=".55" />
+    <path d="M0 240 120 200l100 30 90-30 90 40v60H0Z" fill={ground} />
+  </svg>
+  <span class="absolute inset-x-0 bottom-0 p-4 text-white">
+    <span class="block text-xs font-semibold tracking-wide uppercase opacity-90">{d.altitude}</span>
+    <span class="block font-[family-name:var(--font-display)] text-2xl font-bold">{d.short ?? d.name}</span>
+    <span class="block text-sm opacity-90">{d.daysNeeded}</span>
+  </span>
+</a>

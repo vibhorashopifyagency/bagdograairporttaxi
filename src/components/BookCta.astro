@@ -1,0 +1,26 @@
+---
+import Icon from './Icon.astro';
+import { BUSINESS, POLICY, waLink } from '../data/site';
+interface Props {
+  bookHref?: string;
+  waText?: string;
+  heading?: string;
+}
+const {
+  bookHref = '/book/',
+  waText = 'Hi, I would like to book a taxi.',
+  heading = 'Ready to book?',
+} = Astro.props;
+---
+
+<aside class="mt-12 rounded-2xl bg-pine p-6 text-white sm:p-8">
+  <h2 class="text-2xl font-bold text-white">{heading}</h2>
+  <p class="mt-2 max-w-2xl text-pine-100">
+    Pay a {POLICY.advancePercent}% advance securely and get instant confirmation on WhatsApp. Free cancellation up to {POLICY.freeCancelHours} hours before pickup.
+  </p>
+  <div class="mt-5 flex flex-wrap gap-3">
+    <a class="btn-book" href={bookHref}>Book now <Icon name="arrow" /></a>
+    <a class="btn border border-white/40 text-white hover:bg-white/10" href={waLink(waText)} rel="noopener"><Icon name="whatsapp" /> WhatsApp us</a>
+    <a class="btn border border-white/40 text-white hover:bg-white/10" href={BUSINESS.phoneHref}><Icon name="phone" /> Call {BUSINESS.phone}</a>
+  </div>
+</aside>

@@ -1,0 +1,69 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import RouteCard from '../../components/RouteCard.astro';
+import PackageCard from '../../components/PackageCard.astro';
+import { DESTINATIONS, type Destination } from '../../data/destinations';
+import { ROUTES } from '../../data/routes';
+import { PACKAGES } from '../../data/packages';
+import { SITE } from '../../data/site';
+import { article, faqPage, touristDestination } from '../../lib/schema';
+
+export function getStaticPaths() {
+  return DESTINATIONS.map((d) => ({ params: { slug: d.slug }, props: { d } }));
+}
+const { d } = Astro.props as { d: Destination };
+const path = `/destinations/${d.slug}/`;
+const routes = ROUTES.filter((r) => r.destination === d.slug);
+const packages = PACKAGES.filter((p) => p.destinations.includes(d.slug));
+const faqs = [
+  { q: `What is the best time to visit ${d.name}?`, a: d.bestTime },
+  { q: `How many days do I need in ${d.name}?`, a: `${d.daysNeeded}. ${d.faqs[0]?.q.toLowerCase().includes('days') ? '' : 'Add a day if you want a slower pace.'}`.trim() },
+  { q: `How do I reach ${d.name} from Bagdogra Airport?`, a: d.howToReach },
+  ...d.faqs,
+];
+const desc = `${d.name} travel guide: best time to visit, how many days, top sights and how to reach from Bagdogra Airport or NJP, with taxi fares and tour packages.`;
+---
+
+<BaseLayout
+  title={`${d.short ?? d.name} Travel Guide: Best Time, Sights, Taxi`}
+  description={desc}
+  crumbs={[{ name: 'Destinations', path: '/destinations/' }, { name: d.name, path }]}
+  schema={[touristDestination(d, path), article({ headline: `${d.name} travel guide`, description: desc, path, modified: `${SITE.faresUpdated}-19` }), faqPage(faqs, path)]}
+  ogType="article"
+>
+  <article class="wrap mt-6">
+    <header class="max-w-3xl">
+      <p class="eyebrow">{d.region} · {d.altitude}</p>
+      <h1 class="mt-2 text-3xl leading-tight font-extrabold sm:text-4xl">{d.name} travel guide</h1>
+      <p class="answer mt-5">{d.summary}</p>
+    </header>
+    <dl class="mt-6 grid max-w-3xl gap-3 sm:grid-cols-2">
+      <div class="card p-4"><dt class="text-xs text-muted uppercase">Best time to visit</dt><dd class="mt-1 text-ink">{d.bestTime}</dd></div>
+      <div class="card p-4"><dt class="text-xs text-muted uppercase">Days needed</dt><dd class="mt-1 text-ink">{d.daysNeeded}</dd></div>
+    </dl>
+    <div class="prose-site mt-4">
+      <h2>Top things to see in {d.name}</h2>
+      <ul>{d.highlights.map((h) => <li><strong class="text-ink">{h.name}.</strong> {h.note}</li>)}</ul>
+      <h2>How to reach {d.name}</h2>
+      <p>{d.howToReach}</p>
+      {d.permit && (<><h2>Permits</h2><p>{d.permit} See our <a href="/guides/sikkim-permit-guide/">Sikkim permit guide</a>.</p></>)}
+    </div>
+
+    {routes.length > 0 && (
+      <section class="mt-10" aria-labelledby="tx-h">
+        <h2 id="tx-h" class="mb-4 text-2xl font-bold">Taxi to {d.name}</h2>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{routes.map((r) => <RouteCard route={r} />)}</div>
+      </section>
+    )}
+    {packages.length > 0 && (
+      <section class="mt-10" aria-labelledby="pk-h">
+        <h2 id="pk-h" class="mb-4 text-2xl font-bold">Tour packages with {d.name}</h2>
+        <div class="grid gap-4 md:grid-cols-3">{packages.map((p) => <PackageCard pkg={p} />)}</div>
+      </section>
+    )}
+    <div class="max-w-3xl"><FaqList faqs={faqs} /></div>
+    <BookCta waText={`Hi, I am planning a trip to ${d.name}.`} heading={`Plan your ${d.name} trip`} />
+  </article>
+</BaseLayout>

@@ -1,0 +1,25 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { DESTINATIONS } from '../../data/destinations';
+---
+
+<BaseLayout
+  title="North Bengal and Sikkim Destinations: Travel Guides from Bagdogra"
+  description="Local guides to Darjeeling, Gangtok, Kalimpong, Mirik, Kurseong, Pelling, North Sikkim and the Dooars: best time, days needed and how to reach."
+  crumbs={[{ name: 'Destinations', path: '/destinations/' }]}
+>
+  <div class="wrap mt-6">
+    <h1 class="text-3xl font-extrabold sm:text-4xl">Destinations we drive to</h1>
+    <p class="mt-4 max-w-3xl text-lg">Short, practical guides written by the people who drive these roads every day.</p>
+    <div class="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {DESTINATIONS.map((d) => (
+        <a href={`/destinations/${d.slug}/`} class="card group p-5 no-underline hover:border-pine">
+          <span class="text-xs font-semibold tracking-wide text-pine uppercase">{d.region}</span>
+          <span class="mt-1 block text-xl font-semibold text-ink group-hover:text-pine">{d.name}</span>
+          <span class="mt-2 block text-sm text-body">{d.summary}</span>
+          <span class="mt-3 block text-sm text-muted">{d.daysNeeded} · {d.altitude}</span>
+        </a>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

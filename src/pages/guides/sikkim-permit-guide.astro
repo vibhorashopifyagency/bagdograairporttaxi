@@ -1,0 +1,60 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import { guideBySlug } from '../../data/guides';
+import { article, faqPage } from '../../lib/schema';
+const g = guideBySlug('sikkim-permit-guide');
+const path = `/guides/${g.slug}/`;
+const faqs = [
+  { q: 'Do Indians need a permit for Gangtok?', a: 'No. Indian citizens can visit Gangtok, Pelling, Namchi, Ravangla and most of South and West Sikkim without a permit. Carry a photo ID for the Rangpo check post.' },
+  { q: 'Which places in Sikkim need a permit for Indians?', a: 'Tsomgo Lake, Baba Mandir, Nathula Pass, Zuluk and the Silk Route, and North Sikkim (Lachung, Yumthang, Zero Point, Lachen and Gurudongmar). These are protected areas near the border.' },
+  { q: 'What documents are needed for the permit?', a: 'A photo ID for each traveller (Aadhaar, passport, voter ID or driving licence; children can use a birth certificate or school ID) and two passport-size photos. A PAN card is not accepted.' },
+  { q: 'Can foreigners visit Sikkim?', a: 'Yes, with a Restricted Area Permit (RAP or ILP), issued free at the Rangpo and Melli check posts, at Siliguri’s Sikkim Tourism office, or online. Foreign nationals cannot visit Nathula or Gurudongmar, and North Sikkim needs a group of at least two through a registered operator.' },
+  { q: 'Is Nathula open every day?', a: 'No. Nathula is usually open to Indian citizens from Wednesday to Sunday and closes after heavy snow or on army orders. The permit is applied for a day ahead.' },
+];
+---
+
+<BaseLayout
+  title="Sikkim Permit Guide 2026: Tsomgo, Nathula and North Sikkim"
+  description={g.description}
+  crumbs={[{ name: 'Travel guides', path: '/guides/' }, { name: 'Sikkim permit guide', path }]}
+  schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
+  ogType="article"
+>
+  <article class="wrap mt-6">
+    <header class="max-w-3xl">
+      <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">{g.title}</h1>
+      <p class="mt-2 text-sm text-muted">Updated <time datetime={g.updated}>{g.updatedLabel}</time> by the Bagdogra Airport Taxi team</p>
+      <p class="answer mt-5">Indian citizens need no permit for Gangtok, Pelling or Namchi. A protected-area permit is needed for Tsomgo Lake, Nathula, Zuluk and North Sikkim, and it is arranged by a registered tour operator with a photo ID and two photos per person. Foreign nationals need a free Restricted Area Permit for all of Sikkim.</p>
+    </header>
+    <div class="prose-site mt-8">
+      <h2>Permit needed or not, place by place (Indian citizens)</h2>
+      <div class="table-scroll not-prose">
+        <table>
+          <thead><tr><th>Place</th><th>Permit</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Gangtok, MG Marg, Rumtek</td><td>No</td><td>Photo ID at Rangpo</td></tr>
+            <tr><td>Pelling, Yuksom, Ravangla, Namchi</td><td>No</td><td>West and South Sikkim are open</td></tr>
+            <tr><td>Tsomgo Lake and Baba Mandir</td><td>Yes</td><td>Day permit through an operator</td></tr>
+            <tr><td>Nathula Pass</td><td>Yes</td><td>Wednesday to Sunday, Indians only</td></tr>
+            <tr><td>Zuluk and the Silk Route</td><td>Yes</td><td>Issued at Rongli</td></tr>
+            <tr><td>Lachung, Yumthang, Zero Point</td><td>Yes</td><td>Sikkim-registered vehicle required</td></tr>
+            <tr><td>Lachen and Gurudongmar Lake</td><td>Yes</td><td>Indians only for Gurudongmar</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h2>Documents to carry</h2>
+      <ul>
+        <li>An original photo ID for every adult: Aadhaar, passport, voter ID or driving licence.</li>
+        <li>For children: a birth certificate, school ID or Aadhaar.</li>
+        <li>Two passport-size photos per person, plus soft copies on your phone.</li>
+      </ul>
+      <h2>How we handle it</h2>
+      <p>When you book a Sikkim tour with us, send photos of your IDs on WhatsApp at least two days before. We apply for the permit, arrange the Sikkim-registered car the protected areas require, and hand you the permit before the trip.</p>
+      <p class="text-sm text-muted">Rules change at short notice with weather and army orders. We confirm the current position with every booking. Last checked {g.updatedLabel}.</p>
+    </div>
+    <div class="max-w-3xl"><FaqList faqs={faqs} /></div>
+    <BookCta bookHref="/tour-packages/" waText="Hi, I need help with a Sikkim permit." heading="Let us arrange your Sikkim permit" />
+  </article>
+</BaseLayout>

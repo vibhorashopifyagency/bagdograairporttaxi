@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "trailingSlash": true,
+  "redirects": [
+    { "source": "/index.php", "destination": "/", "permanent": true },
+    { "source": "/about.php", "destination": "/about/", "permanent": true },
+    { "source": "/contact.php", "destination": "/contact/", "permanent": true },
+    { "source": "/404.php", "destination": "/", "permanent": true },
+    { "source": "/:path*.php", "destination": "/", "permanent": true },
+    { "source": "/:path*", "has": [{ "type": "host", "value": "www.bagdograairporttaxi.com" }], "destination": "https://bagdograairporttaxi.com/:path*", "permanent": true }
+  ],
+  "headers": [
+    { "source": "/fonts/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/(.*)", "headers": [
+      { "key": "X-Content-Type-Options", "value": "nosniff" },
+      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+      { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" }
+    ] }
+  ]
+}

@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FaqList from '../components/FaqList.astro';
+import BookCta from '../components/BookCta.astro';
+import { GENERAL_FAQS } from '../data/faqs';
+import { faqPage } from '../lib/schema';
+---
+
+<BaseLayout
+  title="Bagdogra Taxi FAQ: Fares, Delays, Cancellations, Permits"
+  description="Answers on booking a Bagdogra Airport taxi: fares, flight delays, cancellation and refunds, payment, night travel and Sikkim permits."
+  crumbs={[{ name: 'FAQ', path: '/faq/' }]}
+  schema={[faqPage(GENERAL_FAQS, '/faq/')]}
+>
+  <div class="wrap mt-6 max-w-3xl">
+    <h1 class="text-3xl font-extrabold sm:text-4xl">Frequently asked questions</h1>
+    <FaqList faqs={GENERAL_FAQS} heading="Booking, payment and travel" />
+    <BookCta />
+  </div>
+</BaseLayout>

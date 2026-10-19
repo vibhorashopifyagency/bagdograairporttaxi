@@ -1,0 +1,113 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FareTable from '../../components/FareTable.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import TrustStrip from '../../components/TrustStrip.astro';
+import RouteCard from '../../components/RouteCard.astro';
+import { ROUTES, inr, lowestFare, routeBySlug, type Route } from '../../data/routes';
+import { destinationBySlug } from '../../data/destinations';
+import { PACKAGES } from '../../data/packages';
+import { POLICY } from '../../data/site';
+import { faqPage, routeService } from '../../lib/schema';
+import PackageCard from '../../components/PackageCard.astro';
+
+export function getStaticPaths() {
+  return ROUTES.map((route) => ({ params: { slug: route.slug }, props: { route } }));
+}
+
+const { route } = Astro.props as { route: Route };
+const path = `/taxi/${route.slug}/`;
+const from = lowestFare(route);
+const dest = route.destination ? destinationBySlug(route.destination) : undefined;
+const returnRoute = route.returnSlug ? routeBySlug(route.returnSlug) : undefined;
+const related = ROUTES.filter((r) => r.slug !== route.slug && r.group === route.group).slice(0, 4);
+const packages = route.destination ? PACKAGES.filter((p) => p.destinations.includes(route.destination!)).slice(0, 3) : [];
+
+// Every route page answers the same core questions in its own numbers, plus
+// the route-specific ones from the data file.
+const faqs = [
+  {
+    q: `What is the taxi fare from ${route.fromShort} to ${route.toShort}?`,
+    a: `${inr(route.fares.sedan)} in a sedan, ${inr(route.fares.suv)} in an SUV, ${inr(route.fares.innova)} in an Innova Crysta and ${inr(route.fares.traveller)} in a 12-seat Tempo Traveller, one way, including tolls, parking, driver allowance and GST.`,
+  },
+  {
+    q: `How long does ${route.fromShort} to ${route.toShort} take by car?`,
+    a: `The ${route.km} km drive takes ${route.duration} via ${route.via}.`,
+  },
+  ...route.faqs,
+  {
+    q: 'What happens if I cancel?',
+    a: `Cancel up to ${POLICY.freeCancelHours} hours before pickup for a full refund of your advance, or get ${POLICY.lateCancelRefundPercent}% back inside ${POLICY.freeCancelHours} hours. Refunds take up to ${POLICY.refundDays} working days.`,
+  },
+];
+const title = `${route.fromShort} to ${route.toShort} Taxi Fare ${inr(from)} (${route.km} km)`;
+const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(route.fares.sedan)}, Innova ${inr(route.fares.innova)}, ${route.km} km, ${route.duration}. Fixed all-inclusive fare, free cancellation.`;
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  crumbs={[{ name: 'Taxi fares', path: '/taxi/' }, { name: `${route.fromShort} to ${route.toShort}`, path }]}
+  schema={[routeService(route, path), faqPage(faqs, path)]}
+>
+  <article class="wrap mt-6">
+    <header class="max-w-3xl">
+      <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">{route.from} to {route.to} taxi</h1>
+      <p class="answer mt-5">{route.summary}</p>
+      <dl class="mt-5 grid grid-cols-3 gap-3 text-center">
+        <div class="card p-3"><dt class="text-xs text-muted uppercase">Distance</dt><dd class="text-lg font-bold text-ink">{route.km} km</dd></div>
+        <div class="card p-3"><dt class="text-xs text-muted uppercase">Drive time</dt><dd class="text-lg font-bold text-ink">{route.duration}</dd></div>
+        <div class="card p-3"><dt class="text-xs text-muted uppercase">Fare from</dt><dd class="text-lg font-bold text-ink">{inr(from)}</dd></div>
+      </dl>
+      <div class="mt-6 flex flex-wrap gap-3">
+        <a class="btn-book" href={`/book/?route=${route.slug}`}>Book this taxi</a>
+        <a class="btn-ghost" href="#fares">Compare cars</a>
+      </div>
+    </header>
+
+    <section id="fares" class="mt-12 max-w-4xl" aria-labelledby="fares-h">
+      <h2 id="fares-h" class="mb-4 text-2xl font-bold">{route.fromShort} to {route.toShort} fare by car</h2>
+      <FareTable route={route} />
+    </section>
+
+    <div class="prose-site mt-4">
+      <h2>Route and stops</h2>
+      <p>Your driver takes {route.via}. Short stops are included for tea, photos and rest.</p>
+      <ul>{route.stops.map((s) => <li>{s}</li>)}</ul>
+
+      <h2>Local tips for this trip</h2>
+      <ul>{route.tips.map((t) => <li>{t}</li>)}</ul>
+
+      {dest && (
+        <>
+          <h2>About {dest.name}</h2>
+          <p>{dest.summary} <a href={`/destinations/${dest.slug}/`}>Read our {dest.name} travel guide</a>.</p>
+        </>
+      )}
+      {returnRoute && (
+        <p>Going back? See the <a href={`/taxi/${returnRoute.slug}/`}>{returnRoute.fromShort} to {returnRoute.toShort} taxi fare</a>.</p>
+      )}
+    </div>
+
+    <section class="mt-12"><TrustStrip /></section>
+
+    <div class="max-w-3xl"><FaqList faqs={faqs} /></div>
+
+    {packages.length > 0 && (
+      <section class="mt-12" aria-labelledby="pk-h">
+        <h2 id="pk-h" class="mb-4 text-2xl font-bold">Tour packages that include {dest?.name}</h2>
+        <div class="grid gap-4 md:grid-cols-3">{packages.map((p) => <PackageCard pkg={p} />)}</div>
+      </section>
+    )}
+
+    {related.length > 0 && (
+      <section class="mt-12" aria-labelledby="rel-h">
+        <h2 id="rel-h" class="mb-4 text-2xl font-bold">Other {route.group} taxi routes</h2>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{related.map((r) => <RouteCard route={r} />)}</div>
+      </section>
+    )}
+
+    <BookCta bookHref={`/book/?route=${route.slug}`} waText={`Hi, I would like to book a taxi from ${route.from} to ${route.to}.`} heading={`Book your ${route.fromShort} to ${route.toShort} taxi`} />
+  </article>
+</BaseLayout>

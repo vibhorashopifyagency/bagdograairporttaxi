@@ -1,0 +1,56 @@
+---
+import Logo from './Logo.astro';
+import { BUSINESS, SITE, POLICY } from '../data/site';
+import { ROUTES } from '../data/routes';
+import { PACKAGES } from '../data/packages';
+const topRoutes = ROUTES.slice(0, 8);
+const year = new Date().getFullYear();
+---
+
+<footer class="mt-20 border-t border-line bg-mist pb-24 sm:pb-0">
+  <div class="wrap grid gap-10 py-12 md:grid-cols-2 lg:grid-cols-4">
+    <div>
+      <Logo />
+      <p class="mt-4 text-sm">Private airport taxis and tour packages from Bagdogra across North Bengal and Sikkim.</p>
+      <address class="mt-4 text-sm not-italic leading-relaxed">
+        <strong class="text-ink">{SITE.name}</strong><br />
+        {BUSINESS.address.street}, {BUSINESS.address.locality}<br />
+        {BUSINESS.address.district}, {BUSINESS.address.region} {BUSINESS.address.postalCode}<br />
+        <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a><br />
+        <a href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a><br />
+        {BUSINESS.hours}
+      </address>
+      {BUSINESS.gstin && <p class="mt-2 text-xs text-muted">GSTIN {BUSINESS.gstin}</p>}
+    </div>
+    <div>
+      <h2 class="text-sm font-semibold tracking-wide uppercase">Popular taxi routes</h2>
+      <ul class="mt-3 space-y-2 text-sm">
+        {topRoutes.map((r) => <li><a href={`/taxi/${r.slug}/`}>{r.fromShort} to {r.toShort}</a></li>)}
+        <li><a href="/taxi/" class="font-semibold">All fares</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2 class="text-sm font-semibold tracking-wide uppercase">Tour packages</h2>
+      <ul class="mt-3 space-y-2 text-sm">
+        {PACKAGES.map((p) => <li><a href={`/tour-packages/${p.slug}/`}>{p.name}</a></li>)}
+      </ul>
+    </div>
+    <div>
+      <h2 class="text-sm font-semibold tracking-wide uppercase">Help</h2>
+      <ul class="mt-3 space-y-2 text-sm">
+        <li><a href="/cancellation-refund-policy/">Cancellation and refunds</a></li>
+        <li><a href="/faq/">FAQ</a></li>
+        <li><a href="/guides/sikkim-permit-guide/">Sikkim permit guide</a></li>
+        <li><a href="/guides/bagdogra-airport-transport-guide/">Bagdogra Airport transport guide</a></li>
+        <li><a href="/about/">About us</a></li>
+        <li><a href="/contact/">Contact</a></li>
+        <li><a href="/privacy/">Privacy</a></li>
+        <li><a href="/terms/">Terms</a></li>
+      </ul>
+      <p class="mt-4 rounded-lg bg-white p-3 text-xs">Free cancellation up to {POLICY.freeCancelHours} hours before pickup. Refunds in {POLICY.refundDays} working days.</p>
+    </div>
+  </div>
+  <div class="border-t border-line">
+    <p class="wrap py-5 text-xs text-muted">© {year} {SITE.name}. Fares in Indian rupees, updated {SITE.faresUpdatedLabel}.</p>
+  </div>
+</footer>

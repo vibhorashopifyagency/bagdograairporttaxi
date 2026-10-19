@@ -1,0 +1,38 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+import { BUSINESS, ORG_ID, SITE, waLink } from '../data/site';
+const contact = { '@type': 'ContactPage', name: `Contact ${SITE.name}`, url: `${SITE.url}/contact/`, about: { '@id': ORG_ID } };
+---
+
+<BaseLayout
+  title="Contact Bagdogra Airport Taxi: Call or WhatsApp 24 Hours"
+  description={`Call or WhatsApp ${BUSINESS.phone}, 24 hours a day, to book a taxi or tour from Bagdogra Airport, NJP or Siliguri. Office at ${BUSINESS.address.locality}.`}
+  crumbs={[{ name: 'Contact', path: '/contact/' }]}
+  schema={[contact]}
+>
+  <div class="wrap mt-6">
+    <h1 class="text-3xl font-extrabold sm:text-4xl">Contact us, day or night</h1>
+    <p class="answer mt-5 max-w-3xl">The quickest way to reach us is WhatsApp on {BUSINESS.phone}. The same number takes calls 24 hours a day, every day of the year.</p>
+    <div class="mt-10 grid gap-4 md:grid-cols-3">
+      <a href={waLink('Hi, I have a question about a booking.')} rel="noopener" class="card flex flex-col gap-2 p-6 no-underline hover:border-pine">
+        <Icon name="whatsapp" class="h-8 w-8 text-wa" /><strong class="text-lg text-ink">WhatsApp</strong><span>{BUSINESS.phone}</span>
+      </a>
+      <a href={BUSINESS.phoneHref} class="card flex flex-col gap-2 p-6 no-underline hover:border-pine">
+        <Icon name="phone" class="h-8 w-8 text-pine" /><strong class="text-lg text-ink">Call</strong><span>{BUSINESS.phone}</span>
+      </a>
+      <a href={`mailto:${BUSINESS.email}`} class="card flex flex-col gap-2 p-6 no-underline hover:border-pine">
+        <Icon name="card" class="h-8 w-8 text-pine" /><strong class="text-lg text-ink">Email</strong><span>{BUSINESS.email}</span>
+      </a>
+    </div>
+    <section class="card mt-8 p-6" aria-labelledby="office-h">
+      <h2 id="office-h" class="text-xl font-bold">Our office</h2>
+      <address class="mt-3 not-italic leading-relaxed">
+        {SITE.name}<br />{BUSINESS.address.street}, {BUSINESS.address.locality}<br />
+        {BUSINESS.address.district}, {BUSINESS.address.region} {BUSINESS.address.postalCode}, India
+      </address>
+      <p class="mt-2">{BUSINESS.hours}</p>
+      <a href={BUSINESS.mapsUrl} rel="noopener" class="btn-ghost mt-4"><Icon name="map" /> Open in Google Maps</a>
+    </section>
+  </div>
+</BaseLayout>

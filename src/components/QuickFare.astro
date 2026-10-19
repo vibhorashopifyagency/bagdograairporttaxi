@@ -1,0 +1,64 @@
+---
+/**
+ * The fare checker in the homepage hero. A plain GET form to /book/, so it
+ * works with no JavaScript; the script only shows the live price as the
+ * traveller changes route or car.
+ */
+import Icon from './Icon.astro';
+import { ROUTES, ROUTE_GROUPS, inr } from '../data/routes';
+import { VEHICLES } from '../data/vehicles';
+import { POLICY, SITE } from '../data/site';
+const fares = Object.fromEntries(ROUTES.map((r) => [r.slug, r.fares]));
+const first = ROUTES[0];
+---
+
+<form action="/book/" method="get" class="qf rounded-[22px] bg-white/95 p-5 shadow-2xl ring-1 ring-black/5 backdrop-blur sm:p-6">
+  <p class="flex items-center gap-2 text-sm font-semibold text-pine"><Icon name="shield" class="h-4 w-4" /> Instant fixed fare, no surprises</p>
+  <label class="mt-3 block text-sm font-semibold text-ink" for="qf-route">Where are you going?</label>
+  <select id="qf-route" name="route" class="mt-1.5 h-12 w-full rounded-xl border border-line bg-white px-3 text-base text-ink">
+    {ROUTE_GROUPS.map((g) => (
+      <optgroup label={g}>{ROUTES.filter((r) => r.group === g).map((r) => <option value={r.slug}>{r.fromShort} → {r.toShort}</option>)}</optgroup>
+    ))}
+  </select>
+  <fieldset class="mt-4">
+    <legend class="text-sm font-semibold text-ink">Car</legend>
+    <div class="mt-1.5 grid grid-cols-2 gap-2">
+      {VEHICLES.map((v, i) => (
+        <label class="qf-car">
+          <input type="radio" name="vehicle" value={v.key} checked={i === 0} class="sr-only" />
+          <span><strong>{v.name}</strong><small>{v.seats} seats</small></span>
+        </label>
+      ))}
+    </div>
+  </fieldset>
+  <div class="mt-4 flex items-end justify-between rounded-xl bg-pine-50 px-4 py-3">
+    <span class="text-sm text-muted">One way, all inclusive<br /><span class="text-xs">Updated {SITE.faresUpdatedLabel}</span></span>
+    <output id="qf-price" class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink" for="qf-route">{inr(first.fares.sedan)}</output>
+  </div>
+  <button class="btn-book mt-4 w-full" type="submit">Book this taxi <Icon name="arrow" /></button>
+  <p class="mt-3 text-center text-xs text-muted">Pay only {POLICY.advancePercent}% now · Free cancellation up to {POLICY.freeCancelHours} h</p>
+</form>
+
+<script type="application/json" id="qf-data" set:html={JSON.stringify(fares)} />
+<script>
+  const fares: Record<string, Record<string, number>> = JSON.parse(document.getElementById('qf-data')!.textContent!);
+  const form = document.querySelector<HTMLFormElement>('.qf')!;
+  const out = document.getElementById('qf-price')!;
+  const update = () => {
+    const route = (form.elements.namedItem('route') as HTMLSelectElement).value;
+    const car = (form.querySelector('input[name=vehicle]:checked') as HTMLInputElement).value;
+    out.textContent = '₹' + fares[route][car].toLocaleString('en-IN');
+  };
+  form.addEventListener('change', update);
+</script>
+
+<style>
+  .qf-car span {
+    display: flex; flex-direction: column; border: 1px solid var(--color-line); border-radius: 12px;
+    padding: .55rem .75rem; cursor: pointer; color: var(--color-ink); line-height: 1.2;
+  }
+  .qf-car small { color: var(--color-muted); font-size: .75rem; }
+  .qf-car input:checked + span { border-color: var(--color-pine); background: var(--color-pine); color: #fff; }
+  .qf-car input:checked + span small { color: var(--color-pine-100); }
+  .qf-car input:focus-visible + span { outline: 3px solid var(--color-saffron); outline-offset: 2px; }
+</style>

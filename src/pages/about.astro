@@ -1,0 +1,38 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TrustStrip from '../components/TrustStrip.astro';
+import BookCta from '../components/BookCta.astro';
+import { BUSINESS, ORG_ID, SITE } from '../data/site';
+const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.url}/about/`, about: { '@id': ORG_ID } };
+---
+
+<BaseLayout
+  title={`About Us: Local Bagdogra Taxi and Tour Operator since ${BUSINESS.foundingYear}`}
+  description={`${SITE.name} is a local taxi and tour operator based at Bagdogra, running airport transfers and tours across Darjeeling, Sikkim and the Dooars since ${BUSINESS.foundingYear}.`}
+  crumbs={[{ name: 'About', path: '/about/' }]}
+  schema={[about]}
+>
+  <div class="wrap mt-6">
+    <div class="prose-site">
+      <h1 class="text-3xl font-extrabold sm:text-4xl">A local team at Bagdogra, not a call centre</h1>
+      <p class="answer mt-5">{SITE.name} is a taxi and tour operator based at {BUSINESS.address.locality}, a few minutes from the airport. Since {BUSINESS.foundingYear} we have driven travellers from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling, North Sikkim and the Dooars with our own drivers and cars.</p>
+      <h2>What we promise every traveller</h2>
+      <ul>
+        <li>One fixed fare, shown before you pay, the same on every page of this site.</li>
+        <li>Drivers who know the hill roads, verified with police records and trained for mountain driving.</li>
+        <li>A real office you can visit, and one phone number that is answered 24 hours a day.</li>
+        <li>A written cancellation and refund policy, not "flexible" or "contact us".</li>
+      </ul>
+      <h2>Business details</h2>
+      <ul>
+        <li>Name: {BUSINESS.legalName}</li>
+        <li>Address: {BUSINESS.address.street}, {BUSINESS.address.locality}, {BUSINESS.address.district}, {BUSINESS.address.region} {BUSINESS.address.postalCode}</li>
+        <li>Phone and WhatsApp: <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a></li>
+        {BUSINESS.gstin && <li>GSTIN: {BUSINESS.gstin}</li>}
+        <li>Hours: {BUSINESS.hours}</li>
+      </ul>
+    </div>
+    <section class="mt-12"><TrustStrip /></section>
+    <BookCta />
+  </div>
+</BaseLayout>
