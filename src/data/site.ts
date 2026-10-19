@@ -52,12 +52,21 @@ export const BUSINESS = {
   },
   // Bagdogra Airport (IXB) area. Replace with the office's own pin.
   geo: { lat: 26.6812, lng: 88.3286 }, // TODO(pre-launch): office coordinates
-  mapsUrl: 'https://maps.google.com/?q=Bagdogra+Airport+Taxi', // TODO(pre-launch): Google Business Profile link
+  mapsUrl: 'https://maps.app.goo.gl/WTafG6NNSiPbbmVG7', // Google Business Profile (from the owner)
   hours: 'Open 24 hours, every day',
   gstin: '', // TODO(pre-launch): GSTIN, shown on About and in the footer when set
   sameAs: [
-    // TODO(pre-launch): Google Business Profile, TripAdvisor, Facebook, Instagram, Justdial URLs
+    'https://maps.app.goo.gl/WTafG6NNSiPbbmVG7',
+    // TODO(pre-launch): TripAdvisor, Facebook, Instagram, Justdial URLs
   ] as string[],
+  /**
+   * Registrations and approvals shown on About and in the footer, e.g.
+   * { name: 'West Bengal Tourism registered tour operator', id: 'WBT/...' }.
+   * Only list what you can show a certificate for.
+   */
+  registrations: [
+    // TODO(pre-launch): tourism department / IATO / TAAI / Sikkim Tourism registrations
+  ] as { name: string; id?: string }[],
 };
 
 /** The promises shown beside every Book button. Keep them true. */

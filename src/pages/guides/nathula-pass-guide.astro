@@ -1,0 +1,88 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import { guideBySlug } from '../../data/guides';
+import { article, faqPage } from '../../lib/schema';
+const g = guideBySlug('nathula-pass-guide');
+const path = `/guides/${g.slug}/`;
+const faqs = [
+  { q: 'Which days is Nathula Pass open?', a: 'Nathula is usually open to Indian citizens from Wednesday to Sunday. It is closed on Mondays and Tuesdays, and on other days after heavy snow or on army orders.' },
+  { q: 'Can foreigners visit Nathula?', a: 'No. Nathula is open only to Indian citizens. Foreign nationals can usually visit Tsomgo Lake with the right permit, arranged through a registered operator.' },
+  { q: 'How far is Nathula from Gangtok?', a: 'About 56 km, which takes about 2.5 to 3 hours each way on a mountain road with army check posts.' },
+  { q: 'What documents do I need for the Nathula permit?', a: 'An original photo ID for each traveller (Aadhaar, passport, voter ID or driving licence) and two passport-size photos. Send copies to your operator at least a day before.' },
+  { q: 'Is Nathula safe for children and elderly travellers?', a: 'At 4,310 m, the air is thin and cold. Small children, older travellers and anyone with heart, lung or blood pressure problems should ask a doctor first, and may be happier stopping at Tsomgo Lake.' },
+];
+---
+
+<BaseLayout
+  title="Nathula Pass Guide 2026: Permit, Opening Days and Timings"
+  description={g.description}
+  crumbs={[{ name: 'Travel guides', path: '/guides/' }, { name: 'Nathula Pass guide', path }]}
+  schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
+  ogType="article"
+>
+  <article class="wrap mt-6">
+    <header class="max-w-3xl">
+      <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">{g.title}</h1>
+      <p class="mt-2 text-sm text-muted">Updated <time datetime={g.updated}>{g.updatedLabel}</time> by the Bagdogra Airport Taxi team</p>
+      <p class="answer mt-5">Nathula Pass is the India–China border pass at 4,310 m, about 56 km from Gangtok. It is open only to Indian citizens, usually from Wednesday to Sunday, with a permit applied for a day ahead through a registered operator. Most visitors combine it with Tsomgo Lake and Baba Mandir in one day trip from Gangtok.</p>
+    </header>
+    <div class="prose-site mt-8">
+      <h2>Nathula at a glance</h2>
+      <div class="table-scroll not-prose">
+        <table>
+          <tbody>
+            <tr><th>Altitude</th><td>4,310 m</td></tr>
+            <tr><th>Distance from Gangtok</th><td>About 56 km, 2.5 to 3 hours each way</td></tr>
+            <tr><th>Who can visit</th><td>Indian citizens only</td></tr>
+            <tr><th>Open</th><td>Usually Wednesday to Sunday</td></tr>
+            <tr><th>Permit</th><td>Through a registered operator, a day ahead</td></tr>
+            <tr><th>Vehicle</th><td>Sikkim-registered car with a permitted driver</td></tr>
+            <tr><th>Combine with</th><td>Tsomgo Lake (3,753 m) and Baba Mandir</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h2>The permit</h2>
+      <p>You cannot apply for the Nathula permit yourself. A registered tour operator applies for it, usually a day before the trip, so plan to be in Gangtok the day before.</p>
+      <ul>
+        <li>An original photo ID for every traveller: Aadhaar, passport, voter ID or driving licence. A PAN card is not accepted.</li>
+        <li>For children: a birth certificate, school ID or Aadhaar.</li>
+        <li>Two passport-size photos per person.</li>
+      </ul>
+      <p>Carry the originals on the day, as they are checked on the road. For the full rules, see our <a href="/guides/sikkim-permit-guide/">Sikkim permit guide</a>.</p>
+      <h2>Opening days and closures</h2>
+      <p>Nathula is usually open from Wednesday to Sunday. It closes without much notice after heavy snow, on army orders, or for official events. Snow closures are most common from December to March. If Nathula is closed on your day, the Tsomgo Lake and Baba Mandir trip often still runs.</p>
+      <h2>A typical day</h2>
+      <ul>
+        <li><strong>7 to 8 am:</strong> leave Gangtok. Early starts give the best chance of clear skies.</li>
+        <li><strong>Mid-morning:</strong> stop at Tsomgo Lake, then drive on to Nathula.</li>
+        <li><strong>Late morning:</strong> time at the pass. The weather turns quickly, so visits are kept short.</li>
+        <li><strong>Early afternoon:</strong> stop at Baba Mandir on the way back.</li>
+        <li><strong>3 to 4 pm:</strong> back in Gangtok, before the afternoon cloud and early dark.</li>
+      </ul>
+      <h2>Altitude sickness</h2>
+      <p>Nathula is high enough for altitude sickness. Headache, dizziness, nausea and breathlessness are the common signs.</p>
+      <ul>
+        <li>Spend at least one night in Gangtok before going up.</li>
+        <li>Walk slowly at the pass and avoid running or climbing stairs fast.</li>
+        <li>Drink water, eat a light breakfast and avoid alcohol the night before.</li>
+        <li>If you feel unwell, tell the driver. The cure is to go down.</li>
+      </ul>
+      <p>Small children, older travellers, pregnant women and anyone with heart, lung or blood pressure problems should ask a doctor before the trip. Many families let them wait at Tsomgo Lake, which is lower.</p>
+      <h2>What to wear</h2>
+      <ul>
+        <li>A warm jacket, even in summer. It can be near freezing at the pass.</li>
+        <li>Thermal inners, gloves, a woollen cap and warm socks.</li>
+        <li>Shoes with good grip for snow and ice. Snow boots can be hired on the way.</li>
+        <li>Sunglasses and sunscreen, as the sun on snow is strong.</li>
+      </ul>
+      <p>Photography of army posts and soldiers is not allowed. Follow the instructions of the army staff at the pass.</p>
+      <h2>Book it as part of a package</h2>
+      <p>Our <a href="/tour-packages/gangtok-tsomgo-nathula-tour-package/">Gangtok, Tsomgo and Nathula tour package</a> includes the permit, a Sikkim-registered car and the airport transfers. You only send your ID copies and photos.</p>
+      <p class="text-sm text-muted">Opening days and permit rules change with weather and army orders. We confirm the current position with every booking. Last checked {g.updatedLabel}.</p>
+    </div>
+    <div class="max-w-3xl"><FaqList faqs={faqs} /></div>
+    <BookCta bookHref="/tour-packages/gangtok-tsomgo-nathula-tour-package/" waText="Hi, I want to visit Nathula Pass. Please check the permit." heading="Let us arrange your Nathula trip" />
+  </article>
+</BaseLayout>

@@ -9,13 +9,15 @@ import Icon from '../components/Icon.astro';
 import HeroScene from '../components/HeroScene.astro';
 import QuickFare from '../components/QuickFare.astro';
 import DestinationTile from '../components/DestinationTile.astro';
+import GoogleRatingBadge from '../components/GoogleRatingBadge.astro';
+import ReviewsSlider from '../components/ReviewsSlider.astro';
 import { ROUTES, inr, lowestFare } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 import { DESTINATIONS } from '../data/destinations';
 import { GENERAL_FAQS } from '../data/faqs';
 import { BUSINESS, POLICY, SITE, waLink } from '../data/site';
 import { VEHICLES } from '../data/vehicles';
-import { faqPage } from '../lib/schema';
+import { faqPage, googleReviews } from '../lib/schema';
 
 const featured = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport').slice(0, 8);
 const darj = ROUTES[0];
@@ -28,7 +30,7 @@ const steps = [
 ];
 ---
 
-<BaseLayout title={SITE.title} description={SITE.description} schema={[faqPage(GENERAL_FAQS, '/')]}>
+<BaseLayout title={SITE.title} description={SITE.description} schema={[faqPage(GENERAL_FAQS, '/'), ...googleReviews()]}>
   <section class="relative isolate overflow-hidden">
     <HeroScene />
     <div class="wrap relative grid gap-10 pt-10 pb-40 sm:pt-16 sm:pb-64 lg:grid-cols-[1.1fr_420px] lg:items-start lg:pb-72">
@@ -51,6 +53,7 @@ const steps = [
           <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-pine" /> UPI and card</li>
           <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-pine" /> Same car into Gangtok</li>
         </ul>
+        <GoogleRatingBadge variant="chip" class="mt-6" />
       </div>
       <QuickFare />
     </div>
@@ -98,9 +101,11 @@ const steps = [
       <a href="/tour-packages/" class="font-semibold">All packages</a>
     </div>
     <div class="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {PACKAGES.map((p) => <PackageCard pkg={p} />)}
+      {PACKAGES.slice(0, 6).map((p) => <PackageCard pkg={p} />)}
     </div>
   </section>
+
+  <ReviewsSlider />
 
   <section class="wrap mt-16" aria-labelledby="fleet">
     <p class="eyebrow">Our cars</p>

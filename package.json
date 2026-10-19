@@ -9,12 +9,14 @@
   },
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "node scripts/fetch-google-reviews.mjs",
     "build": "astro build",
     "postbuild": "node scripts/verify-build.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "check": "astro check",
-    "og": "node scripts/make-og.mjs"
+    "og": "node scripts/make-og.mjs",
+    "reviews": "node scripts/fetch-google-reviews.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",

@@ -6,12 +6,14 @@
  * One business entity lives under ORG_ID and every other node points at it by
  * `@id`, so search and answer engines resolve a single business, not twenty.
  *
- * Deliberately absent: AggregateRating and Review. They go in only when real
- * reviews are on the page (Google treats self-made ratings as spam).
+ * AggregateRating and Review come only from the fetched Google reviews, and
+ * only when they are on the page: the rating badge is in the footer of every
+ * page, the review cards only where the slider is (`googleReviews`).
  */
 import { BUSINESS, ORG_ID, SITE, WEBSITE_ID } from '../data/site';
 import type { Faq, Route } from '../data/routes';
 import { VEHICLES } from '../data/vehicles';
+import { GOOGLE } from '../data/reviews';
 import type { TourPackage } from '../data/packages';
 import type { Destination } from '../data/destinations';
 
@@ -55,12 +57,21 @@ export function businessGraph() {
         opens: '00:00',
         closes: '23:59',
       },
-      priceRange: '₹600 – ₹25,000',
+      priceRange: '₹600 – ₹30,000',
       currenciesAccepted: 'INR',
       paymentAccepted: 'UPI, Credit Card, Debit Card, Net Banking, Cash',
       areaServed: AREA_SERVED,
       foundingDate: BUSINESS.foundingYear,
       sameAs: BUSINESS.sameAs,
+      aggregateRating: GOOGLE.hasRating
+        ? {
+            '@type': 'AggregateRating',
+            ratingValue: GOOGLE.rating,
+            reviewCount: GOOGLE.count,
+            bestRating: 5,
+            worstRating: 1,
+          }
+        : undefined,
       contactPoint: {
         '@type': 'ContactPoint',
         contactType: 'reservations',
@@ -193,4 +204,18 @@ export function article(opts: { headline: string; description: string; path: str
     publisher: { '@id': ORG_ID },
     image: abs('/og/default.png'),
   };
+}
+
+/** The Google reviews shown in the slider, attached to the business. */
+export function googleReviews() {
+  return GOOGLE.reviews.map((r) => ({
+    '@type': 'Review',
+    itemReviewed: { '@id': ORG_ID },
+    author: { '@type': 'Person', name: r.author, url: r.authorUrl },
+    reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5, worstRating: 1 },
+    reviewBody: r.text,
+    datePublished: r.published ? r.published.slice(0, 10) : undefined,
+    publisher: { '@type': 'Organization', name: 'Google' },
+    url: r.url,
+  }));
 }

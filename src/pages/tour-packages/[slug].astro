@@ -5,6 +5,7 @@ import BookCta from '../../components/BookCta.astro';
 import TrustStrip from '../../components/TrustStrip.astro';
 import PackageCard from '../../components/PackageCard.astro';
 import Icon from '../../components/Icon.astro';
+import GoogleRatingBadge from '../../components/GoogleRatingBadge.astro';
 import { PACKAGES, type TourPackage } from '../../data/packages';
 import { destinationBySlug } from '../../data/destinations';
 import { inr } from '../../data/routes';
@@ -44,6 +45,7 @@ const dests = pkg.destinations.map(destinationBySlug).filter(Boolean);
       <p class="answer mt-5">{pkg.summary}</p>
       <div class="mt-5 flex flex-wrap items-center gap-4">
         <p class="text-muted">from <strong class="text-3xl text-ink">{inr(pkg.fromPrice)}</strong> {pkg.priceNote}</p>
+        <GoogleRatingBadge variant="chip" />
       </div>
       <div class="mt-3 flex flex-wrap gap-1.5">{pkg.bestFor.map((b) => <span class="rounded-full bg-pine-50 px-3 py-1 text-sm text-pine-dark">Best for: {b}</span>)}</div>
       <div class="mt-6 flex flex-wrap gap-3">

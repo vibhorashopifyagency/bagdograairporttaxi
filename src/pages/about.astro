@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import TrustStrip from '../components/TrustStrip.astro';
 import BookCta from '../components/BookCta.astro';
+import ReviewsSlider from '../components/ReviewsSlider.astro';
 import { BUSINESS, ORG_ID, SITE } from '../data/site';
 const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.url}/about/`, about: { '@id': ORG_ID } };
 ---
@@ -29,10 +30,14 @@ const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.u
         <li>Address: {BUSINESS.address.street}, {BUSINESS.address.locality}, {BUSINESS.address.district}, {BUSINESS.address.region} {BUSINESS.address.postalCode}</li>
         <li>Phone and WhatsApp: <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a></li>
         {BUSINESS.gstin && <li>GSTIN: {BUSINESS.gstin}</li>}
+        {BUSINESS.registrations.map((r) => <li>{r.name}{r.id && `: ${r.id}`}</li>)}
         <li>Hours: {BUSINESS.hours}</li>
       </ul>
     </div>
     <section class="mt-12"><TrustStrip /></section>
+  </div>
+  <ReviewsSlider heading="Reviews from our travellers" />
+  <div class="wrap">
     <BookCta />
   </div>
 </BaseLayout>

@@ -4,6 +4,7 @@ import FareTable from '../../components/FareTable.astro';
 import FaqList from '../../components/FaqList.astro';
 import BookCta from '../../components/BookCta.astro';
 import TrustStrip from '../../components/TrustStrip.astro';
+import GoogleRatingBadge from '../../components/GoogleRatingBadge.astro';
 import RouteCard from '../../components/RouteCard.astro';
 import { ROUTES, inr, lowestFare, routeBySlug, type Route } from '../../data/routes';
 import { destinationBySlug } from '../../data/destinations';
@@ -64,6 +65,7 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
         <a class="btn-book" href={`/book/?route=${route.slug}`}>Book this taxi</a>
         <a class="btn-ghost" href="#fares">Compare cars</a>
       </div>
+      <GoogleRatingBadge variant="chip" class="mt-5" />
     </header>
 
     <section id="fares" class="mt-12 max-w-4xl" aria-labelledby="fares-h">

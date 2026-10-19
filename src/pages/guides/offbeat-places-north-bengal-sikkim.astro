@@ -1,0 +1,78 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import { guideBySlug } from '../../data/guides';
+import { article, faqPage } from '../../lib/schema';
+const g = guideBySlug('offbeat-places-north-bengal-sikkim');
+const path = `/guides/${g.slug}/`;
+const faqs = [
+  { q: 'Which offbeat place is closest to Bagdogra Airport?', a: 'Sittong is about 3 hours away, and Chatakpur, Tinchuley and Takdah are about 3.5 hours. All four work for a weekend trip.' },
+  { q: 'Do I need a permit for the Silk Route?', a: 'Yes. Indian citizens need a protected-area permit for Zuluk and the Silk Route beyond Rongli, arranged by a registered operator with a photo ID and photos. Aritar needs no permit.' },
+  { q: 'Are there hotels in these villages?', a: 'Mostly homestays, with simple rooms, home-cooked food and hot water by bucket in some places. A few, such as Lava and Rinchenpong, also have small hotels.' },
+  { q: 'Is mobile network available in offbeat places?', a: 'Coverage is patchy. Expect a weak signal or none in parts of Zuluk, Rishop and Okhrey. Tell family your plan, and carry some cash, as cards and UPI may not work.' },
+  { q: 'What is the best time to visit Sittong for oranges?', a: 'Usually November to January, when the orchards are heavy with fruit. The exact weeks depend on the year.' },
+];
+const places = [
+  { name: 'Lava', time: 'about 4 h', why: 'A forest village at about 2,350 m, the gateway to Neora Valley National Park, with a large monastery.' },
+  { name: 'Lolegaon', time: 'about 4 h', why: 'Pine forest walks and sunrise views of Kanchenjunga, close to Lava.' },
+  { name: 'Rishop', time: 'about 4.5 h', why: 'A small hamlet above Lava with a short walk to the Tiffindara viewpoint.' },
+  { name: 'Kolakham', time: 'about 4.5 h', why: 'Homestays facing Kanchenjunga, near Changey Falls and the edge of Neora Valley.' },
+  { name: 'Sittong', time: 'about 3 h', why: 'Orange orchards in winter, a quiet river valley and a simple village life.' },
+  { name: 'Chatakpur', time: 'about 3.5 h', why: 'An eco village inside Senchal Wildlife Sanctuary, with forest walks and mountain views.' },
+  { name: 'Tinchuley', time: 'about 3.5 h', why: 'Village homestays, orange orchards and a viewpoint over the Teesta and Rangit valleys.' },
+  { name: 'Takdah', time: 'about 3.5 h', why: 'Old British-era bungalows, pine forest and tea gardens, close to Tinchuley.' },
+  { name: 'Zuluk and the Silk Route', time: 'about 6 to 7 h', why: 'The zig-zag road of the old trade route, with Nathang valley and Kupup higher up. Permit needed.' },
+  { name: 'Aritar', time: 'about 5 h', why: 'A lake surrounded by forest on the way to the Silk Route. No permit needed.' },
+  { name: 'Rinchenpong', time: 'about 5 h', why: 'A West Sikkim village with a fine Kanchenjunga view and an old monastery.' },
+  { name: 'Okhrey', time: 'about 6 h', why: 'A base for the Varsey rhododendron sanctuary, best in March and April.' },
+];
+---
+
+<BaseLayout
+  title="Offbeat Places in North Bengal and Sikkim near Bagdogra"
+  description={g.description}
+  crumbs={[{ name: 'Travel guides', path: '/guides/' }, { name: 'Offbeat places', path }]}
+  schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
+  ogType="article"
+>
+  <article class="wrap mt-6">
+    <header class="max-w-3xl">
+      <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">{g.title}</h1>
+      <p class="mt-2 text-sm text-muted">Updated <time datetime={g.updated}>{g.updatedLabel}</time> by the Bagdogra Airport Taxi team</p>
+      <p class="answer mt-5">The best offbeat places near Bagdogra Airport are Sittong, Chatakpur and Tinchuley (about 3 to 3.5 hours away), Lava, Lolegaon, Rishop and Kolakham (about 4 to 4.5 hours), and Zuluk on the Silk Route (about 6 to 7 hours, permit needed). Most have homestays, quiet forest and views of Kanchenjunga without the crowds of Darjeeling and Gangtok.</p>
+    </header>
+    <div class="prose-site mt-8">
+      <h2>Offbeat places and drive times from Bagdogra</h2>
+      <div class="table-scroll not-prose">
+        <table>
+          <thead><tr><th>Place</th><th>Drive from Bagdogra</th><th>Why go</th></tr></thead>
+          <tbody>
+            {places.map((p) => <tr><td><strong>{p.name}</strong></td><td>{p.time}</td><td>{p.why}</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-muted">Drive times are typical in good weather and can be much longer after landslides or in heavy traffic.</p>
+      <h2>Lava, Lolegaon, Rishop and Kolakham</h2>
+      <p>These four villages sit close together in the Kalimpong hills and are easy to combine in two or three nights. Lava is the largest and has the most places to stay. Read more in our <a href="/destinations/lava/">Lava and Kolakham guide</a>.</p>
+      <h2>Sittong, Chatakpur, Tinchuley and Takdah</h2>
+      <p>These are the nearest offbeat stops to the airport, in the hills between Kurseong, Darjeeling and the Teesta. They suit a weekend or a quiet night before or after Darjeeling.</p>
+      <h2>Zuluk and the Silk Route</h2>
+      <p>The Silk Route in East Sikkim follows part of the old trade road to Tibet. The usual circuit runs through Aritar, Zuluk, Nathang valley and Kupup. Indian citizens need a protected-area permit, issued at Rongli through a registered operator, and nights in Nathang are cold all year. Read our <a href="/destinations/silk-route/">Silk Route and Zuluk guide</a>.</p>
+      <h2>Rinchenpong and Okhrey</h2>
+      <p>These West Sikkim villages need no permit for Indian citizens. Rinchenpong has one of the best Kanchenjunga views in Sikkim. Okhrey is the base for the Varsey rhododendron sanctuary in spring.</p>
+      <h2>Tips for offbeat trips</h2>
+      <ul>
+        <li>Book homestays ahead, especially in October, November and the summer holidays.</li>
+        <li>Carry cash. Cards and UPI do not always work.</li>
+        <li>Expect patchy mobile network in the higher villages.</li>
+        <li>Pack warm clothes. Nights are cold from October to March.</li>
+        <li>Avoid the monsoon months if you can, as village roads are the first to be blocked.</li>
+      </ul>
+      <p>See all our <a href="/tour-packages/">tour packages</a>, or ask us to build a custom trip around these villages.</p>
+      <p class="text-sm text-muted">Permit rules and road conditions change. We confirm the current position with every booking. Last checked {g.updatedLabel}.</p>
+    </div>
+    <div class="max-w-3xl"><FaqList faqs={faqs} /></div>
+    <BookCta bookHref="/tour-packages/" waText="Hi, I want to plan an offbeat trip near Bagdogra." heading="Plan an offbeat trip" />
+  </article>
+</BaseLayout>

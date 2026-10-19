@@ -1,4 +1,5 @@
 ---
+import GoogleRatingBadge from '../../components/GoogleRatingBadge.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Icon from '../../components/Icon.astro';
 import { ROUTES, ROUTE_GROUPS } from '../../data/routes';
@@ -26,6 +27,7 @@ const data = {
     <div>
       <h1 class="text-3xl font-extrabold sm:text-4xl">Book your taxi</h1>
       <p class="mt-2 text-muted">Takes under a minute. You see the full fare before you pay anything.</p>
+      <GoogleRatingBadge variant="chip" class="mt-4" />
 
       <form id="book" class="mt-8 space-y-8" novalidate>
         <fieldset>

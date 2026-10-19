@@ -46,9 +46,19 @@ The site shows these numbers next to every Book button. Confirm or change:
 - [ ] Real photos of the fleet, drivers and office (About page and car cards)
 - [ ] Destination photos to replace the illustrated tiles (WebP, ~1200 px)
 
-## 7. Reviews
-- [ ] Once there are real Google reviews, add a reviews section and
-      `AggregateRating` schema. Do not add ratings that are not on the page.
+## 7. Google reviews (built, needs an API key)
+The rating badge, the reviews slider and the `AggregateRating` / `Review`
+schema are built. They stay hidden until reviews are fetched from Google.
+- [ ] In Google Cloud, create a Maps Platform API key with **Places API (New)**
+      enabled (restrict it to that API)
+- [ ] Set `GOOGLE_PLACES_API_KEY` in the host's build environment
+- [ ] Run `GOOGLE_PLACES_API_KEY=... npm run reviews` once; it finds the
+      listing by name and prints its place ID. Set `GOOGLE_PLACE_ID` to that
+      value so it always pulls the right listing
+- [ ] Rebuild daily (a scheduled deploy hook) so the rating and the latest
+      reviews stay current. Google returns the five most relevant reviews.
+- [ ] Add registrations you hold (tourism department, IATO/TAAI) to
+      `BUSINESS.registrations` in `src/data/site.ts`
 
 ## 8. Go live
 - [ ] Set `PRE_LAUNCH = false` in `src/data/site.ts`. The build fails if

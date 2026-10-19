@@ -230,6 +230,103 @@ export const DESTINATIONS: Destination[] = [
     ],
     geo: { lat: 26.7183, lng: 88.7636 },
   },
+  {
+    slug: 'silk-route',
+    name: 'Silk Route and Zuluk',
+    region: 'East Sikkim',
+    altitude: 'About 1,400 to 4,000 m',
+    summary:
+      'The Silk Route is a circuit through Aritar, Zuluk, Nathang valley and Kupup in East Sikkim, along part of the old trade road to Tibet. It is about 6 to 7 hours from Bagdogra Airport, needs a protected-area permit, and is best done over 2 to 3 nights.',
+    bestTime: 'October to December for clear views, and March to May for rhododendrons. Snow is likely from December to March and can close the higher road.',
+    daysNeeded: '2 to 3 nights',
+    highlights: [
+      { name: 'Zuluk zig-zag road', note: 'The famous loops of road, best seen from Thambi viewpoint at sunrise.' },
+      { name: 'Aritar Lake', note: 'A forest lake on the way in, with no permit needed.' },
+      { name: 'Nathang valley', note: 'A high, open valley that turns white after snow.' },
+      { name: 'Kupup and Elephant Lake', note: 'A lake said to be shaped like an elephant, near the highest point of the circuit.' },
+      { name: 'Old Baba Mandir', note: 'The original shrine to Baba Harbhajan Singh.' },
+      { name: 'Kanchenjunga sunrise', note: 'Wide views of the range from Thambi and Lungthung on clear mornings.' },
+    ],
+    howToReach:
+      'Drive about 6 to 7 hours from Bagdogra by Rangpo and Rongli, or start from Gangtok. Most trips spend the first night at Aritar or Zuluk.',
+    permit:
+      'Indian citizens need a protected-area permit for Zuluk and beyond, issued at Rongli through a registered operator with a photo ID and photos. Foreign nationals face tighter rules, so check with us first.',
+    faqs: [
+      {
+        q: 'Is the Silk Route suitable for elderly travellers?',
+        a: 'Zuluk is fine for most people, but Nathang and Kupup are close to 4,000 m. Older travellers and anyone with heart or lung problems should ask a doctor and take it slowly.',
+      },
+      {
+        q: 'Are there hotels on the Silk Route?',
+        a: 'Mostly simple homestays with shared meals. Rooms are basic but warm, and we book them as part of the trip.',
+      },
+    ],
+    geo: { lat: 27.2526, lng: 88.7772 },
+  },
+  {
+    slug: 'lava',
+    name: 'Lava and Kolakham',
+    short: 'Lava',
+    region: 'Kalimpong district, West Bengal',
+    altitude: 'About 2,000 to 2,350 m',
+    summary:
+      'Lava is a forest village about 4 hours from Bagdogra Airport, at the edge of Neora Valley National Park. Kolakham, a short drive below, has homestays facing Kanchenjunga. Together with Lolegaon and Rishop they make a quiet 2 to 3 night trip.',
+    bestTime: 'October to May. Neora Valley National Park is usually closed in the monsoon, and the roads are slippery then.',
+    daysNeeded: '2 to 3 days',
+    highlights: [
+      { name: 'Neora Valley National Park', note: 'Dense forest with red pandas and many birds. Entry is from Lava.' },
+      { name: 'Lava Monastery', note: 'A large Kagyu monastery above the village.' },
+      { name: 'Changey Falls', note: 'A tall waterfall near Kolakham, reached by a walk of steps.' },
+      { name: 'Kolakham viewpoint', note: 'Kanchenjunga at sunrise from the homestay terraces.' },
+      { name: 'Rishop and Tiffindara', note: 'A short walk to a viewpoint over the range.' },
+      { name: 'Lolegaon', note: 'Pine forest walks about an hour away.' },
+    ],
+    howToReach:
+      'Drive about 4 hours from Bagdogra or NJP through Sevoke and Gorubathan, or about 2 hours from Kalimpong.',
+    faqs: [
+      {
+        q: 'Is Lava good for birdwatching?',
+        a: 'Yes. The forest around Lava and Neora Valley is one of the best birding areas in North Bengal, especially from March to May.',
+      },
+      {
+        q: 'Do I need a permit for Lava or Kolakham?',
+        a: 'No. Lava and Kolakham need no permit. Neora Valley National Park needs an entry ticket, and it is usually closed in the monsoon.',
+      },
+    ],
+    geo: { lat: 27.0867, lng: 88.6638 },
+  },
+  {
+    slug: 'bhutan',
+    name: 'Phuentsholing and Bhutan',
+    short: 'Bhutan',
+    region: 'Bhutan border, via Jaigaon',
+    altitude: 'About 300 m (Phuentsholing) to 2,300 m (Thimphu)',
+    summary:
+      'Phuentsholing is the Bhutan border town opposite Jaigaon, about 4.5 to 5 hours from Bagdogra Airport. Indian citizens enter with a passport or voter ID and get an entry permit there for Thimphu and Paro. Indian taxis generally go only to Phuentsholing, and a Bhutan-registered car is used beyond.',
+    bestTime: 'October to December for clear skies, and March to May for spring. The monsoon brings heavy rain to Phuentsholing.',
+    daysNeeded: '1 day for Phuentsholing, 5 to 6 days for Thimphu and Paro',
+    highlights: [
+      { name: 'Bhutan Gate and Zangtho Pelri Lhakhang', note: 'The border gate and a temple in the centre of Phuentsholing.' },
+      { name: 'Crocodile breeding centre', note: 'A short stop in Phuentsholing town.' },
+      { name: 'Buddha Dordenma, Thimphu', note: 'A giant seated Buddha above the capital.' },
+      { name: 'Dochula Pass', note: 'Memorial chortens and Himalayan views between Thimphu and Punakha.' },
+      { name: 'Punakha Dzong', note: 'A fortress at the meeting of two rivers.' },
+      { name: 'Tiger’s Nest (Paro Taktsang)', note: 'A cliffside monastery reached by a steep half-day hike.' },
+    ],
+    howToReach:
+      'Drive about 4.5 to 5 hours from Bagdogra to Jaigaon through the Dooars. Cross on foot or by car to Phuentsholing, complete immigration, and continue in a Bhutan-registered vehicle.',
+    faqs: [
+      {
+        q: 'What documents do Indians need for Bhutan?',
+        a: 'A valid passport or voter ID for adults, and a passport or birth certificate for children. A Sustainable Development Fee is charged per person per night, and we confirm the current amount with every booking.',
+      },
+      {
+        q: 'Can I take an Indian taxi into Bhutan?',
+        a: 'Indian taxis generally go only as far as Phuentsholing. For Thimphu, Paro and beyond, a Bhutan-registered car and driver is used, which we arrange.',
+      },
+    ],
+    geo: { lat: 26.8516, lng: 89.3884 },
+  },
 ];
 
 export const destinationBySlug = (slug: string) => DESTINATIONS.find((d) => d.slug === slug);

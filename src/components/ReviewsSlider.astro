@@ -1,0 +1,101 @@
+---
+/**
+ * Google reviews in a swipeable row. Plain CSS scroll-snap does the sliding,
+ * so it works with touch, trackpad and keyboard and ships almost no script;
+ * the arrow buttons are a small enhancement. Each card links back to the
+ * review on Google, as Google's terms ask, and to the reviewer's profile.
+ */
+import GoogleLogo from './GoogleLogo.astro';
+import GoogleRatingBadge from './GoogleRatingBadge.astro';
+import Stars from './Stars.astro';
+import { GOOGLE } from '../data/reviews';
+interface Props {
+  heading?: string;
+}
+const { heading = 'What travellers say about us on Google' } = Astro.props;
+const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+const tints = ['#0b5d4b', '#5a8fb0', '#d98a0b', '#7a4fa3', '#c2410c', '#2f6f61'];
+---
+
+{GOOGLE.reviews.length > 0 && (
+  <section class="wrap mt-16" aria-labelledby="reviews-h" data-reviews>
+    <div class="flex flex-wrap items-end justify-between gap-6">
+      <div>
+        <p class="eyebrow">Google reviews</p>
+        <h2 id="reviews-h" class="mt-2 text-3xl font-bold sm:text-4xl">{heading}</h2>
+      </div>
+      <GoogleRatingBadge />
+    </div>
+
+    <div class="relative mt-8">
+      <ul class="reviews-track -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-4 pb-4" tabindex="0" aria-label="Google reviews, scroll sideways for more">
+        {GOOGLE.reviews.map((r, i) => (
+          <li class="card relative flex w-[85%] shrink-0 snap-start flex-col p-5 sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.7rem)]">
+            <div class="flex items-center gap-3 pr-8">
+              {r.photo ? (
+                <img src={r.photo} alt="" width="40" height="40" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="h-10 w-10 shrink-0 rounded-full bg-mist object-cover" />
+              ) : (
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={`background:${tints[i % tints.length]}`} aria-hidden="true">{initials(r.author)}</span>
+              )}
+              <span class="min-w-0">
+                {r.authorUrl ? (
+                  <a href={r.authorUrl} target="_blank" rel="nofollow noopener" class="block truncate font-semibold text-ink no-underline hover:text-pine">{r.author}</a>
+                ) : (
+                  <span class="block truncate font-semibold text-ink">{r.author}</span>
+                )}
+                {r.relative && <time class="block text-xs text-muted" datetime={r.published || undefined}>{r.relative}</time>}
+              </span>
+            </div>
+            <GoogleLogo class="absolute top-5 right-5 h-5 w-5" />
+            <Stars rating={r.rating} class="mt-3 h-4 w-4" />
+            <blockquote class="mt-2 line-clamp-6 text-[0.95rem] leading-relaxed text-body">{r.text}</blockquote>
+            {r.url && <a href={r.url} target="_blank" rel="nofollow noopener" class="mt-auto pt-4 text-sm font-semibold">Read on Google</a>}
+          </li>
+        ))}
+      </ul>
+      <div class="mt-2 flex items-center justify-between gap-4">
+        <p class="text-sm text-muted">
+          <a href={GOOGLE.url} target="_blank" rel="noopener" class="font-semibold">See all {GOOGLE.count.toLocaleString('en-IN')} reviews on Google</a>
+          <span aria-hidden="true"> · </span>
+          <a href={GOOGLE.writeReviewUrl} target="_blank" rel="noopener">Travelled with us? Write a review</a>
+        </p>
+        <div class="hidden gap-2 sm:flex">
+          <button type="button" class="reviews-btn" data-dir="-1" aria-label="Previous reviews"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg></button>
+          <button type="button" class="reviews-btn" data-dir="1" aria-label="Next reviews"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg></button>
+        </div>
+      </div>
+    </div>
+  </section>
+)}
+
+<style>
+  .reviews-track { scrollbar-width: thin; }
+  .reviews-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.75rem; height: 2.75rem; border-radius: 9999px;
+    border: 1px solid var(--color-line); background: #fff; color: var(--color-ink);
+  }
+  .reviews-btn:hover { border-color: var(--color-pine); color: var(--color-pine); }
+  .reviews-btn:disabled { opacity: 0.35; cursor: default; }
+</style>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>('[data-reviews]')) {
+    const track = root.querySelector<HTMLElement>('.reviews-track')!;
+    const buttons = root.querySelectorAll<HTMLButtonElement>('.reviews-btn');
+    const update = () => {
+      const max = track.scrollWidth - track.clientWidth - 2;
+      buttons[0].disabled = track.scrollLeft <= 2;
+      buttons[1].disabled = track.scrollLeft >= max;
+    };
+    buttons.forEach((b) =>
+      b.addEventListener('click', () => {
+        const card = track.querySelector('li');
+        const step = card ? card.getBoundingClientRect().width + 16 : track.clientWidth;
+        track.scrollBy({ left: step * Number(b.dataset.dir), behavior: 'smooth' });
+      }),
+    );
+    track.addEventListener('scroll', update, { passive: true });
+    update();
+  }
+</script>

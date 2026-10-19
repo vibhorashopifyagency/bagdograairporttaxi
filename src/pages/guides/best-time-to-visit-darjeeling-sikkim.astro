@@ -1,0 +1,82 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import { guideBySlug } from '../../data/guides';
+import { article, faqPage } from '../../lib/schema';
+const g = guideBySlug('best-time-to-visit-darjeeling-sikkim');
+const path = `/guides/${g.slug}/`;
+const faqs = [
+  { q: 'Which month is best for Kanchenjunga views?', a: 'October to December. The monsoon has washed the dust out of the air, and most mornings are clear. January and February are also clear but much colder.' },
+  { q: 'When can I see snow in Sikkim?', a: 'From about December to March at Tsomgo Lake, Nathula and Zero Point in North Sikkim. Darjeeling and Gangtok towns see snow only on a few days, if at all.' },
+  { q: 'Is it safe to visit Darjeeling and Sikkim in the monsoon?', a: 'It is possible, but landslides close hill roads on many days from late June to September. Keep a spare day, travel in daylight and avoid tight flight connections.' },
+  { q: 'When are the Dooars national parks closed?', a: 'Gorumara and Jaldapara close from 16 June to 15 September every year for the monsoon.' },
+  { q: 'Is Durga Puja a good time to visit?', a: 'The weather is usually good, but it is the busiest time of the year. Hotels, cars and flights fill early and prices rise, so book several weeks ahead.' },
+];
+---
+
+<BaseLayout
+  title="Best Time to Visit Darjeeling and Sikkim: Month-by-Month Guide"
+  description={g.description}
+  crumbs={[{ name: 'Travel guides', path: '/guides/' }, { name: 'Best time to visit', path }]}
+  schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
+  ogType="article"
+>
+  <article class="wrap mt-6">
+    <header class="max-w-3xl">
+      <h1 class="text-3xl leading-tight font-extrabold sm:text-4xl">{g.title}</h1>
+      <p class="mt-2 text-sm text-muted">Updated <time datetime={g.updated}>{g.updatedLabel}</time> by the Bagdogra Airport Taxi team</p>
+      <p class="answer mt-5">The best time to visit Darjeeling and Sikkim is October to December for clear Kanchenjunga views, and March to May for spring flowers and mild weather. Come in January to March for snow at Tsomgo and Nathula. Avoid late June to September if you can, as rain and landslides block hill roads.</p>
+    </header>
+    <div class="prose-site mt-8">
+      <h2>Month by month</h2>
+      <div class="table-scroll not-prose">
+        <table>
+          <thead><tr><th>Month</th><th>Weather</th><th>Kanchenjunga views</th><th>Snow</th><th>Crowds</th><th>Good to know</th></tr></thead>
+          <tbody>
+            <tr><td>January</td><td>Cold, dry</td><td>Very good</td><td>Likely up high</td><td>Low</td><td>Tsomgo Lake frozen. Nathula and North Sikkim may close after snow.</td></tr>
+            <tr><td>February</td><td>Cold, dry</td><td>Very good</td><td>Likely up high</td><td>Low</td><td>Tsomgo frozen. Losar falls in February or March.</td></tr>
+            <tr><td>March</td><td>Cool, some haze</td><td>Good</td><td>Possible up high</td><td>Rising</td><td>Tsomgo starts to thaw late in the month. Rhododendrons begin.</td></tr>
+            <tr><td>April</td><td>Mild</td><td>Fair, hazy</td><td>At Zero Point</td><td>High</td><td>Rhododendrons in Yumthang, Varsey and Okhrey.</td></tr>
+            <tr><td>May</td><td>Mild, pre-monsoon showers</td><td>Fair, hazy</td><td>At Zero Point</td><td>Peak</td><td>School holidays. Book early.</td></tr>
+            <tr><td>June</td><td>Monsoon arrives</td><td>Poor</td><td>Rare</td><td>Falling</td><td>Dooars parks close from 16 June.</td></tr>
+            <tr><td>July</td><td>Heavy rain</td><td>Poor</td><td>No</td><td>Low</td><td>Landslides likely. Dooars parks closed.</td></tr>
+            <tr><td>August</td><td>Heavy rain</td><td>Poor</td><td>No</td><td>Low</td><td>Landslides likely. Dooars parks closed.</td></tr>
+            <tr><td>September</td><td>Rain easing</td><td>Improving</td><td>No</td><td>Rising</td><td>Dooars parks reopen after 15 September.</td></tr>
+            <tr><td>October</td><td>Clear, cool</td><td>Excellent</td><td>Rare</td><td>Peak at Durga Puja</td><td>The best month for views. Book early around the Puja holidays.</td></tr>
+            <tr><td>November</td><td>Clear, cold nights</td><td>Excellent</td><td>Possible up high</td><td>Medium</td><td>Sittong orange season begins.</td></tr>
+            <tr><td>December</td><td>Cold, clear</td><td>Excellent</td><td>Likely up high</td><td>High at Christmas</td><td>Snow may close Nathula on some days.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-muted">Weather varies from year to year. The table shows typical patterns, not a forecast.</p>
+      <h2>What is open, and when</h2>
+      <ul>
+        <li><strong>Nathula Pass</strong> is usually open to Indian citizens from Wednesday to Sunday, all year, but closes after heavy snow or on army orders. See our <a href="/guides/nathula-pass-guide/">Nathula Pass guide</a>.</li>
+        <li><strong>Tsomgo Lake</strong> is usually frozen from January to March. The road stays open on most days, subject to snow.</li>
+        <li><strong>North Sikkim</strong> (Lachung, Yumthang, Lachen, Gurudongmar) is open most of the year, but snow and landslides close the roads for days at a time. Permits are sometimes paused at short notice.</li>
+        <li><strong>Gorumara and Jaldapara</strong> in the Dooars close from 16 June to 15 September.</li>
+        <li><strong>Darjeeling, Gangtok, Kalimpong and Pelling</strong> are open all year.</li>
+      </ul>
+      <h2>Travelling in the monsoon</h2>
+      <p>From late June to September, landslides close hill roads on many days. NH10, the main road to Gangtok along the Teesta, is the road most often affected, and it has had repeated closures since the October 2023 flood. When it shuts, we take longer routes through Lava or Kalimpong where they are open.</p>
+      <ul>
+        <li>Keep one spare day before your flight home.</li>
+        <li>Start early and aim to finish hill driving before dark.</li>
+        <li>Choose a flexible plan. Sikkim permits for North Sikkim may be paused after heavy rain.</li>
+        <li>Pack a rain jacket and shoes with good grip.</li>
+      </ul>
+      <p>The monsoon has its rewards: green hills, waterfalls at full flow, fewer people and lower hotel rates.</p>
+      <h2>Festivals and busy dates</h2>
+      <ul>
+        <li><strong>Losar</strong>, the Tibetan new year, falls in February or March. Monasteries in Gangtok, Darjeeling and Kalimpong hold dances and prayers.</li>
+        <li><strong>Saga Dawa</strong>, in May or June by the lunar calendar, marks the Buddha’s birth, enlightenment and death. Gangtok holds a procession.</li>
+        <li><strong>Durga Puja</strong>, in late September or October, is the busiest week of the year. Cars and hotels sell out across the hills.</li>
+        <li><strong>Christmas and New Year</strong> bring big crowds to Darjeeling and Gangtok.</li>
+      </ul>
+      <p class="text-sm text-muted">Road and permit rules change with weather and army orders. We confirm the current position with every booking. Last checked {g.updatedLabel}.</p>
+    </div>
+    <div class="max-w-3xl"><FaqList faqs={faqs} /></div>
+    <BookCta bookHref="/tour-packages/" waText="Hi, I am planning a trip to Darjeeling and Sikkim. Which dates are best?" heading="Plan your trip for the right season" />
+  </article>
+</BaseLayout>
