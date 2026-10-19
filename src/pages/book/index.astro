@@ -44,7 +44,7 @@ const data = {
               ))}
             </select>
           </label>
-          <label class="field mt-4 hidden" data-for="package">
+          <label class="field mt-4" data-for="package" hidden>
             <span>Tour package</span>
             <select name="package">
               {PACKAGES.map((p) => <option value={p.slug}>{p.name} ({p.nights}N/{p.days}D)</option>)}
@@ -153,7 +153,7 @@ const data = {
 
     function calc() {
       const pkg = kind() === 'package';
-      document.querySelectorAll<HTMLElement>('[data-for]').forEach((el) => el.classList.toggle('hidden', el.dataset.for !== (pkg ? 'package' : 'taxi')));
+      document.querySelectorAll<HTMLElement>('[data-for]').forEach((el) => (el.hidden = el.dataset.for !== (pkg ? 'package' : 'taxi')));
       const route = d.routes[val('route')];
       const vehicle = (f.querySelector('input[name=vehicle]:checked') as HTMLInputElement).value;
       document.querySelectorAll<HTMLElement>('[data-price]').forEach((el) => {
@@ -235,6 +235,7 @@ const data = {
 </BaseLayout>
 
 <style>
+  .field[hidden] { display: none; }
   .field { display: flex; flex-direction: column; gap: 0.375rem; font-weight: 600; color: var(--color-ink); font-size: 0.95rem; }
   .field input, .field select {
     min-height: 3rem; border: 1px solid var(--color-line); border-radius: 0.75rem; padding: 0.625rem 0.875rem;
