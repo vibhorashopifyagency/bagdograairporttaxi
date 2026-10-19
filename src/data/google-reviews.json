@@ -1,10 +1,113 @@
 {
-  "source": "",
-  "fetchedAt": "",
-  "placeId": "",
-  "name": "",
-  "mapsUrl": "",
-  "rating": 0,
-  "count": 0,
-  "reviews": []
+  "_note": "Copied by hand from the Google Business Profile on 20 Oct 2026 (rating, count and the ten most relevant reviews, verbatim). scripts/fetch-google-reviews.mjs overwrites this file once GOOGLE_PLACES_API_KEY is set, so the figures refresh automatically from then on.",
+  "source": "Google Business Profile (manual copy)",
+  "fetchedAt": "2026-10-20T00:00:00.000Z",
+  "placeId": "ChIJgebDZQJH5DkR9JC1zX1LUU0",
+  "cid": "5571317217728237812",
+  "name": "Bagdogra Airport Taxi",
+  "mapsUrl": "https://maps.app.goo.gl/WTafG6NNSiPbbmVG7",
+  "rating": 4.9,
+  "count": 129,
+  "reviews": [
+    {
+      "author": "Vishnu Singh",
+      "authorUrl": "https://www.google.com/maps/contrib/107532908791788574058/reviews",
+      "photo": "https://lh3.googleusercontent.com/a/ACg8ocITi4tOR-wHwn-Epdbt3qp--40BgacJQlxQg8O6tpOp940vWwk=w96-h96-p-rp-mo-br100",
+      "rating": 5,
+      "text": "Great experience! The driver arrived on time, drove safely, and was very friendly. Will definitely use this service again. Reliable and comfortable ride. Clean car, polite driver, and fair pricing. Highly satisfied with the service. Outstanding service from start to finish. The booking process was easy, and the trip was comfortable and stress-free.",
+      "published": "",
+      "relative": "4 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT2tkUGRFczBlSEZ2WjJOalJXdGhhMU5UZFc0MGNIYxAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "DIPAK SHAW",
+      "authorUrl": "https://www.google.com/maps/contrib/102923573196859851023/reviews",
+      "photo": "https://lh3.googleusercontent.com/a/ACg8ocJvDyAQR_fzeD-5er8edKaHOW5kmbKO5iAw7IVokDTxyrOIKA=w96-h96-p-rp-mo-br100",
+      "rating": 5,
+      "text": "I would like to express my sincere gratitude to our taxi driver and the entire tour & travel team for making our journey so comfortable, safe, and enjoyable. Your professionalism, punctuality, kindness, and dedication made every moment of the trip memorable. Thank you for your excellent service and warm hospitality. I truly appreciate all your efforts and look forward to traveling with you again in the future.",
+      "published": "",
+      "relative": "3 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT21zNFQyaEJTSGRSVFdaWVRHVjNRamxHTW5RMFpXYxAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "Balaji Coimbatore",
+      "authorUrl": "https://www.google.com/maps/contrib/101670096799766237394/reviews",
+      "photo": "https://lh3.googleusercontent.com/a/ACg8ocI8eYwsse-Z3M7kQVoz79oJuE1vB6SXyyrlFd-s8wUP-bx0vA=w96-h96-p-rp-mo-br100",
+      "rating": 5,
+      "text": "I had an excellent experience with Pinku Singh’s Bagdora Airport Taxi service! Pinku was incredibly easy to communicate with and always available to help, making the entire booking process smooth and stress-free.\nOur driver, Saku Barman, was outstanding. He arrived on time for every pickup, even with Darjeeling’s notorious heavy traffic and narrow, winding streets. His punctuality and professionalism made our airport transfers completely reliable.\nI highly recommend Pinku Singh’s Bagdora Airport Taxi to anyone traveling to or from Bagdogra Airport and Darjeeling. Professional, dependable, and hassle-free — exactly what you need in the hills! Thank you! 🙏",
+      "published": "",
+      "relative": "4 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT21oTkxXbHhPVlpXZWtaZmRFcGxjRVYzVm1vNFlrRRAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "Sonal Prasad",
+      "authorUrl": "https://www.google.com/maps/contrib/102892486786572215987/reviews",
+      "photo": "https://lh3.googleusercontent.com/a/ACg8ocL41WqztVoHb_Bo9vp5UPuLgLRuUEUCrvHRT813N1t50NejBA=w96-h96-p-rp-mo-br100",
+      "rating": 5,
+      "text": "One of the best road trips we had, Sandeep , our driver, was fabulous. He provided us with lots of information, which made the trip even more beautiful! I will recommend him highly!",
+      "published": "",
+      "relative": "3 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT2xSM1NrMW1jbU42Um5SNVZFbDRaV1UwZWpRNU5GRRAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "Sudipto Mondal",
+      "authorUrl": "https://www.google.com/maps/contrib/101326187930375772145/reviews",
+      "photo": "https://lh3.googleusercontent.com/a/ACg8ocI_PavVUbg-_lQyBVsdAlem8T62iAPXYTUXeW-DiX6xrgGAbzRt=w96-h96-p-rp-mo-ba12-br100",
+      "rating": 5,
+      "text": "I had an excellent experience with this taxi service. The owner Mr. Pinko a true gentleman and his drivers are always on time, executed good professionalism and were courteous throughout our journey.\nThe booking process was smooth and the fares were transparent with no hidden charges. I would really recommend this taxi service to anyone looking for reliable, efficient and customer focussed transportation.\nI will definitely use their services again in the future.",
+      "published": "",
+      "relative": "4 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT25OMGMyWktORzVxV1ZCV1ZtSkpVR0ZUVWxGS1FuYxAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "Rohit Saxena",
+      "authorUrl": "https://www.google.com/maps/contrib/100732773572912284114/reviews",
+      "photo": "https://lh3.googleusercontent.com/a/ACg8ocKds_KtMz5SXPpCG51rykD651rwUkTPuOdcd86WvTb4DsSp2g=w96-h96-p-rp-mo-ba12-br100",
+      "rating": 5,
+      "text": "Finest of most reliable taxi services for whole Darjeeling and Sikkim Visit. I will recommend all of you to use this Bagdogra Airport Taxi Services for family or group tours. Thanks Bagdogra Airport Taxi Services 🙏👍",
+      "published": "",
+      "relative": "4 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT2pFdFltTmZkMVYzWlVsMVlrY3lTVEIxWWt0Zk0zYxAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "Krishnan Naranapatty",
+      "authorUrl": "https://www.google.com/maps/contrib/115077352733444640960/reviews",
+      "photo": "https://lh3.googleusercontent.com/a-/ALV-UjXHWvMo40YlUJpq0hHh6YECjwFTyOgI5_yzIcRZFX0KrkeFsKDn=w96-h96-p-rp-mo-br100",
+      "rating": 5,
+      "text": "We loved the service that we got from pinku singh. Very prompt. Coming from chennai for the very first time, Pinku was there to take care of our travel.\n\nWill call him everytime i am here traveling to this part of the country",
+      "published": "",
+      "relative": "4 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT2swNE5XcHpOWGd3UTI0MlRFaE5VbWs1TFZGM1RsRRAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "Gaurav Bahuguna",
+      "authorUrl": "https://www.google.com/maps/contrib/104261098205083062637/reviews",
+      "photo": "https://lh3.googleusercontent.com/a-/ALV-UjXEYg5KfPxAM7Q-QN0vyPxB9nMAi2tiBRMkOY2Ok0QADc0SdNAR=w96-h96-p-rp-mo-br100",
+      "rating": 5,
+      "text": "We had a wonderful trip. The vehicle provided was in excellent condition with a thorough  professional and proficient driver. The trip was very well planned and all the places of interest were adequately covered.\nHighly recommemded",
+      "published": "",
+      "relative": "7 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT2s5TFExWnpNbEl4WmtSTGFsZENUMjVKZDNGVVVtYxAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "sanjay sinha",
+      "authorUrl": "https://www.google.com/maps/contrib/100863484048836081596/reviews",
+      "photo": "https://lh3.googleusercontent.com/a-/ALV-UjWzTeo8yllsgL2pF1WjqNYhPRqZJsu8VkqRpaaQxWCs6Nut_gDB=w96-h96-p-rp-mo-ba12-br100",
+      "rating": 5,
+      "text": "Very good driver. Totally satisfied with the service. A smooth and comfortable drive from Jaigaon to Siliguri.",
+      "published": "",
+      "relative": "4 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT25KM2VVMW1WazlDWnpOaFRVMXhlRWhqZFdNM09YYxAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    },
+    {
+      "author": "Suman Mukhia",
+      "authorUrl": "https://www.google.com/maps/contrib/107673140503906166301/reviews",
+      "photo": "https://lh3.googleusercontent.com/a-/ALV-UjXIkz5h21_9Oqa_cBpY_8z2llbR83A84EqU7Fos3pRJ9RpEoeae=w96-h96-p-rp-mo-br100",
+      "rating": 5,
+      "text": "Thank you Mr Pinku, I had a very pleasant stay in Darjeeling & Gangtok and your cab service made it possible.",
+      "published": "",
+      "relative": "4 months ago",
+      "url": "https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sCi9DQUlRQUNvZENodHljRjlvT2xsTFRWUkVVV3hoZUhSamJXbEZka2h4TkZCTU5FRRAB!2m1!1s0x0:0x4d514b7dcdb590f4!3m1!1e1"
+    }
+  ]
 }

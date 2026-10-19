@@ -15,7 +15,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 const OUT = new URL('../src/data/google-reviews.json', import.meta.url);
 const key = process.env.GOOGLE_PLACES_API_KEY;
 const query = process.env.GOOGLE_PLACE_QUERY || 'Bagdogra Airport Taxi, Bagdogra, West Bengal';
-let placeId = process.env.GOOGLE_PLACE_ID;
+// The listing's place ID, derived from its Maps feature ID (0x39e4470265c3e681:0x4d514b7dcdb590f4).
+let placeId = process.env.GOOGLE_PLACE_ID || 'ChIJgebDZQJH5DkR9JC1zX1LUU0';
 
 if (!key) {
   console.log('google-reviews: no GOOGLE_PLACES_API_KEY, keeping the saved reviews');

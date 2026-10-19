@@ -49,6 +49,7 @@ export function llmsIndex() {
     `- [Full fare chart](${abs('/taxi/')})`,
     `- [Cancellation and refund policy](${abs('/cancellation-refund-policy/')})`,
     `- [FAQ](${abs('/faq/')})`,
+    `- [Photo gallery](${abs('/gallery/')})`,
     `- [Contact](${abs('/contact/')})`,
     '',
     '## Optional',

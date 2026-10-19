@@ -55,26 +55,36 @@ stay linked from the footer).
 - [ ] Add photos of the office and drivers on the About page the same way
 - [ ] Run `npm run og` after changing the hero photo so the share card matches
 
-## 7. Google reviews (built, needs an API key)
-The rating badge and the reviews slider are live on the page. Until the API
-key is set they show the listing's real 4.9 rating with **sample review
-cards**, labelled as samples (`src/data/reviews-sample.json`). No rating or
-review schema is emitted from samples, and the build refuses to go live
-while they are still showing. The phone number and address in `site.ts` were
-taken from the Google listing on 20 Oct 2026; confirm them. The email is the one
-on the current live site. Note the live site shows hours as Mon–Sat 08:00–22:00
-while `BUSINESS.hours` says open 24 hours: pick one and keep it the same on
-the site and the Google listing.
+## 7. Google reviews (live data in place, API key makes it automatic)
+The rating badge, the reviews slider and the AggregateRating/Review schema
+now use the listing's real figures: 4.9 from 129 reviews and its ten most
+relevant reviews, copied verbatim from the Google Business Profile on
+20 Oct 2026 into `src/data/google-reviews.json` (listing: Bagdogra Airport
+Taxi, behind Ashok Nagar Club; place ID `ChIJgebDZQJH5DkR9JC1zX1LUU0`).
+The "x months ago" labels are as of that date, so set up the feed below and
+they refresh with every build. Note the live site shows hours as Mon–Sat
+08:00–22:00 while `BUSINESS.hours` says open 24 hours: pick one and keep it
+the same on the site and the Google listing.
 - [ ] In Google Cloud, create a Maps Platform API key with **Places API (New)**
       enabled (restrict it to that API)
-- [ ] Set `GOOGLE_PLACES_API_KEY` in the host's build environment
-- [ ] Run `GOOGLE_PLACES_API_KEY=... npm run reviews` once; it finds the
-      listing by name and prints its place ID. Set `GOOGLE_PLACE_ID` to that
-      value so it always pulls the right listing
+- [ ] Set `GOOGLE_PLACES_API_KEY` in the host's build environment. The place
+      ID is already pinned in `scripts/fetch-google-reviews.mjs`; set
+      `GOOGLE_PLACE_ID` only to override it
+- [ ] Run `GOOGLE_PLACES_API_KEY=... npm run reviews` once and check that the
+      rating and count it writes match the listing
 - [ ] Rebuild daily (a scheduled deploy hook) so the rating and the latest
       reviews stay current. Google returns the five most relevant reviews.
 - [ ] Add registrations you hold (tourism department, IATO/TAAI) to
       `BUSINESS.registrations` in `src/data/site.ts`
+
+## 7a. Brand
+- [ ] The logo is the Jai Jawan Travels badge with its olive ring recoloured
+      to the site's ink and lime (`scripts/brand/logo-master*.png`; run
+      `npm run og` after replacing it). Confirm `legalName` ("Jai Jawan
+      Travels") and the About page line about the owner being an Army veteran,
+      both taken from the current site and the logo
+- [ ] Replace or add to the gallery (`src/data/gallery.ts`) with the
+      business's own photos of cars, drivers and trips
 
 ## 8. Go live
 - [ ] Set `PRE_LAUNCH = false` in `src/data/site.ts`. The build fails if

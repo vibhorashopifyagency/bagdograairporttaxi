@@ -28,7 +28,9 @@ Node 22.12 or newer.
 | Site-wide FAQs | `src/data/faqs.ts` |
 | Which photo goes with which place, package, route or guide | `src/lib/photos.ts` |
 | Photo list, licences and alt text (generated) | `scripts/fetch-photos.mjs`, `src/data/photos.json` |
-| Sample reviews shown until the Google feed is connected | `src/data/reviews-sample.json` |
+| Google rating, count and reviews (real, copied 20 Oct 2026; refreshed by the API once a key is set) | `src/data/google-reviews.json` |
+| Photo gallery entries and categories | `src/data/gallery.ts` |
+| Brand badge masters (ink/lime recolour of the Jai Jawan Travels logo) | `scripts/brand/` |
 | JSON-LD builders | `src/lib/schema.ts` |
 | llms.txt / llms-full.txt content | `src/lib/llms.ts` |
 

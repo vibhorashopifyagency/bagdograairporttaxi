@@ -1,0 +1,157 @@
+---
+/**
+ * A photo grid with optional category filters and a lightbox. Every tile is a
+ * real <button>, the lightbox is a native <dialog>, and filtering only hides
+ * list items, so the page works without JavaScript (the lightbox then simply
+ * does not open and the tiles are plain pictures).
+ */
+import type { GalleryItem } from '../data/gallery';
+import { GALLERY_CATEGORIES } from '../data/gallery';
+import { PHOTOS } from '../lib/photos';
+import Photo from './Photo.astro';
+import Icon from './Icon.astro';
+interface Props {
+  items: GalleryItem[];
+  filters?: boolean;
+  /** Smaller rows for a section inside another page. */
+  dense?: boolean;
+}
+const { items, filters = false, dense = false } = Astro.props;
+const cats = GALLERY_CATEGORIES.filter((c) => items.some((i) => i.category === c));
+const count = (c: string) => items.filter((i) => i.category === c).length;
+// A rhythm of big and wide tiles so the grid reads like a magazine spread.
+const span = (i: number) => (dense ? (i === 0 ? 'md:col-span-2 md:row-span-2' : '') : i % 7 === 0 ? 'md:col-span-2 md:row-span-2' : i % 7 === 4 ? 'md:col-span-2' : '');
+const data = items.map((it) => ({
+  src: `/img/${it.photo}-1600.webp`,
+  title: it.title,
+  place: it.place,
+  alt: PHOTOS[it.photo].alt,
+  artist: PHOTOS[it.photo].artist,
+  license: PHOTOS[it.photo].license,
+  licenseUrl: PHOTOS[it.photo].licenseUrl,
+  source: PHOTOS[it.photo].source,
+  href: it.href ?? '',
+  cta: it.cta ?? '',
+  category: it.category,
+}));
+---
+
+<div data-gallery>
+  {filters && (
+    <div class="flex flex-wrap gap-2" role="group" aria-label="Show photos of">
+      <button type="button" class="gchip is-on" data-filter="all" aria-pressed="true">All <span>{items.length}</span></button>
+      {cats.map((c) => <button type="button" class="gchip" data-filter={c} aria-pressed="false">{c} <span>{count(c)}</span></button>)}
+    </div>
+  )}
+  <ul class:list={['grid grid-flow-dense grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-4', filters && 'mt-6', dense ? 'auto-rows-[140px] sm:auto-rows-[170px] xl:auto-rows-[190px]' : 'auto-rows-[150px] sm:auto-rows-[200px] xl:auto-rows-[240px]']} data-reveal-stagger>
+    {items.map((it, i) => (
+      <li class={span(i)} data-cat={it.category}>
+        <button type="button" class="gitem group relative block h-full w-full overflow-hidden rounded-2xl bg-mist text-left" data-index={i} aria-label={`Open photo: ${it.title}, ${it.place}`}>
+          <Photo name={it.photo} class="zoom absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw" alt="" />
+          <span class="photo-fade absolute inset-x-0 bottom-0 h-2/3 opacity-90 transition-opacity group-hover:opacity-100" aria-hidden="true"></span>
+          <span class="absolute inset-x-3 bottom-3 text-white">
+            <strong class="block font-[family-name:var(--font-display)] text-[0.95rem] leading-tight sm:text-lg">{it.title}</strong>
+            <span class="block truncate text-xs opacity-85">{it.place}</span>
+          </span>
+          <span class="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-ink opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden="true">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+          </span>
+        </button>
+      </li>
+    ))}
+  </ul>
+
+  <dialog class="glb" aria-label="Photo viewer">
+    <div class="glb-frame">
+      <button type="button" class="glb-btn glb-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+      <button type="button" class="glb-btn glb-prev" data-dir="-1" aria-label="Previous photo"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6" /></svg></button>
+      <button type="button" class="glb-btn glb-next" data-dir="1" aria-label="Next photo"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6" /></svg></button>
+      <figure class="glb-fig">
+        <img class="glb-img" src="" alt="" decoding="async" />
+        <figcaption class="glb-cap">
+          <div class="min-w-0">
+            <p class="text-[0.65rem] font-bold tracking-[0.14em] text-lime uppercase" data-cat></p>
+            <p class="mt-0.5 font-[family-name:var(--font-display)] text-lg font-bold text-white sm:text-xl" data-title></p>
+            <p class="text-sm text-white/70" data-place></p>
+            <p class="mt-1.5 text-xs text-white/50" data-credit></p>
+          </div>
+          <div class="flex shrink-0 items-center gap-3">
+            <span class="text-sm text-white/60 tabular-nums" data-counter></span>
+            <a class="btn-book min-h-10 px-4 py-2 text-sm" data-cta href="/">Book <Icon name="arrow" class="h-4 w-4" /></a>
+          </div>
+        </figcaption>
+      </figure>
+    </div>
+  </dialog>
+  <script type="application/json" data-gallery-data set:html={JSON.stringify(data)} />
+</div>
+
+<style>
+  .gchip {
+    display: inline-flex; align-items: center; gap: .4rem; min-height: 2.5rem; padding: 0 .95rem; border-radius: 9999px;
+    border: 1px solid var(--color-line); background: #fff; color: var(--color-ink); font-weight: 600; font-size: .9rem; cursor: pointer;
+    transition: background .2s, border-color .2s, color .2s;
+  }
+  .gchip span { font-size: .72rem; font-weight: 700; color: var(--color-muted); }
+  .gchip:hover { border-color: var(--color-ink); }
+  .gchip.is-on { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
+  .gchip.is-on span { color: var(--color-lime); }
+  .glb { max-width: none; max-height: none; width: 100vw; height: 100dvh; margin: 0; padding: 0; background: transparent; border: 0; }
+  .glb::backdrop { background: rgb(17 17 17 / .94); }
+  .glb[open] { display: grid; place-items: center; }
+  .glb-frame { position: relative; width: min(100vw, 1500px); height: 100dvh; display: grid; grid-template-rows: 1fr; padding: 3.5rem 1rem 1rem; }
+  .glb-fig { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: .9rem; min-height: 0; }
+  .glb-img { max-height: 100%; max-width: 100%; width: auto; height: auto; justify-self: center; align-self: center; border-radius: 1rem; object-fit: contain; box-shadow: 0 40px 80px -30px rgb(0 0 0 / .8); }
+  .glb-cap { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: .75rem 1.5rem; padding: 0 .25rem .25rem; }
+  .glb-btn { position: absolute; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border-radius: 9999px; background: rgb(255 255 255 / .12); color: #fff; border: 1px solid rgb(255 255 255 / .2); backdrop-filter: blur(8px); transition: background .2s; }
+  .glb-btn:hover { background: rgb(255 255 255 / .25); }
+  .glb-close { top: .75rem; right: 1rem; }
+  .glb-prev { left: .75rem; top: 50%; transform: translateY(-50%); }
+  .glb-next { right: .75rem; top: 50%; transform: translateY(-50%); }
+  @media (min-width: 640px) { .glb-frame { padding: 4rem 4.5rem 1.5rem; } .glb-prev { left: 1.25rem; } .glb-next { right: 1.25rem; } }
+  @media (prefers-reduced-motion: no-preference) { .glb[open] .glb-img { animation: glb-in .3s cubic-bezier(.2,.7,.2,1); } }
+  @keyframes glb-in { from { opacity: 0; transform: scale(.97); } }
+</style>
+
+<script>
+  type Item = { src: string; title: string; place: string; alt: string; artist: string; license: string; licenseUrl: string; source: string; href: string; cta: string; category: string };
+  for (const root of document.querySelectorAll<HTMLElement>('[data-gallery]')) {
+    const items: Item[] = JSON.parse(root.querySelector('[data-gallery-data]')!.textContent!);
+    const lis = [...root.querySelectorAll<HTMLLIElement>('li[data-cat]')];
+    const dlg = root.querySelector<HTMLDialogElement>('.glb')!;
+    const img = dlg.querySelector<HTMLImageElement>('.glb-img')!;
+    const set = (sel: string, text: string) => { dlg.querySelector<HTMLElement>(sel)!.textContent = text; };
+    const cta = dlg.querySelector<HTMLAnchorElement>('[data-cta]')!;
+    let current = 0;
+    const visible = () => lis.map((li, i) => (li.hidden ? -1 : i)).filter((i) => i >= 0);
+
+    const show = (i: number) => {
+      const it = items[i]; current = i;
+      img.src = it.src; img.alt = it.alt;
+      set('[data-cat]', it.category); set('[data-title]', it.title); set('[data-place]', it.place);
+      set('[data-credit]', `Photo: ${it.artist}${it.license ? ` · ${it.license}` : ''}`);
+      const v = visible(); set('[data-counter]', `${v.indexOf(i) + 1} / ${v.length}`);
+      if (it.href) { cta.hidden = false; cta.href = it.href; cta.firstChild!.textContent = it.cta + ' '; } else cta.hidden = true;
+      // Preload the neighbours so arrows feel instant.
+      for (const d of [1, -1]) { const n = v[(v.indexOf(i) + d + v.length) % v.length]; if (n !== undefined) new Image().src = items[n].src; }
+    };
+    const step = (d: number) => { const v = visible(); if (!v.length) return; show(v[(v.indexOf(current) + d + v.length) % v.length]); };
+
+    root.querySelectorAll<HTMLButtonElement>('.gitem').forEach((b) => b.addEventListener('click', () => { show(Number(b.dataset.index)); dlg.showModal(); }));
+    dlg.querySelectorAll<HTMLButtonElement>('[data-dir]').forEach((b) => b.addEventListener('click', () => step(Number(b.dataset.dir))));
+    dlg.querySelector('[data-close]')!.addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === dlg || (e.target as HTMLElement).classList.contains('glb-frame')) dlg.close(); });
+    dlg.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') step(1); if (e.key === 'ArrowLeft') step(-1); });
+    let x0 = 0;
+    dlg.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+    dlg.addEventListener('touchend', (e) => { const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1); }, { passive: true });
+
+    root.querySelectorAll<HTMLButtonElement>('.gchip').forEach((chip) =>
+      chip.addEventListener('click', () => {
+        const f = chip.dataset.filter!;
+        root.querySelectorAll('.gchip').forEach((c) => { c.classList.toggle('is-on', c === chip); c.setAttribute('aria-pressed', String(c === chip)); });
+        lis.forEach((li) => { li.hidden = f !== 'all' && li.dataset.cat !== f; });
+      }),
+    );
+  }
+</script>

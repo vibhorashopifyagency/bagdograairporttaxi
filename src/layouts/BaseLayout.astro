@@ -47,8 +47,8 @@ const nodes = [...businessGraph(), ...(allCrumbs ? [crumbSchema(allCrumbs)] : []
     {!noindex && <link rel="canonical" href={canonical} />}
     <link rel="preload" href="/fonts/bricolage-latin-variable.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/inter-latin-variable.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/logo-192.png" sizes="192x192" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#111111" />
@@ -79,6 +79,8 @@ const nodes = [...businessGraph(), ...(allCrumbs ? [crumbSchema(allCrumbs)] : []
     <meta name="format-detection" content="telephone=no" />
 
     <JsonLd nodes={nodes} />
+    <!-- Marks the document as scripted before first paint, so reveal animations never hide content without JS. -->
+    <script is:inline>document.documentElement.classList.add('js');</script>
   </head>
   <body class="min-h-screen">
     <Header />
@@ -88,5 +90,36 @@ const nodes = [...businessGraph(), ...(allCrumbs ? [crumbSchema(allCrumbs)] : []
     </main>
     <Footer />
     <MobileActionBar />
+    <script>
+      // Scroll reveal and count-up numbers. Both are decoration: without this
+      // script everything is visible and every number is already in the HTML.
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const counters = document.querySelectorAll<HTMLElement>('[data-count]');
+      const countUp = (el: HTMLElement) => {
+        const end = Number(el.dataset.count); const suffix = el.dataset.suffix ?? '';
+        if (reduce || !Number.isFinite(end)) { el.textContent = end + suffix; return; }
+        const t0 = performance.now(); const dur = 1100;
+        const step = (t: number) => {
+          const k = Math.min(1, (t - t0) / dur); const e = 1 - Math.pow(1 - k, 3);
+          el.textContent = Math.round(end * e) + suffix;
+          if (k < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      };
+      if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver((entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            e.target.classList.add('in');
+            if ((e.target as HTMLElement).dataset.count !== undefined) countUp(e.target as HTMLElement);
+            io.unobserve(e.target);
+          }
+        }, { rootMargin: '0px 0px -6% 0px', threshold: 0.08 });
+        document.querySelectorAll('[data-reveal], [data-reveal-stagger]').forEach((el) => io.observe(el));
+        counters.forEach((el) => io.observe(el));
+      } else {
+        document.querySelectorAll('[data-reveal], [data-reveal-stagger]').forEach((el) => el.classList.add('in'));
+      }
+    </script>
   </body>
 </html>

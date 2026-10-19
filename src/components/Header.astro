@@ -36,6 +36,7 @@ const menus = [
   { key: 'guides', href: '/guides/', label: 'Travel guides' },
 ];
 const plain = [
+  { href: '/gallery/', label: 'Gallery' },
   { href: '/about/', label: 'About' },
   { href: '/contact/', label: 'Contact' },
 ];
@@ -49,7 +50,7 @@ const plain = [
     <ul class="flex items-center gap-5">
       <li><a href={BUSINESS.phoneHref} class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="phone" class="h-3.5 w-3.5 text-lime" />{BUSINESS.phone}</a></li>
       <li><a href={`mailto:${BUSINESS.email}`} class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="card" class="h-3.5 w-3.5 text-lime" />{BUSINESS.email}</a></li>
-      <li class="hidden items-center gap-1.5 lg:inline-flex"><Icon name="clock" class="h-3.5 w-3.5 text-lime" />{BUSINESS.hours}</li>
+      <li class="hidden items-center gap-2 lg:inline-flex"><span class="live-dot" aria-hidden="true"></span><span data-ist>{BUSINESS.hours}</span></li>
     </ul>
     <ul class="flex items-center gap-5">
       {GOOGLE.hasRating && (
@@ -65,10 +66,10 @@ const plain = [
   <div class="wrap flex h-[4.5rem] items-center justify-between gap-3">
     <Logo />
 
-    <nav aria-label="Main" class="hidden min-w-0 lg:block">
-      <ul class="flex items-center gap-0 text-[0.95rem]">
+    <nav aria-label="Main" class="hidden min-w-0 xl:block">
+      <ul class="flex h-[4.5rem] items-center gap-0 text-[0.92rem]">
         {menus.map((m) => (
-          <li class="mega" data-mega={m.key}>
+          <li class="mega flex h-full items-center" data-mega={m.key}>
             <span class="flex items-center">
               <a href={m.href} class:list={['rounded-l-full py-2 pr-1 pl-3.5 font-medium whitespace-nowrap no-underline transition-colors hover:bg-lime-50 hover:text-ink', isActive(m.href) ? 'bg-lime-50 text-ink' : 'text-ink']} aria-current={isActive(m.href) ? 'page' : undefined}>{m.label}</a>
               <button type="button" class="mega-toggle rounded-r-full py-2 pr-2.5 pl-1 text-ink transition-colors hover:bg-lime-50" aria-expanded="false" aria-controls={`mega-${m.key}`} aria-label={`Open ${m.label} menu`}>
@@ -223,7 +224,7 @@ const plain = [
       <a href="/book/" class="btn-book hidden min-h-11 whitespace-nowrap px-5 py-2 sm:inline-flex">Book a taxi <span class="hidden rounded-full bg-ink/10 px-2 py-0.5 text-xs font-bold xl:inline">from {inr(minFare)}</span></a>
 
       <!-- Phone drawer -->
-      <details class="mnav lg:hidden">
+      <details class="mnav xl:hidden">
         <summary class="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-line bg-white" aria-label="Menu">
           <svg class="mnav-open h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
           <svg class="mnav-close hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
@@ -269,6 +270,7 @@ const plain = [
                   </ul>
                 </details>
               </li>
+              <li><a href="/gallery/" class="block py-3.5 font-semibold text-ink no-underline">Gallery</a></li>
               <li><a href="/about/" class="block py-3.5 font-semibold text-ink no-underline">About</a></li>
               <li><a href="/contact/" class="block py-3.5 font-semibold text-ink no-underline">Contact</a></li>
             </ul>
@@ -285,7 +287,14 @@ const plain = [
     display: none;
     position: absolute;
     left: 0; right: 0; top: 100%;
-    padding-top: 0.25rem;
+    padding-top: 0;
+    animation: mega-in .22s cubic-bezier(.2,.7,.2,1);
+  }
+  @keyframes mega-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  /* While a menu is open, an invisible strip under the bar keeps the item hovered as the
+     pointer crosses the border into the panel. */
+  .mega:hover::after, .mega.is-open::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 12px;
   }
   .mega-card {
     background: #fff;
@@ -307,8 +316,10 @@ const plain = [
   @media (hover: none) {
     /* On touch screens hover is sticky and confusing; the toggle button does the work. */
     .mega:hover > .mega-panel { display: none; }
+    .mega:hover::after { content: none; }
     .mega.is-open > .mega-panel { display: block; }
   }
+  @media (prefers-reduced-motion: reduce) { .mega-panel { animation: none; } }
 </style>
 
 <script>
@@ -323,7 +334,30 @@ const plain = [
       if (!open) { item.classList.add('is-open'); btn.setAttribute('aria-expanded', 'true'); }
     });
   });
+  // Hover intent: opening waits a beat so a pointer crossing the bar does not flash menus,
+  // and closing waits longer so a short detour outside the panel does not shut it.
+  if (window.matchMedia('(hover: hover)').matches) {
+    let openTimer = 0, closeTimer = 0;
+    items.forEach((item) => {
+      const btn = item.querySelector<HTMLButtonElement>('.mega-toggle')!;
+      item.addEventListener('mouseenter', () => {
+        clearTimeout(closeTimer);
+        openTimer = window.setTimeout(() => { close(); item.classList.add('is-open'); btn.setAttribute('aria-expanded', 'true'); }, 60);
+      });
+      item.addEventListener('mouseleave', () => {
+        clearTimeout(openTimer);
+        closeTimer = window.setTimeout(() => { item.classList.remove('is-open'); btn.setAttribute('aria-expanded', 'false'); }, 260);
+      });
+    });
+  }
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  // Local time at Bagdogra in the top bar, so the "open now" claim is visibly live.
+  const ist = document.querySelector<HTMLElement>('[data-ist]');
+  if (ist) {
+    const fmt = new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
+    const tick = () => { ist.textContent = `Bagdogra ${fmt.format(new Date())} IST · drivers on duty now`; };
+    tick(); setInterval(tick, 15000);
+  }
   document.addEventListener('click', (e) => { if (!(e.target as Element).closest('.mega')) close(); });
   // Lock page scroll while the phone drawer is open.
   const drawer = document.querySelector<HTMLDetailsElement>('.mnav');

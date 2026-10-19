@@ -4,13 +4,15 @@ import PageHero from '../components/PageHero.astro';
 import TrustStrip from '../components/TrustStrip.astro';
 import BookCta from '../components/BookCta.astro';
 import ReviewsSlider from '../components/ReviewsSlider.astro';
-import Photo from '../components/Photo.astro';
 import Icon from '../components/Icon.astro';
+import GalleryGrid from '../components/GalleryGrid.astro';
 import { BUSINESS, ORG_ID, SITE } from '../data/site';
+import { GALLERY } from '../data/gallery';
 import { ROUTES } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.url}/about/`, about: { '@id': ORG_ID } };
 const since = new Date().getFullYear() - Number(BUSINESS.foundingYear);
+const aboutGallery = [...GALLERY.filter((g) => g.category === 'Our cars'), ...GALLERY.filter((g) => g.category === 'On the road'), ...GALLERY.filter((g) => ['hero', 'toy-train', 'tsomgo'].includes(g.photo))];
 ---
 
 <BaseLayout
@@ -23,7 +25,8 @@ const since = new Date().getFullYear() - Number(BUSINESS.foundingYear);
 
   <div class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-14">
     <div class="prose-site min-w-0">
-      <p class="answer">{SITE.name} is a taxi and tour operator based at {BUSINESS.address.locality}, a few minutes from the airport. Since {BUSINESS.foundingYear} we have driven travellers from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling, North Sikkim and the Dooars with our own drivers and cars.</p>
+      <p class="answer">{SITE.name} is a unit of {BUSINESS.legalName}, a taxi and tour operator based at {BUSINESS.address.locality}, a few minutes from the airport. Since {BUSINESS.foundingYear} we have driven travellers from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling, North Sikkim and the Dooars with our own drivers and cars.</p>
+      <p>The business is run by Pinku Singh, an Army veteran, which is where the name Jai Jawan and the saluting soldier on our badge come from. Travellers who book with us talk to him or his office directly, before the trip and during it.</p>
       <h2>What we promise every traveller</h2>
       <ul>
         <li>One fixed fare, shown before you pay, the same on every page of this site.</li>
@@ -31,12 +34,7 @@ const since = new Date().getFullYear() - Number(BUSINESS.foundingYear);
         <li>A real office you can visit, and one phone number that is answered 24 hours a day.</li>
         <li>A written cancellation and refund policy, not "flexible" or "contact us".</li>
       </ul>
-      <div class="not-prose my-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div class="overflow-hidden rounded-2xl"><Photo name="airport" class="aspect-square w-full object-cover" sizes="200px" /></div>
-        <div class="overflow-hidden rounded-2xl"><Photo name="car-innova" class="aspect-square w-full object-cover" sizes="200px" /></div>
-        <div class="overflow-hidden rounded-2xl"><Photo name="hero" class="aspect-square w-full object-cover" sizes="200px" /></div>
-        <div class="overflow-hidden rounded-2xl"><Photo name="toy-train" class="aspect-square w-full object-cover" sizes="200px" /></div>
-      </div>
+
       <h2>Business details</h2>
       <ul>
         <li>Name: {BUSINESS.legalName}</li>
@@ -63,6 +61,13 @@ const since = new Date().getFullYear() - Number(BUSINESS.foundingYear);
       </div>
     </aside>
   </div>
+  <section class="wrap mt-16" aria-labelledby="about-gallery">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div><p class="eyebrow">Gallery</p><h2 id="about-gallery" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Our cars and the roads we drive</h2></div>
+      <a href="/gallery/" class="inline-flex items-center gap-1.5 font-semibold text-lime-text no-underline hover:text-ink">All {GALLERY.length} photos <Icon name="arrow" class="h-4 w-4" /></a>
+    </div>
+    <div class="mt-8"><GalleryGrid items={aboutGallery} dense /></div>
+  </section>
   <div class="wrap mt-16"><TrustStrip /></div>
   <div class="mt-16"><ReviewsSlider heading="Reviews from our travellers" /></div>
   <div class="wrap">

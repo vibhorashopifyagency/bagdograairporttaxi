@@ -36,7 +36,9 @@ export const SITE = {
 } as const;
 
 export const BUSINESS = {
-  legalName: 'Bagdogra Airport Taxi', // TODO(pre-launch): registered business name
+  legalName: 'Jai Jawan Travels', // From the logo and the current site ("a unit of Jai Jawan Travels"). TODO(pre-launch): confirm the registered name
+  tagline: 'Your journey, our responsibility', // The owner's own line, from the Google Business Profile post of 18 Oct 2026
+  placeId: 'ChIJgebDZQJH5DkR9JC1zX1LUU0', // Google Place ID of the listing (derived from its Maps feature ID)
   foundingYear: '2015', // TODO(pre-launch): confirm year started
   phone: '+91 82930 14308', // From the Google Business Profile (20 Oct 2026). TODO(pre-launch): confirm this is the one number to publish
   phoneHref: 'tel:+918293014308',
@@ -98,6 +100,7 @@ export const NAV = [
   { href: '/tour-packages/', label: 'Tour packages' },
   { href: '/destinations/', label: 'Destinations' },
   { href: '/guides/', label: 'Travel guides' },
+  { href: '/gallery/', label: 'Gallery' },
   { href: '/about/', label: 'About' },
   { href: '/contact/', label: 'Contact' },
 ];

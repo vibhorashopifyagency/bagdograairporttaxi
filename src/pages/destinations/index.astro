@@ -3,7 +3,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../../components/PageHero.astro';
 import DestinationTile from '../../components/DestinationTile.astro';
 import BookCta from '../../components/BookCta.astro';
+import PhotoMarquee from '../../components/PhotoMarquee.astro';
 import { DESTINATIONS } from '../../data/destinations';
+import { GALLERY } from '../../data/gallery';
 ---
 
 <BaseLayout
@@ -15,9 +17,16 @@ import { DESTINATIONS } from '../../data/destinations';
     <p class="mt-4 max-w-2xl text-lg text-white/85">Short, practical guides written by the people who drive these roads every day: best time, days needed, permits and how to reach from Bagdogra.</p>
   </PageHero>
   <div class="wrap section">
-    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>
       {DESTINATIONS.map((d) => <DestinationTile d={d} variant="card" />)}
     </div>
+    <section class="mt-16" aria-labelledby="dest-gallery">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div><p class="eyebrow">Gallery</p><h2 id="dest-gallery" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">See where the road goes</h2></div>
+        <a href="/gallery/" class="font-semibold text-lime-text no-underline hover:text-ink">All {GALLERY.length} photos →</a>
+      </div>
+      <div class="mt-8"><PhotoMarquee items={GALLERY.filter((g) => g.category !== 'Our cars')} /></div>
+    </section>
     <BookCta waText="Hi, I am planning a trip and would like some advice." heading="Not sure where to go first?" image="tsomgo" />
   </div>
 </BaseLayout>
