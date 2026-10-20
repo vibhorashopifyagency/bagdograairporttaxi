@@ -1,0 +1,117 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import TrustStrip from '../../components/TrustStrip.astro';
+import PackageCard from '../../components/PackageCard.astro';
+import Icon from '../../components/Icon.astro';
+import GoogleRatingBadge from '../../components/GoogleRatingBadge.astro';
+import { PACKAGES, type TourPackage } from '../../data/packages';
+import { destinationBySlug } from '../../data/destinations';
+import { inr } from '../../data/routes';
+import { BUSINESS, POLICY, waLink } from '../../data/site';
+import { packagePhoto } from '../../lib/photos';
+import { faqPage, tourTrip } from '../../lib/schema';
+
+export function getStaticPaths() {
+  return PACKAGES.map((pkg) => ({ params: { slug: pkg.slug }, props: { pkg } }));
+}
+const { pkg } = Astro.props as { pkg: TourPackage };
+const path = `/tour-packages/${pkg.slug}/`;
+const faqs = [
+  {
+    q: `How much does the ${pkg.name} tour cost?`,
+    a: `From ${inr(pkg.fromPrice)} ${pkg.priceNote}, for ${pkg.nights} nights and ${pkg.days} days starting and ending at Bagdogra Airport or NJP. The price depends on season, hotel category and group size.`,
+  },
+  ...pkg.faqs,
+  {
+    q: 'How do I confirm the package?',
+    a: `Pay ${POLICY.advancePercent}% of the package price as an advance to hold hotels and the car. You get a written itinerary and invoice on WhatsApp and email. The balance is due before the trip starts.`,
+  },
+];
+const others = PACKAGES.filter((p) => p.slug !== pkg.slug).slice(0, 3);
+const dests = pkg.destinations.map(destinationBySlug).filter(Boolean);
+const waText = `Hi, I am interested in the ${pkg.name} tour package (${pkg.nights}N/${pkg.days}D).`;
+---
+
+<BaseLayout
+  title={`${pkg.short} Tour Package ${pkg.nights}N/${pkg.days}D from ${inr(pkg.fromPrice)}`}
+  description={`${pkg.nights}N/${pkg.days}D ${pkg.short} tour from Bagdogra, from ${inr(pkg.fromPrice)} per person. Private car, hotels, day-wise itinerary and clear inclusions.`}
+  crumbs={[{ name: 'Tour packages', path: '/tour-packages/' }, { name: pkg.name, path }]}
+  schema={[tourTrip(pkg, path), faqPage(faqs, path)]}
+  ogImage={`/img/${packagePhoto(pkg)}-1600.webp`}
+>
+  <PageHero image={packagePhoto(pkg)} eyebrow={`${pkg.nights} nights / ${pkg.days} days · from Bagdogra or NJP`} title={`${pkg.name} tour package`}>
+    <div class="mt-5 flex flex-wrap gap-2">
+      <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {pkg.places.join(' · ')}</span>
+      {pkg.bestFor.map((b) => <span class="chip-light">{b}</span>)}
+    </div>
+  </PageHero>
+
+  <article class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-14">
+    <div class="min-w-0">
+      <p class="answer">{pkg.summary}</p>
+
+      <section id="itinerary" class="mt-12" aria-labelledby="it-h">
+        <h2 id="it-h" class="text-2xl font-extrabold sm:text-3xl">Day-wise itinerary</h2>
+        <ol class="mt-6 space-y-5 border-l-2 border-line pl-7">
+          {pkg.itinerary.map((d, i) => (
+            <li class="relative">
+              <span class="absolute -left-[2.55rem] flex h-8 w-8 items-center justify-center rounded-full bg-ink font-[family-name:var(--font-display)] text-sm font-bold text-white ring-4 ring-white">{i + 1}</span>
+              <h3 class="pt-1 font-bold text-ink">Day {i + 1}: {d.title}</h3>
+              <p class="mt-1 leading-relaxed">{d.detail}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section class="mt-12 grid gap-5 md:grid-cols-2" aria-label="Inclusions and exclusions">
+        <div class="card p-6">
+          <h2 class="text-xl font-bold">Included</h2>
+          <ul class="mt-4 space-y-2.5">{pkg.includes.map((x) => <li class="flex gap-2.5"><Icon name="check" class="mt-0.5 h-5 w-5 shrink-0 text-lime-text" />{x}</li>)}</ul>
+        </div>
+        <div class="card bg-cream p-6">
+          <h2 class="text-xl font-bold">Not included</h2>
+          <ul class="mt-4 space-y-2.5">{pkg.excludes.map((x) => <li class="flex gap-2.5"><span class="w-5 shrink-0 text-center text-muted" aria-hidden="true">–</span>{x}</li>)}</ul>
+        </div>
+      </section>
+
+      {dests.length > 0 && (
+        <p class="mt-8">Read more about the places on this trip: {dests.map((d, i) => <>{i > 0 && ', '}<a href={`/destinations/${d!.slug}/`}>{d!.name}</a></>)}.</p>
+      )}
+
+      <FaqList faqs={faqs} />
+    </div>
+
+    <aside class="lg:sticky lg:top-24 lg:self-start">
+      <div class="card overflow-hidden">
+        <div class="bg-ink p-6 text-white">
+          <p class="text-sm text-white/70">Package price</p>
+          <p class="mt-1 flex items-baseline gap-2"><span class="text-sm text-white/70">from</span><strong class="font-[family-name:var(--font-display)] text-4xl font-extrabold">{inr(pkg.fromPrice)}</strong></p>
+          <p class="mt-1 text-sm text-white/70">{pkg.priceNote}</p>
+          <GoogleRatingBadge variant="chip" dark class="mt-4" />
+        </div>
+        <div class="space-y-3 p-5">
+          <a class="btn-book w-full" href={`/book/?package=${pkg.slug}`}>Get this package <Icon name="arrow" /></a>
+          <a class="btn-wa w-full" href={waLink(waText)} rel="noopener"><Icon name="whatsapp" /> Ask on WhatsApp</a>
+          <a class="btn-ghost w-full" href={BUSINESS.phoneHref}><Icon name="phone" class="h-4 w-4 text-lime-text" /> {BUSINESS.phone}</a>
+        </div>
+        <ul class="space-y-2.5 border-t border-line bg-cream p-5 text-sm">
+          <li class="flex gap-2.5"><Icon name="shield" class="h-5 w-5 shrink-0 text-lime-text" />Only {POLICY.advancePercent}% advance to confirm</li>
+          <li class="flex gap-2.5"><Icon name="car" class="h-5 w-5 shrink-0 text-lime-text" />Same private car and driver throughout</li>
+          <li class="flex gap-2.5"><Icon name="refund" class="h-5 w-5 shrink-0 text-lime-text" />Clear <a href="/cancellation-refund-policy/">cancellation terms</a></li>
+        </ul>
+      </div>
+    </aside>
+  </article>
+
+  <div class="wrap">
+    <section class="mt-16"><TrustStrip /></section>
+    <section class="mt-16" aria-labelledby="more-h">
+      <h2 id="more-h" class="mb-6 text-2xl font-extrabold sm:text-3xl">Other tour packages</h2>
+      <div class="grid gap-5 md:grid-cols-3">{others.map((p) => <PackageCard pkg={p} />)}</div>
+    </section>
+    <BookCta bookHref={`/book/?package=${pkg.slug}`} waText={waText} heading="Plan this trip with us" image={packagePhoto(pkg)} />
+  </div>
+</BaseLayout>

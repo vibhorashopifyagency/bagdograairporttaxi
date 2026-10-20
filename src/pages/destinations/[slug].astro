@@ -1,0 +1,94 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import FaqList from '../../components/FaqList.astro';
+import BookCta from '../../components/BookCta.astro';
+import RouteCard from '../../components/RouteCard.astro';
+import PackageCard from '../../components/PackageCard.astro';
+import Icon from '../../components/Icon.astro';
+import { DESTINATIONS, type Destination } from '../../data/destinations';
+import { ROUTES } from '../../data/routes';
+import { PACKAGES } from '../../data/packages';
+import { SITE } from '../../data/site';
+import { destinationPhoto } from '../../lib/photos';
+import { article, faqPage, touristDestination } from '../../lib/schema';
+
+export function getStaticPaths() {
+  return DESTINATIONS.map((d) => ({ params: { slug: d.slug }, props: { d } }));
+}
+const { d } = Astro.props as { d: Destination };
+const path = `/destinations/${d.slug}/`;
+const routes = ROUTES.filter((r) => r.destination === d.slug);
+const packages = PACKAGES.filter((p) => p.destinations.includes(d.slug));
+const faqs = [
+  { q: `What is the best time to visit ${d.name}?`, a: d.bestTime },
+  { q: `How many days do I need in ${d.name}?`, a: `${d.daysNeeded}. ${d.faqs[0]?.q.toLowerCase().includes('days') ? '' : 'Add a day if you want a slower pace.'}`.trim() },
+  { q: `How do I reach ${d.name} from Bagdogra Airport?`, a: d.howToReach },
+  ...d.faqs,
+];
+const desc = `${d.name} travel guide: best time to visit, how many days, top sights and how to reach from Bagdogra Airport or NJP, with taxi fares and tour packages.`;
+---
+
+<BaseLayout
+  title={`${d.short ?? d.name} Travel Guide: Best Time, Sights, Taxi`}
+  description={desc}
+  crumbs={[{ name: 'Destinations', path: '/destinations/' }, { name: d.name, path }]}
+  schema={[touristDestination(d, path), article({ headline: `${d.name} travel guide`, description: desc, path, modified: `${SITE.faresUpdated}-19` }), faqPage(faqs, path)]}
+  ogType="article"
+  ogImage={`/img/${destinationPhoto(d.slug)}-1600.webp`}
+>
+  <PageHero image={destinationPhoto(d.slug)} eyebrow={`${d.region} · ${d.altitude}`} title={`${d.name} travel guide`}>
+    <div class="mt-5 flex flex-wrap gap-2">
+      <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> {d.daysNeeded}</span>
+      <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {d.howToReach.split('.')[0]}</span>
+    </div>
+  </PageHero>
+
+  <article class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-14">
+    <div class="min-w-0">
+      <p class="answer">{d.summary}</p>
+      <dl class="mt-6 grid gap-3 sm:grid-cols-2">
+        <div class="card p-5"><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Best time to visit</dt><dd class="mt-1.5 text-ink">{d.bestTime}</dd></div>
+        <div class="card p-5"><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Days needed</dt><dd class="mt-1.5 text-ink">{d.daysNeeded}</dd></div>
+      </dl>
+
+      <h2 class="mt-12 text-2xl font-extrabold sm:text-3xl">Top things to see in {d.name}</h2>
+      <ol class="mt-5 grid gap-3 sm:grid-cols-2">
+        {d.highlights.map((h, i) => (
+          <li class="card flex gap-4 p-5">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-sm font-extrabold text-ink">{i + 1}</span>
+            <span><strong class="block text-ink">{h.name}</strong><span class="mt-0.5 block text-sm leading-relaxed">{h.note}</span></span>
+          </li>
+        ))}
+      </ol>
+
+      <div class="prose-site mt-6">
+        <h2>How to reach {d.name}</h2>
+        <p>{d.howToReach}</p>
+        {d.permit && (<><h2>Permits</h2><p>{d.permit} See our <a href="/guides/sikkim-permit-guide/">Sikkim permit guide</a>.</p></>)}
+      </div>
+
+      <FaqList faqs={faqs} />
+    </div>
+
+    <aside class="space-y-5 lg:sticky lg:top-24 lg:self-start">
+      {routes.length > 0 && (
+        <section class="card p-5" aria-labelledby="tx-h">
+          <h2 id="tx-h" class="text-lg font-bold">Taxi to {d.short ?? d.name}</h2>
+          <div class="mt-4 grid gap-3">{routes.map((r) => <RouteCard route={r} compact />)}</div>
+        </section>
+      )}
+      <a href="/book/" class="btn-book w-full">Book a taxi <Icon name="arrow" /></a>
+    </aside>
+  </article>
+
+  <div class="wrap">
+    {packages.length > 0 && (
+      <section class="mt-16" aria-labelledby="pk-h">
+        <h2 id="pk-h" class="mb-6 text-2xl font-extrabold sm:text-3xl">Tour packages with {d.short ?? d.name}</h2>
+        <div class="grid gap-5 md:grid-cols-3">{packages.slice(0, 3).map((p) => <PackageCard pkg={p} />)}</div>
+      </section>
+    )}
+    <BookCta waText={`Hi, I am planning a trip to ${d.name}.`} heading={`Plan your ${d.short ?? d.name} trip`} image={destinationPhoto(d.slug)} />
+  </div>
+</BaseLayout>

@@ -1,0 +1,36 @@
+---
+/**
+ * A departures-board strip of live fares: every airport route and its lowest
+ * fare, drifting across an ink band. Pure CSS marquee, paused on hover, a
+ * plain scrollable row under reduced motion. Links go to the route pages.
+ */
+import { ROUTES, inr, lowestFare } from '../data/routes';
+import { SITE } from '../data/site';
+const rows = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport');
+---
+
+<div class="border-y border-white/10 bg-ink text-white" aria-label="Fare board">
+  <div class="flex items-stretch">
+    <p class="hidden shrink-0 items-center gap-2 border-r border-white/10 bg-ink-soft px-5 text-[0.68rem] font-bold tracking-[0.14em] text-lime uppercase md:flex">
+      <span class="live-dot" aria-hidden="true"></span> Fixed fares · {SITE.faresUpdatedLabel}
+    </p>
+    <div class="marquee min-w-0 flex-1" style={`--speed: ${rows.length * 6}s`}>
+      <div class="marquee-track">
+        {[0, 1].map((copy) => (
+          <ul class="flex shrink-0 items-center" aria-hidden={copy === 1 ? 'true' : undefined}>
+            {rows.map((r) => (
+              <li class="flex shrink-0 items-center">
+                <a href={`/taxi/${r.slug}/`} class="flex items-center gap-3 px-5 py-3 text-sm no-underline hover:bg-white/5" tabindex={copy === 1 ? -1 : undefined}>
+                  <span class="font-[family-name:var(--font-display)] text-[0.95rem] font-bold tracking-wide text-white uppercase">{r.toShort}</span>
+                  <span class="text-xs text-white/55">{r.km} km · {r.duration.replace(' to ', '–').replace(' hours', ' h').replace(' minutes', ' min')}</span>
+                  <span class="font-[family-name:var(--font-display)] text-base font-extrabold text-lime">{inr(lowestFare(r))}</span>
+                </a>
+                <span class="h-1.5 w-1.5 rounded-full bg-white/20" aria-hidden="true"></span>
+              </li>
+            ))}
+          </ul>
+        ))}
+      </div>
+    </div>
+  </div>
+</div>

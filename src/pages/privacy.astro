@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { BUSINESS, SITE } from '../data/site';
+---
+
+<BaseLayout title="Privacy Policy" description={`How ${SITE.name} handles the details you share when you book a taxi or tour.`} crumbs={[{ name: 'Privacy', path: '/privacy/' }]}>
+  <div class="wrap mt-6">
+    <div class="prose-site">
+      <h1 class="text-3xl font-extrabold sm:text-4xl">Privacy policy</h1>
+      <p>We collect only what we need to run your trip: your name, mobile number, pickup and drop details, flight or train number and, for Sikkim permits, copies of photo ID.</p>
+      <h2>How we use it</h2>
+      <ul>
+        <li>To confirm your booking and send driver details on WhatsApp or SMS.</li>
+        <li>To apply for Sikkim protected-area permits on your behalf.</li>
+        <li>To ask for a review after your trip, once.</li>
+      </ul>
+      <p>We do not sell or share your details with anyone except the driver, the hotels in your package and permit authorities.</p>
+      <h2>Payments</h2>
+      <p>Online payments are processed by a licensed payment gateway. We never see or store your card or UPI details.</p>
+      <h2>This website</h2>
+      <p>This site sets no advertising cookies. The booking form runs in your browser and sends nothing to us until you choose to confirm on WhatsApp or pay.</p>
+      <h2>Your rights</h2>
+      <p>Under the Digital Personal Data Protection Act, 2023, you can ask us to show, correct or delete your data. Email {BUSINESS.email}. ID copies for permits are deleted within 30 days of your trip.</p>
+      <p class="text-sm text-muted">Effective {SITE.faresUpdatedLabel}.</p>
+    </div>
+  </div>
+</BaseLayout>

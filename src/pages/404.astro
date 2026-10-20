@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import RouteCard from '../components/RouteCard.astro';
+import { ROUTES } from '../data/routes';
+---
+
+<!-- Served with a real 404 status by the host and marked noindex, so it can
+     never be indexed with the homepage title as the old /404.php was. -->
+<BaseLayout title="Page not found" description="This page does not exist. Find taxi fares and tour packages from Bagdogra Airport." noindex>
+  <div class="wrap mt-12 text-center">
+    <p class="eyebrow">Error 404</p>
+    <h1 class="mt-2 text-4xl font-extrabold">This road doesn’t go anywhere</h1>
+    <p class="mx-auto mt-4 max-w-xl text-lg">The page you’re looking for has moved or never existed. These are the routes people book most.</p>
+    <div class="mt-8 grid gap-3 text-left sm:grid-cols-2 lg:grid-cols-4">{ROUTES.slice(0, 4).map((r) => <RouteCard route={r} />)}</div>
+    <a class="btn-book mt-8" href="/">Back to the homepage</a>
+  </div>
+</BaseLayout>

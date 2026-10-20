@@ -1,0 +1,6 @@
+# Netlify / Cloudflare Pages: old .php URLs to the new clean URLs (301)
+/index.php      /                 301
+/about.php      /about/           301
+/contact.php    /contact/         301
+/404.php        /                 301
+/*.php          /                 301

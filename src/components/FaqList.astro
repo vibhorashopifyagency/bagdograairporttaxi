@@ -1,0 +1,25 @@
+---
+import type { Faq } from '../data/routes';
+interface Props {
+  faqs: Faq[];
+  heading?: string;
+}
+const { faqs, heading = 'Frequently asked questions' } = Astro.props;
+---
+
+<section aria-labelledby="faq-h" class="mt-14">
+  <h2 id="faq-h" class="mb-5 text-2xl font-extrabold sm:text-3xl">{heading}</h2>
+  <div class="space-y-3">
+    {faqs.map((f) => (
+      <details class="group card p-4 sm:p-5 open:border-lime open:bg-lime-50/40">
+        <summary class="flex cursor-pointer list-none items-start justify-between gap-4 font-semibold text-ink">
+          <h3 class="text-base sm:text-lg">{f.q}</h3>
+          <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cream text-lime-text transition-transform group-open:rotate-45" aria-hidden="true">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
+          </span>
+        </summary>
+        <p class="mt-3 leading-relaxed">{f.a}</p>
+      </details>
+    ))}
+  </div>
+</section>

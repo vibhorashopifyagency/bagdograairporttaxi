@@ -1,0 +1,48 @@
+---
+/**
+ * One taxi route. The default card is a photo poster with the destination
+ * over the picture and the fare below, so a grid of them reads at a glance.
+ * `compact` is a one-line row for lists where every route goes to the same
+ * place (destination pages).
+ */
+import type { Route } from '../data/routes';
+import { inr, lowestFare } from '../data/routes';
+import { routePhoto } from '../lib/photos';
+import Photo from './Photo.astro';
+import Icon from './Icon.astro';
+interface Props {
+  route: Route;
+  compact?: boolean;
+}
+const { route, compact = false } = Astro.props;
+const href = `/taxi/${route.slug}/`;
+const from = inr(lowestFare(route));
+---
+
+{compact ? (
+  <a href={href} class="card lift group flex items-center gap-4 p-4 no-underline">
+    <span class="min-w-0 flex-1">
+      <span class="block text-[0.7rem] font-bold tracking-[0.12em] text-muted uppercase">{route.fromShort}</span>
+      <span class="block font-[family-name:var(--font-display)] text-lg font-bold text-ink group-hover:text-lime-text">{route.toShort}</span>
+      <span class="mt-0.5 block text-sm text-muted">{route.km} km · {route.duration}</span>
+    </span>
+    <span class="shrink-0 text-right text-[0.7rem] text-muted">from<strong class="block font-[family-name:var(--font-display)] text-xl leading-none text-ink">{from}</strong></span>
+    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cream text-ink transition-colors group-hover:bg-lime" aria-hidden="true"><Icon name="arrow" class="h-4 w-4" /></span>
+  </a>
+) : (
+  <a href={href} class="card lift group flex flex-col overflow-hidden no-underline">
+    <span class="relative block aspect-[4/3] overflow-hidden bg-mist">
+      <Photo name={routePhoto(route)} class="zoom absolute inset-0 h-full w-full object-cover" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" alt="" />
+      <span class="photo-fade absolute inset-x-0 bottom-0 h-3/4" aria-hidden="true"></span>
+      <span class="absolute top-3 left-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink shadow-sm">{route.km} km</span>
+      <span class="absolute inset-x-4 bottom-4 text-white">
+        <span class="block text-[0.68rem] font-bold tracking-[0.12em] uppercase opacity-85">From {route.fromShort}</span>
+        <span class="block font-[family-name:var(--font-display)] text-2xl leading-tight font-bold">{route.toShort}</span>
+      </span>
+    </span>
+    <span class="flex items-center justify-between gap-3 p-4">
+      <span class="inline-flex items-center gap-1.5 text-sm text-muted"><Icon name="clock" class="h-4 w-4 shrink-0 text-lime-text" />{route.duration}</span>
+      <span class="text-right text-[0.7rem] text-muted">from<strong class="block font-[family-name:var(--font-display)] text-xl leading-none text-ink">{from}</strong></span>
+    </span>
+  </a>
+)}

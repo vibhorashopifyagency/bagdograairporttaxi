@@ -1,0 +1,36 @@
+---
+/**
+ * A photo tile per destination. `poster` (default) is the tall tile used in
+ * the homepage grid; `card` adds the summary for the destinations index.
+ */
+import type { Destination } from '../data/destinations';
+import { destinationPhoto } from '../lib/photos';
+import Photo from './Photo.astro';
+interface Props { d: Destination; variant?: 'poster' | 'card' }
+const { d, variant = 'poster' } = Astro.props;
+---
+
+{variant === 'poster' ? (
+  <a href={`/destinations/${d.slug}/`} class="lift group relative block aspect-[4/5] overflow-hidden rounded-[var(--radius-card)] bg-ink no-underline">
+    <Photo name={destinationPhoto(d.slug)} class="zoom absolute inset-0 h-full w-full object-cover" sizes="(min-width: 768px) 25vw, 50vw" alt="" />
+    <span class="photo-fade absolute inset-x-0 bottom-0 h-3/4" aria-hidden="true"></span>
+    <span class="absolute inset-x-0 bottom-0 p-4 text-white">
+      <span class="block text-[0.7rem] font-bold tracking-[0.12em] uppercase opacity-80">{d.altitude}</span>
+      <span class="block font-[family-name:var(--font-display)] text-2xl leading-tight font-bold">{d.short ?? d.name}</span>
+      <span class="mt-0.5 block text-sm opacity-90">{d.daysNeeded}</span>
+    </span>
+  </a>
+) : (
+  <a href={`/destinations/${d.slug}/`} class="card lift group flex flex-col overflow-hidden no-underline">
+    <span class="relative block aspect-[16/10] overflow-hidden bg-mist">
+      <Photo name={destinationPhoto(d.slug)} class="zoom absolute inset-0 h-full w-full object-cover" alt="" />
+      <span class="absolute top-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-ink shadow-sm">{d.altitude}</span>
+    </span>
+    <span class="flex flex-1 flex-col p-5">
+      <span class="text-[0.7rem] font-bold tracking-[0.12em] text-lime-text uppercase">{d.region}</span>
+      <span class="mt-1 font-[family-name:var(--font-display)] text-xl leading-tight font-bold text-ink group-hover:text-lime-text">{d.name}</span>
+      <span class="mt-2 line-clamp-3 text-sm leading-relaxed text-body">{d.summary}</span>
+      <span class="mt-4 text-sm font-medium text-muted">{d.daysNeeded}</span>
+    </span>
+  </a>
+)}

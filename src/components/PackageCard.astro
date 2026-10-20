@@ -1,0 +1,29 @@
+---
+import type { TourPackage } from '../data/packages';
+import { inr } from '../data/routes';
+import { packagePhoto } from '../lib/photos';
+import Photo from './Photo.astro';
+interface Props { pkg: TourPackage; badge?: string }
+const { pkg, badge } = Astro.props;
+---
+
+<a href={`/tour-packages/${pkg.slug}/`} class="card lift group flex flex-col overflow-hidden no-underline">
+  <span class="relative block aspect-[16/10] overflow-hidden bg-mist">
+    <Photo name={packagePhoto(pkg)} class="zoom absolute inset-0 h-full w-full object-cover" alt="" />
+    <span class="photo-fade absolute inset-x-0 bottom-0 h-2/3" aria-hidden="true"></span>
+    <span class="absolute top-3 left-3 flex gap-1.5"><span class="rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-ink shadow-sm">{pkg.nights}N · {pkg.days}D</span>{badge && <span class="rounded-full bg-lime px-3 py-1 text-xs font-bold text-ink shadow-sm">{badge}</span>}</span>
+    <span class="absolute inset-x-4 bottom-3 text-sm font-medium text-white/90">{pkg.places.join(' · ')}</span>
+  </span>
+  <span class="flex flex-1 flex-col p-5">
+    <span class="font-[family-name:var(--font-display)] text-xl leading-tight font-bold text-ink group-hover:text-lime-text">{pkg.name}</span>
+    <span class="mt-3 flex flex-wrap gap-1.5">
+      {pkg.bestFor.map((b) => <span class="rounded-full bg-lime-50 px-2.5 py-0.5 text-xs font-medium text-ink">{b}</span>)}
+    </span>
+    <span class="mt-auto flex items-end justify-between gap-3 border-t border-line pt-4 mt-5">
+      <span class="text-sm text-muted">from <strong class="font-[family-name:var(--font-display)] text-2xl text-ink">{inr(pkg.fromPrice)}</strong><span class="block text-xs">per person · private car · hotels</span></span>
+      <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-cream text-ink transition-colors group-hover:bg-lime" aria-hidden="true">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
+      </span>
+    </span>
+  </span>
+</a>

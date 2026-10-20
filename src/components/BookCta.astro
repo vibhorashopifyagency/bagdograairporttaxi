@@ -1,0 +1,35 @@
+---
+import Icon from './Icon.astro';
+import Photo from './Photo.astro';
+import { BUSINESS, POLICY, waLink } from '../data/site';
+interface Props {
+  bookHref?: string;
+  waText?: string;
+  heading?: string;
+  image?: string;
+}
+const {
+  bookHref = '/book/',
+  waText = 'Hi, I would like to book a taxi.',
+  heading = 'Ready to book?',
+  image = 'pelling',
+} = Astro.props;
+---
+
+<aside class="relative mt-14 overflow-hidden rounded-[28px] bg-ink-soft text-white">
+  <Photo name={image} class="absolute inset-0 h-full w-full object-cover opacity-40" sizes="(min-width: 1024px) 1152px, 100vw" alt="" />
+  <div class="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-ink/40" aria-hidden="true"></div>
+  <div class="relative grid grid-cols-1 gap-6 p-7 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-center">
+    <div class="max-w-2xl">
+      <h2 class="text-2xl font-extrabold text-white sm:text-3xl">{heading}</h2>
+      <p class="mt-2 text-white/70">
+        Pay a {POLICY.advancePercent}% advance securely and get instant confirmation on WhatsApp. Free cancellation up to {POLICY.freeCancelHours} hours before pickup.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <a class="btn-book" href={bookHref}>Book now <Icon name="arrow" /></a>
+      <a class="btn-light" href={waLink(waText)} rel="noopener"><Icon name="whatsapp" /> WhatsApp</a>
+      <a class="btn-light" href={BUSINESS.phoneHref}><Icon name="phone" /> {BUSINESS.phone}</a>
+    </div>
+  </div>
+</aside>

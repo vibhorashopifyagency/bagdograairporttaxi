@@ -1,0 +1,19 @@
+---
+/**
+ * Emits one JSON-LD graph. Rendered with set:html so quotes are not
+ * HTML-escaped (an escaped quote makes the whole block invalid JSON), and
+ * undefined or empty values are dropped so an unknown fact is absent rather
+ * than present and empty.
+ */
+interface Props {
+  nodes: unknown[];
+}
+const { nodes } = Astro.props;
+const json = JSON.stringify({ '@context': 'https://schema.org', '@graph': nodes }, (_k, v) => {
+  if (v === undefined || v === '') return undefined;
+  if (Array.isArray(v) && v.length === 0) return undefined;
+  return v;
+}).replace(/</g, '\\u003c');
+---
+
+<script type="application/ld+json" is:inline set:html={json} />

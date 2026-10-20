@@ -1,0 +1,36 @@
+---
+/**
+ * Two rows of photographs drifting in opposite directions, the whole strip a
+ * link to the gallery. Pure CSS animation (paused on hover, off under
+ * reduced motion, where it becomes a scrollable row). Each row lists its
+ * photos twice so the loop is seamless; the copies are hidden from readers.
+ */
+import type { GalleryItem } from '../data/gallery';
+import Photo from './Photo.astro';
+interface Props { items: GalleryItem[]; rows?: 1 | 2 }
+const { items, rows = 2 } = Astro.props;
+const half = Math.ceil(items.length / 2);
+const rowItems = rows === 2 ? [items.slice(0, half), items.slice(half)] : [items];
+---
+
+<div class="space-y-3 sm:space-y-4">
+  {rowItems.map((row, r) => (
+    <div class="marquee" style={`--speed: ${Math.max(40, row.length * 7)}s`}>
+      <div class:list={['marquee-track gap-3 sm:gap-4', r === 1 && 'reverse']}>
+        {[0, 1].map((copy) => (
+          <ul class="flex shrink-0 gap-3 pr-3 sm:gap-4 sm:pr-4" aria-hidden={copy === 1 ? 'true' : undefined}>
+            {row.map((it) => (
+              <li class="shrink-0">
+                <a href="/gallery/" class="group relative block h-40 w-56 overflow-hidden rounded-2xl bg-mist no-underline sm:h-52 sm:w-72" tabindex={copy === 1 ? -1 : undefined}>
+                  <Photo name={it.photo} class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" sizes="288px" alt={copy === 1 ? '' : undefined} />
+                  <span class="photo-fade absolute inset-x-0 bottom-0 h-1/2 opacity-80" aria-hidden="true"></span>
+                  <span class="absolute inset-x-3 bottom-2.5 text-white"><strong class="block font-[family-name:var(--font-display)] text-sm leading-tight sm:text-base">{it.title}</strong><span class="block truncate text-[0.7rem] opacity-85">{it.place}</span></span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ))}
+      </div>
+    </div>
+  ))}
+</div>

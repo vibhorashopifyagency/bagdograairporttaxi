@@ -1,0 +1,35 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import Photo from '../../components/Photo.astro';
+import BookCta from '../../components/BookCta.astro';
+import { GUIDES } from '../../data/guides';
+import { guidePhoto } from '../../lib/photos';
+---
+
+<BaseLayout
+  title="Travel Guides for Bagdogra, Darjeeling and Sikkim"
+  description="Practical, up-to-date guides from a local Bagdogra taxi operator: Sikkim permits, getting from Bagdogra Airport to the hills, and more."
+  crumbs={[{ name: 'Travel guides', path: '/guides/' }]}
+>
+  <PageHero image="teesta" eyebrow="From the drivers’ seat" title="Travel guides" compact>
+    <p class="mt-4 max-w-2xl text-lg text-white/85">Answers to the questions our drivers hear every day, kept current.</p>
+  </PageHero>
+  <div class="wrap section">
+    <div class="grid gap-5 md:grid-cols-2">
+      {GUIDES.map((g) => (
+        <a href={`/guides/${g.slug}/`} class="card lift group flex flex-col overflow-hidden no-underline sm:flex-row">
+          <span class="relative block aspect-[16/10] shrink-0 overflow-hidden bg-mist sm:aspect-auto sm:w-48">
+            <Photo name={guidePhoto(g.slug)} class="zoom absolute inset-0 h-full w-full object-cover" sizes="(min-width: 640px) 192px, 100vw" alt="" />
+          </span>
+          <span class="flex flex-1 flex-col p-5">
+            <span class="font-[family-name:var(--font-display)] text-xl leading-tight font-bold text-ink group-hover:text-lime-text">{g.title}</span>
+            <span class="mt-2 text-sm leading-relaxed">{g.description}</span>
+            <span class="mt-auto pt-4 text-xs font-medium text-muted">Updated {g.updatedLabel}</span>
+          </span>
+        </a>
+      ))}
+    </div>
+    <BookCta waText="Hi, I have a question about travelling from Bagdogra." heading="Still have a question?" image="nathula" />
+  </div>
+</BaseLayout>

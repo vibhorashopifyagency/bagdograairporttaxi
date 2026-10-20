@@ -1,0 +1,365 @@
+---
+/**
+ * Top bar, main bar and mega menu. The four content menus open on hover and
+ * keyboard focus (CSS only); a small script adds click/tap toggling, Escape
+ * and click-outside. On phones the same content is a full-screen drawer built
+ * from <details>, so it works without JavaScript.
+ */
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import Photo from './Photo.astro';
+import GoogleLogo from './GoogleLogo.astro';
+import Stars from './Stars.astro';
+import { BUSINESS, waLink } from '../data/site';
+import { ROUTES, ROUTE_GROUPS, inr, lowestFare } from '../data/routes';
+import { PACKAGES } from '../data/packages';
+import { DESTINATIONS } from '../data/destinations';
+import { GUIDES } from '../data/guides';
+import { VEHICLES } from '../data/vehicles';
+import { GOOGLE } from '../data/reviews';
+import { destinationPhoto, guidePhoto, packagePhoto } from '../lib/photos';
+
+const path = Astro.url.pathname;
+const isActive = (href: string) => path === href || path.startsWith(href);
+const minFare = Math.min(...ROUTES.map(lowestFare));
+const minPkg = Math.min(...PACKAGES.map((p) => p.fromPrice));
+const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', innova: 'car-innova', traveller: 'car-traveller' };
+const themes = [...new Set(PACKAGES.flatMap((p) => p.bestFor))].slice(0, 8);
+const menuPackages = PACKAGES.slice(0, 6);
+const permitGuide = GUIDES.find((g) => g.slug === 'sikkim-permit-guide')!;
+const shortPlace = (s: string) => s.replace('Bagdogra Airport', 'Airport').replace('NJP station', 'NJP');
+
+const menus = [
+  { key: 'fares', href: '/taxi/', label: 'Taxi fares' },
+  { key: 'packages', href: '/tour-packages/', label: 'Tour packages' },
+  { key: 'destinations', href: '/destinations/', label: 'Destinations' },
+  { key: 'guides', href: '/guides/', label: 'Travel guides' },
+];
+const plain = [
+  { href: '/gallery/', label: 'Gallery' },
+  { href: '/about/', label: 'About' },
+  { href: '/contact/', label: 'Contact' },
+];
+---
+
+<a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-white focus:p-3">Skip to content</a>
+
+<!-- Top bar: the facts a nervous first-time booker checks before anything else. -->
+<div class="hidden bg-ink text-xs text-white/75 md:block">
+  <div class="wrap flex h-9 items-center justify-between gap-4">
+    <ul class="flex items-center gap-5">
+      <li><a href={BUSINESS.phoneHref} class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="phone" class="h-3.5 w-3.5 text-lime" />{BUSINESS.phone}</a></li>
+      <li><a href={`mailto:${BUSINESS.email}`} class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="card" class="h-3.5 w-3.5 text-lime" />{BUSINESS.email}</a></li>
+      <li class="hidden items-center gap-2 lg:inline-flex"><span class="live-dot" aria-hidden="true"></span><span data-ist>{BUSINESS.hours}</span></li>
+    </ul>
+    <ul class="flex items-center gap-5">
+      {GOOGLE.hasRating && (
+        <li><a href={GOOGLE.url} target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-white"><GoogleLogo class="h-3.5 w-3.5" /><strong class="text-white">{GOOGLE.rating.toFixed(1)}</strong><Stars rating={GOOGLE.rating} class="h-3 w-3" /><span>on Google</span></a></li>
+      )}
+      <li><a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="whatsapp" class="h-3.5 w-3.5 text-lime" />WhatsApp, replies in minutes</a></li>
+    </ul>
+  </div>
+</div>
+
+<!-- No backdrop-filter here: it would become the containing block for the fixed phone drawer. -->
+<header class="sticky top-0 z-40 border-b border-line bg-white" data-header>
+  <div class="wrap flex h-[4.5rem] items-center justify-between gap-3">
+    <Logo />
+
+    <nav aria-label="Main" class="hidden min-w-0 xl:block">
+      <ul class="flex h-[4.5rem] items-center gap-0 text-[0.92rem]">
+        {menus.map((m) => (
+          <li class="mega flex h-full items-center" data-mega={m.key}>
+            <span class="flex items-center">
+              <a href={m.href} class:list={['rounded-l-full py-2 pr-1 pl-3.5 font-medium whitespace-nowrap no-underline transition-colors hover:bg-lime-50 hover:text-ink', isActive(m.href) ? 'bg-lime-50 text-ink' : 'text-ink']} aria-current={isActive(m.href) ? 'page' : undefined}>{m.label}</a>
+              <button type="button" class="mega-toggle rounded-r-full py-2 pr-2.5 pl-1 text-ink transition-colors hover:bg-lime-50" aria-expanded="false" aria-controls={`mega-${m.key}`} aria-label={`Open ${m.label} menu`}>
+                <svg class="h-4 w-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+            </span>
+
+            <div class="mega-panel" id={`mega-${m.key}`}>
+              <div class="wrap">
+                <div class="mega-card">
+                  {m.key === 'fares' && (
+                    <div class="grid gap-8 lg:grid-cols-[1fr_260px]">
+                      <div>
+                        <div class="flex items-baseline justify-between gap-4">
+                          <p class="eyebrow">Fixed fares, one way, all inclusive</p>
+                          <a href="/taxi/" class="text-sm font-semibold no-underline hover:text-ink">Full fare chart →</a>
+                        </div>
+                        <div class="mt-4 grid gap-6 sm:grid-cols-3">
+                          {ROUTE_GROUPS.map((g) => {
+                            const rows = ROUTES.filter((r) => r.group === g);
+                            return rows.length > 0 && (
+                              <div>
+                                <h3 class="text-sm font-bold text-ink">{g}</h3>
+                                <ul class="mt-2 space-y-1">
+                                  {rows.slice(0, 5).map((r) => (
+                                    <li><a href={`/taxi/${r.slug}/`} class="flex items-baseline justify-between gap-2 rounded-md px-1.5 py-1 text-sm text-body no-underline hover:bg-lime-50 hover:text-ink"><span class="truncate">{shortPlace(r.fromShort)} → {shortPlace(r.toShort)}</span><span class="shrink-0 font-semibold text-ink">{inr(lowestFare(r))}</span></a></li>
+                                  ))}
+                                  {rows.length > 5 && <li><a href="/taxi/" class="px-1.5 text-xs font-semibold text-muted no-underline hover:text-ink">+{rows.length - 5} more routes</a></li>}
+                                </ul>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <aside class="rounded-2xl bg-cream p-4">
+                        <h3 class="text-sm font-bold text-ink">Choose your car</h3>
+                        <ul class="mt-3 space-y-2">
+                          {VEHICLES.map((v) => (
+                            <li class="flex items-center gap-3">
+                              <span class="h-11 w-16 shrink-0 overflow-hidden rounded-lg bg-mist"><Photo name={carPhoto[v.key]} class="h-full w-full object-cover" sizes="64px" /></span>
+                              <span class="min-w-0 text-sm"><strong class="block text-ink">{v.name}</strong><span class="text-xs text-muted">{v.seats} seats · {v.bags}</span></span>
+                            </li>
+                          ))}
+                        </ul>
+                        <a href="/book/" class="btn-book mt-4 w-full min-h-11 text-sm">Check my fare <Icon name="arrow" class="h-4 w-4" /></a>
+                      </aside>
+                    </div>
+                  )}
+
+                  {m.key === 'packages' && (
+                    <div class="grid gap-8 lg:grid-cols-[1fr_240px]">
+                      <div>
+                        <div class="flex items-baseline justify-between gap-4">
+                          <p class="eyebrow">From {inr(minPkg)} per person, private car and hotels</p>
+                          <a href="/tour-packages/" class="text-sm font-semibold no-underline hover:text-ink">All {PACKAGES.length} packages →</a>
+                        </div>
+                        <ul class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {menuPackages.map((p) => (
+                            <li>
+                              <a href={`/tour-packages/${p.slug}/`} class="group flex items-center gap-3 rounded-xl p-1.5 no-underline hover:bg-lime-50">
+                                <span class="h-14 w-20 shrink-0 overflow-hidden rounded-lg bg-mist"><Photo name={packagePhoto(p)} class="h-full w-full object-cover" sizes="80px" alt="" /></span>
+                                <span class="min-w-0"><span class="block truncate text-sm font-semibold text-ink">{p.name}</span><span class="block text-xs text-muted">{p.nights}N/{p.days}D · from {inr(p.fromPrice)}</span></span>
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <aside class="rounded-2xl bg-cream p-4">
+                        <h3 class="text-sm font-bold text-ink">Popular themes</h3>
+                        <ul class="mt-3 flex flex-wrap gap-1.5">
+                          {themes.map((t) => <li><a href="/tour-packages/" class="rounded-full border border-line bg-white px-2.5 py-1 text-xs font-medium text-ink no-underline hover:border-ink">{t}</a></li>)}
+                        </ul>
+                        <p class="mt-4 text-xs leading-relaxed text-muted">Every package: one private car for the whole trip, hotels with breakfast and dinner, permits arranged, {BUSINESS.hours.toLowerCase()} support.</p>
+                        <a href={waLink('Hi, I would like a custom tour quote.')} rel="noopener" class="btn-wa mt-4 w-full min-h-11 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> Custom quote</a>
+                      </aside>
+                    </div>
+                  )}
+
+                  {m.key === 'destinations' && (
+                    <div class="grid gap-8 lg:grid-cols-[1fr_240px]">
+                      <div>
+                        <div class="flex items-baseline justify-between gap-4">
+                          <p class="eyebrow">Where we drive</p>
+                          <a href="/destinations/" class="text-sm font-semibold no-underline hover:text-ink">All guides →</a>
+                        </div>
+                        <ul class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                          {DESTINATIONS.map((d) => (
+                            <li>
+                              <a href={`/destinations/${d.slug}/`} class="flex items-center gap-3 rounded-xl p-1.5 no-underline hover:bg-lime-50">
+                                <span class="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-mist"><Photo name={destinationPhoto(d.slug)} class="h-full w-full object-cover" sizes="48px" alt="" /></span>
+                                <span class="min-w-0"><span class="block truncate text-sm font-semibold text-ink">{d.short ?? d.name}</span><span class="block truncate text-xs text-muted">{d.daysNeeded}</span></span>
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <aside class="relative overflow-hidden rounded-2xl bg-ink p-4 text-white">
+                        <Photo name="pelling" class="absolute inset-0 h-full w-full object-cover opacity-50" sizes="240px" alt="" />
+                        <div class="relative">
+                          <h3 class="text-sm font-bold text-white">Not sure where to go?</h3>
+                          <p class="mt-2 text-xs leading-relaxed text-white/80">Tell us your dates and who is travelling. We will suggest a route that fits.</p>
+                          <a href={waLink('Hi, I am planning a trip and would like some advice.')} rel="noopener" class="btn-wa mt-4 w-full min-h-11 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> Ask us</a>
+                        </div>
+                      </aside>
+                    </div>
+                  )}
+
+                  {m.key === 'guides' && (
+                    <div class="grid gap-8 lg:grid-cols-[1fr_280px]">
+                      <div>
+                        <p class="eyebrow">Answers from the drivers’ seat</p>
+                        <ul class="mt-4 grid gap-2 sm:grid-cols-2">
+                          {GUIDES.map((g) => (
+                            <li>
+                              <a href={`/guides/${g.slug}/`} class="flex items-center gap-3 rounded-xl p-1.5 no-underline hover:bg-lime-50">
+                                <span class="h-14 w-20 shrink-0 overflow-hidden rounded-lg bg-mist"><Photo name={guidePhoto(g.slug)} class="h-full w-full object-cover" sizes="80px" alt="" /></span>
+                                <span class="min-w-0"><span class="line-clamp-2 text-sm font-semibold leading-snug text-ink">{g.title}</span><span class="block text-xs text-muted">Updated {g.updatedLabel}</span></span>
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <aside class="rounded-2xl bg-cream p-4">
+                        <p class="text-[0.65rem] font-bold tracking-[0.14em] text-lime-text uppercase">Read before you book Sikkim</p>
+                        <a href={`/guides/${permitGuide.slug}/`} class="mt-2 block text-sm font-bold text-ink no-underline hover:underline">{permitGuide.title}</a>
+                        <p class="mt-2 text-xs leading-relaxed text-muted">{permitGuide.description}</p>
+                        <p class="mt-3 text-xs font-semibold text-ink">We arrange the permits with every booking.</p>
+                      </aside>
+                    </div>
+                  )}
+
+                  <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4 text-sm">
+                    <p class="text-muted">Prefer to talk? <a href={BUSINESS.phoneHref} class="font-semibold text-ink no-underline">{BUSINESS.phone}</a>, {BUSINESS.hours.toLowerCase()}.</p>
+                    <div class="flex gap-2">
+                      <a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="btn-ghost min-h-10 px-4 py-2 text-sm"><Icon name="whatsapp" class="h-4 w-4 text-wa" /> WhatsApp</a>
+                      <a href="/book/" class="btn-book min-h-10 px-4 py-2 text-sm">Book now <Icon name="arrow" class="h-4 w-4" /></a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </li>
+        ))}
+        {plain.map((n) => (
+          <li><a href={n.href} class:list={['rounded-full px-3.5 py-2 font-medium whitespace-nowrap no-underline transition-colors hover:bg-lime-50', isActive(n.href) ? 'bg-lime-50 text-ink' : 'text-ink']} aria-current={isActive(n.href) ? 'page' : undefined}>{n.label}</a></li>
+        ))}
+      </ul>
+    </nav>
+
+    <div class="flex shrink-0 items-center gap-2">
+      <a href={BUSINESS.phoneHref} class="hidden items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 font-semibold text-ink no-underline hover:text-lime-text 2xl:flex"><Icon name="phone" class="h-4 w-4 text-lime-text" />{BUSINESS.phone}</a>
+      <a href="/book/" class="btn-book hidden min-h-11 whitespace-nowrap px-5 py-2 sm:inline-flex">Book a taxi <span class="hidden rounded-full bg-ink/10 px-2 py-0.5 text-xs font-bold xl:inline">from {inr(minFare)}</span></a>
+
+      <!-- Phone drawer -->
+      <details class="mnav xl:hidden">
+        <summary class="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-line bg-white" aria-label="Menu">
+          <svg class="mnav-open h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          <svg class="mnav-close hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </summary>
+        <nav aria-label="Mobile" class="fixed inset-x-0 top-[4.5rem] bottom-0 z-50 overflow-y-auto bg-white pb-28">
+          <div class="wrap py-3">
+            <div class="grid grid-cols-2 gap-2">
+              <a href="/book/" class="btn-book min-h-11 text-sm">Book a taxi</a>
+              <a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="btn-wa min-h-11 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> WhatsApp</a>
+            </div>
+            <ul class="mt-3 divide-y divide-line">
+              <li>
+                <details class="group">
+                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink">Taxi fares <span class="text-xs text-muted">from {inr(minFare)}</span></summary>
+                  <ul class="pb-3">
+                    {ROUTES.slice(0, 10).map((r) => <li><a href={`/taxi/${r.slug}/`} class="flex justify-between py-2 text-sm text-body no-underline"><span>{r.fromShort} → {r.toShort}</span><strong class="text-ink">{inr(lowestFare(r))}</strong></a></li>)}
+                    <li><a href="/taxi/" class="block py-2 text-sm font-semibold no-underline">All {ROUTES.length} fares →</a></li>
+                  </ul>
+                </details>
+              </li>
+              <li>
+                <details class="group">
+                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink">Tour packages <span class="text-xs text-muted">from {inr(minPkg)}</span></summary>
+                  <ul class="pb-3">
+                    {PACKAGES.slice(0, 8).map((p) => <li><a href={`/tour-packages/${p.slug}/`} class="flex justify-between gap-3 py-2 text-sm text-body no-underline"><span class="truncate">{p.name}</span><strong class="shrink-0 text-ink">{p.nights}N</strong></a></li>)}
+                    <li><a href="/tour-packages/" class="block py-2 text-sm font-semibold no-underline">All {PACKAGES.length} packages →</a></li>
+                  </ul>
+                </details>
+              </li>
+              <li>
+                <details class="group">
+                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink">Destinations</summary>
+                  <ul class="grid grid-cols-2 pb-3">
+                    {DESTINATIONS.map((d) => <li><a href={`/destinations/${d.slug}/`} class="block py-2 text-sm text-body no-underline">{d.short ?? d.name}</a></li>)}
+                  </ul>
+                </details>
+              </li>
+              <li>
+                <details class="group">
+                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink">Travel guides</summary>
+                  <ul class="pb-3">
+                    {GUIDES.map((g) => <li><a href={`/guides/${g.slug}/`} class="block py-2 text-sm text-body no-underline">{g.title}</a></li>)}
+                  </ul>
+                </details>
+              </li>
+              <li><a href="/gallery/" class="block py-3.5 font-semibold text-ink no-underline">Gallery</a></li>
+              <li><a href="/about/" class="block py-3.5 font-semibold text-ink no-underline">About</a></li>
+              <li><a href="/contact/" class="block py-3.5 font-semibold text-ink no-underline">Contact</a></li>
+            </ul>
+            <p class="mt-4 text-sm text-muted"><a href={BUSINESS.phoneHref} class="font-semibold text-ink">{BUSINESS.phone}</a> · {BUSINESS.hours}</p>
+          </div>
+        </nav>
+      </details>
+    </div>
+  </div>
+</header>
+
+<style>
+  .mega-panel {
+    display: none;
+    position: absolute;
+    left: 0; right: 0; top: 100%;
+    padding-top: 0;
+    animation: mega-in .22s cubic-bezier(.2,.7,.2,1);
+  }
+  @keyframes mega-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  /* While a menu is open, an invisible strip under the bar keeps the item hovered as the
+     pointer crosses the border into the panel. */
+  .mega:hover::after, .mega.is-open::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 12px;
+  }
+  .mega-card {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-top: 0;
+    border-radius: 0 0 24px 24px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-float);
+  }
+  .mega:hover > .mega-panel,
+  .mega:focus-within > .mega-panel,
+  .mega.is-open > .mega-panel { display: block; }
+  .mega:hover > span > a, .mega.is-open > span > a,
+  .mega:hover > span > .mega-toggle, .mega.is-open > span > .mega-toggle { background: var(--color-lime-50); }
+  .mega.is-open .mega-toggle svg, .mega:hover .mega-toggle svg { transform: rotate(180deg); }
+  .mnav[open] .mnav-open { display: none; }
+  .mnav[open] .mnav-close { display: block; }
+  .mnav[open] > summary { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
+  @media (hover: none) {
+    /* On touch screens hover is sticky and confusing; the toggle button does the work. */
+    .mega:hover > .mega-panel { display: none; }
+    .mega:hover::after { content: none; }
+    .mega.is-open > .mega-panel { display: block; }
+  }
+  @media (prefers-reduced-motion: reduce) { .mega-panel { animation: none; } }
+</style>
+
+<script>
+  const items = [...document.querySelectorAll<HTMLElement>('.mega')];
+  const close = () => items.forEach((i) => { i.classList.remove('is-open'); i.querySelector('.mega-toggle')?.setAttribute('aria-expanded', 'false'); });
+  items.forEach((item) => {
+    const btn = item.querySelector<HTMLButtonElement>('.mega-toggle')!;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const open = item.classList.contains('is-open');
+      close();
+      if (!open) { item.classList.add('is-open'); btn.setAttribute('aria-expanded', 'true'); }
+    });
+  });
+  // Hover intent: opening waits a beat so a pointer crossing the bar does not flash menus,
+  // and closing waits longer so a short detour outside the panel does not shut it.
+  if (window.matchMedia('(hover: hover)').matches) {
+    let openTimer = 0, closeTimer = 0;
+    items.forEach((item) => {
+      const btn = item.querySelector<HTMLButtonElement>('.mega-toggle')!;
+      item.addEventListener('mouseenter', () => {
+        clearTimeout(closeTimer);
+        openTimer = window.setTimeout(() => { close(); item.classList.add('is-open'); btn.setAttribute('aria-expanded', 'true'); }, 60);
+      });
+      item.addEventListener('mouseleave', () => {
+        clearTimeout(openTimer);
+        closeTimer = window.setTimeout(() => { item.classList.remove('is-open'); btn.setAttribute('aria-expanded', 'false'); }, 260);
+      });
+    });
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  // Local time at Bagdogra in the top bar, so the "open now" claim is visibly live.
+  const ist = document.querySelector<HTMLElement>('[data-ist]');
+  if (ist) {
+    const fmt = new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
+    const tick = () => { ist.textContent = `Bagdogra ${fmt.format(new Date())} IST · drivers on duty now`; };
+    tick(); setInterval(tick, 15000);
+  }
+  document.addEventListener('click', (e) => { if (!(e.target as Element).closest('.mega')) close(); });
+  // Lock page scroll while the phone drawer is open.
+  const drawer = document.querySelector<HTMLDetailsElement>('.mnav');
+  drawer?.addEventListener('toggle', () => { document.body.style.overflow = drawer.open ? 'hidden' : ''; });
+</script>

@@ -1,0 +1,24 @@
+---
+import Icon from './Icon.astro';
+import { POLICY } from '../data/site';
+interface Props { class?: string }
+const { class: cls = '' } = Astro.props;
+const items = [
+  { icon: 'card', title: 'Fixed fares, all inclusive', text: 'Tolls, parking, driver allowance and GST included.' },
+  { icon: 'clock', title: `${POLICY.freeWaitMinutes} min free waiting`, text: 'We track your flight or train. Delays cost nothing.' },
+  { icon: 'refund', title: `Free cancellation ${POLICY.freeCancelHours} h`, text: `Full refund of your advance within ${POLICY.refundDays} working days.` },
+  { icon: 'shield', title: 'Secure advance payment', text: `Pay ${POLICY.advancePercent}% by UPI or card. Balance after the trip.` },
+] as const;
+---
+
+<ul class:list={['grid gap-3 sm:grid-cols-2 lg:grid-cols-4', cls]}>
+  {items.map((it) => (
+    <li class="card flex gap-3.5 p-4 sm:p-5">
+      <span class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-lime-50 text-lime-text"><Icon name={it.icon} /></span>
+      <span>
+        <strong class="block font-[family-name:var(--font-display)] text-[1.05rem] text-ink">{it.title}</strong>
+        <span class="mt-0.5 block text-sm leading-snug text-muted">{it.text}</span>
+      </span>
+    </li>
+  ))}
+</ul>

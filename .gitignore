@@ -1,0 +1,9 @@
+dist/
+.astro/
+node_modules/
+.env
+.env.*
+.DS_Store
+.vercel/
+lighthouse/
+.photos-cache/

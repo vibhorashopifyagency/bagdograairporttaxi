@@ -1,0 +1,251 @@
+---
+import GoogleRatingBadge from '../../components/GoogleRatingBadge.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Icon from '../../components/Icon.astro';
+import { ROUTES, ROUTE_GROUPS } from '../../data/routes';
+import { PACKAGES } from '../../data/packages';
+import { VEHICLES } from '../../data/vehicles';
+import { BUSINESS, POLICY, PAYMENT } from '../../data/site';
+
+// Only what the script needs, so the inline payload stays a few kB.
+const data = {
+  routes: Object.fromEntries(ROUTES.map((r) => [r.slug, { name: `${r.from} to ${r.to}`, fares: r.fares }])),
+  packages: Object.fromEntries(PACKAGES.map((p) => [p.slug, `${p.name} (${p.nights}N/${p.days}D)`])),
+  vehicles: Object.fromEntries(VEHICLES.map((v) => [v.key, v.name])),
+  policy: POLICY,
+  whatsapp: BUSINESS.whatsapp,
+  paymentUrl: PAYMENT.advanceUrl,
+};
+---
+
+<BaseLayout
+  title="Book a Bagdogra Airport Taxi Online: Instant Fare, Secure Advance"
+  description={`Book a fixed-fare taxi from Bagdogra Airport, NJP or Siliguri in under a minute. See the full fare, pay a ${POLICY.advancePercent}% advance securely and get instant WhatsApp confirmation.`}
+  crumbs={[{ name: 'Book a taxi', path: '/book/' }]}
+>
+  <div class="wrap mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <div>
+      <h1 class="text-3xl font-extrabold sm:text-4xl">Book your taxi</h1>
+      <p class="mt-2 text-muted">Takes under a minute. You see the full fare before you pay anything.</p>
+      <GoogleRatingBadge variant="chip" class="mt-4" />
+
+      <form id="book" class="mt-8 space-y-8" novalidate>
+        <fieldset>
+          <legend class="text-lg font-bold text-ink">1. Trip</legend>
+          <div class="mt-3 flex gap-2" role="radiogroup">
+            <label class="chip"><input type="radio" name="kind" value="taxi" checked class="sr-only" /><span>Taxi transfer</span></label>
+            <label class="chip"><input type="radio" name="kind" value="package" class="sr-only" /><span>Tour package</span></label>
+          </div>
+          <label class="field mt-4" data-for="taxi">
+            <span>Route</span>
+            <select name="route" required>
+              {ROUTE_GROUPS.map((g) => (
+                <optgroup label={g}>
+                  {ROUTES.filter((r) => r.group === g).map((r) => <option value={r.slug}>{r.from} to {r.to}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <label class="field mt-4" data-for="package" hidden>
+            <span>Tour package</span>
+            <select name="package">
+              {PACKAGES.map((p) => <option value={p.slug}>{p.name} ({p.nights}N/{p.days}D)</option>)}
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend class="text-lg font-bold text-ink">2. Car</legend>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            {VEHICLES.map((v, i) => (
+              <label class="vehicle card flex cursor-pointer items-start gap-3 p-4">
+                <input type="radio" name="vehicle" value={v.key} checked={i === 0} class="mt-1 accent-[#111111]" />
+                <span class="flex-1">
+                  <strong class="block text-ink">{v.name} <span class="font-normal text-muted">· {v.seats} seats</span></strong>
+                  <span class="block text-xs text-muted">{v.models}</span>
+                  <span class="mt-1 block text-lg font-bold text-ink" data-price={v.key}></span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset class="grid gap-4 sm:grid-cols-2">
+          <legend class="mb-3 text-lg font-bold text-ink sm:col-span-2">3. When and where</legend>
+          <label class="field"><span>Pickup date</span><input type="date" name="date" required /></label>
+          <label class="field"><span>Pickup time (or landing time)</span><input type="time" name="time" required /></label>
+          <label class="field"><span>Flight or train number <em class="font-normal text-muted">(optional)</em></span><input name="flight" placeholder="e.g. 6E 6521" autocomplete="off" /></label>
+          <label class="field"><span>Passengers</span><input type="number" name="pax" min="1" max="12" value="2" inputmode="numeric" /></label>
+          <label class="field sm:col-span-2"><span>Hotel or drop address</span><input name="drop" placeholder="Hotel name and area" /></label>
+        </fieldset>
+
+        <fieldset class="grid gap-4 sm:grid-cols-2">
+          <legend class="mb-3 text-lg font-bold text-ink sm:col-span-2">4. Your details</legend>
+          <label class="field"><span>Full name</span><input name="name" required autocomplete="name" /></label>
+          <label class="field"><span>Mobile (WhatsApp)</span><input name="phone" type="tel" required autocomplete="tel" inputmode="tel" placeholder="+91" /></label>
+        </fieldset>
+        <p id="err" class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert"></p>
+      </form>
+    </div>
+
+    <aside class="lg:sticky lg:top-24 lg:self-start">
+      <div class="card overflow-hidden">
+        <div class="bg-ink p-5 text-white">
+          <p class="text-sm text-white/70">Your fare</p>
+          <p class="text-4xl font-extrabold" id="total" aria-live="polite">–</p>
+          <p class="text-sm text-white/70" id="trip-name"></p>
+        </div>
+        <dl class="space-y-2 p-5 text-sm">
+          <div class="flex justify-between"><dt>Base fare</dt><dd id="base" class="font-semibold text-ink">–</dd></div>
+          <div class="flex justify-between"><dt>Night charge</dt><dd id="night" class="font-semibold text-ink">₹0</dd></div>
+          <div class="flex justify-between border-t border-line pt-2"><dt><strong class="text-ink">Advance now ({POLICY.advancePercent}%)</strong></dt><dd id="adv" class="font-bold text-ink">–</dd></div>
+          <div class="flex justify-between"><dt>Pay driver after trip</dt><dd id="bal">–</dd></div>
+        </dl>
+        <div class="space-y-3 px-5 pb-5">
+          <button type="button" id="wa" class="btn-wa w-full"><Icon name="whatsapp" /> Confirm on WhatsApp</button>
+          <button type="button" id="pay" class="btn-book w-full"><Icon name="shield" /> Pay advance securely</button>
+          <p class="text-xs text-muted" id="pay-note"></p>
+        </div>
+        <ul class="space-y-2 border-t border-line bg-mist p-5 text-sm">
+          <li class="flex gap-2"><Icon name="refund" class="h-5 w-5 shrink-0 text-lime-text" />Free cancellation up to {POLICY.freeCancelHours} hours before pickup. <a href="/cancellation-refund-policy/">Policy</a></li>
+          <li class="flex gap-2"><Icon name="clock" class="h-5 w-5 shrink-0 text-lime-text" />{POLICY.freeWaitMinutes} minutes free waiting after landing</li>
+          <li class="flex gap-2"><Icon name="check" class="h-5 w-5 shrink-0 text-lime-text" />Tolls, parking, driver allowance and GST included</li>
+        </ul>
+      </div>
+      <p class="mt-4 text-center text-sm">Prefer to talk? <a href={BUSINESS.phoneHref}>Call {BUSINESS.phone}</a>, open 24 hours.</p>
+    </aside>
+  </div>
+
+  <script type="application/json" id="book-data" set:html={JSON.stringify(data)} />
+  <script>
+    type Data = {
+      routes: Record<string, { name: string; fares: Record<string, number> }>;
+      packages: Record<string, string>;
+      vehicles: Record<string, string>;
+      policy: { advancePercent: number; nightCharge: number; nightChargeFrom: string; nightChargeTo: string };
+      whatsapp: string;
+      paymentUrl: string;
+    };
+    const d: Data = JSON.parse(document.getElementById('book-data')!.textContent!);
+    const f = document.getElementById('book') as HTMLFormElement;
+    const $ = (id: string) => document.getElementById(id)!;
+    const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
+    const val = (n: string) => ((f.elements.namedItem(n) as HTMLInputElement | null)?.value ?? '').trim();
+    const kind = () => (f.querySelector('input[name=kind]:checked') as HTMLInputElement).value;
+
+    // Prefill from links such as /book/?route=…&vehicle=… or ?package=…
+    const q = new URLSearchParams(location.search);
+    if (q.get('route') && d.routes[q.get('route')!]) (f.elements.namedItem('route') as HTMLSelectElement).value = q.get('route')!;
+    if (q.get('package') && d.packages[q.get('package')!]) {
+      (f.querySelector('input[value=package]') as HTMLInputElement).checked = true;
+      (f.elements.namedItem('package') as HTMLSelectElement).value = q.get('package')!;
+    }
+    if (q.get('vehicle')) {
+      const v = f.querySelector(`input[name=vehicle][value="${CSS.escape(q.get('vehicle')!)}"]`) as HTMLInputElement | null;
+      if (v) v.checked = true;
+    }
+    const dateEl = f.elements.namedItem('date') as HTMLInputElement;
+    dateEl.min = new Date().toISOString().slice(0, 10);
+
+    const isNight = (t: string) => {
+      if (!t) return false;
+      const { nightChargeFrom: a, nightChargeTo: b } = d.policy;
+      return t >= a || t < b;
+    };
+
+    function calc() {
+      const pkg = kind() === 'package';
+      document.querySelectorAll<HTMLElement>('[data-for]').forEach((el) => (el.hidden = el.dataset.for !== (pkg ? 'package' : 'taxi')));
+      const route = d.routes[val('route')];
+      const vehicle = (f.querySelector('input[name=vehicle]:checked') as HTMLInputElement).value;
+      document.querySelectorAll<HTMLElement>('[data-price]').forEach((el) => {
+        el.textContent = pkg ? '' : inr(route.fares[el.dataset.price!]);
+      });
+      if (pkg) {
+        $('trip-name').textContent = d.packages[val('package')];
+        $('total').textContent = 'Custom quote';
+        ['base', 'adv', 'bal'].forEach((id) => ($(id).textContent = 'On quote'));
+        $('night').textContent = '–';
+        return null;
+      }
+      const base = route.fares[vehicle];
+      const night = isNight(val('time')) ? d.policy.nightCharge : 0;
+      const total = base + night;
+      const adv = Math.round((total * d.policy.advancePercent) / 100);
+      $('trip-name').textContent = `${route.name} · ${d.vehicles[vehicle]}`;
+      $('total').textContent = inr(total);
+      $('base').textContent = inr(base);
+      $('night').textContent = inr(night);
+      $('adv').textContent = inr(adv);
+      $('bal').textContent = inr(total - adv);
+      return { route, vehicle, total, adv };
+    }
+
+    function check() {
+      const missing = ['date', 'time', 'name', 'phone'].filter((n) => !val(n));
+      const err = $('err');
+      if (missing.length) {
+        err.textContent = 'Please add your ' + missing.map((m) => (m === 'phone' ? 'mobile number' : m === 'time' ? 'pickup time' : m === 'date' ? 'pickup date' : 'name')).join(', ') + '.';
+        err.classList.remove('hidden');
+        (f.elements.namedItem(missing[0]) as HTMLElement).focus();
+        return false;
+      }
+      err.classList.add('hidden');
+      return true;
+    }
+
+    function message() {
+      const c = calc();
+      const lines = kind() === 'package'
+        ? [`Tour package: ${d.packages[val('package')]}`, `Car: ${d.vehicles[(f.querySelector('input[name=vehicle]:checked') as HTMLInputElement).value]}`]
+        : [`Route: ${c!.route.name}`, `Car: ${d.vehicles[c!.vehicle]}`, `Fare shown: ${inr(c!.total)} (advance ${inr(c!.adv)})`];
+      return [
+        'New booking request',
+        ...lines,
+        `Date: ${val('date')} at ${val('time')}`,
+        val('flight') && `Flight/train: ${val('flight')}`,
+        `Passengers: ${val('pax')}`,
+        val('drop') && `Drop: ${val('drop')}`,
+        `Name: ${val('name')}`,
+        `Mobile: ${val('phone')}`,
+      ].filter(Boolean).join('\n');
+    }
+
+    f.addEventListener('input', calc);
+    f.addEventListener('change', calc);
+    $('wa').addEventListener('click', () => {
+      if (!check()) return;
+      window.open(`https://wa.me/${d.whatsapp}?text=${encodeURIComponent(message())}`, '_blank', 'noopener');
+    });
+    if (!d.paymentUrl) {
+      $('pay-note').textContent = 'A secure payment link (UPI, card or net banking) is sent with your WhatsApp confirmation.';
+      ($('pay') as HTMLButtonElement).hidden = true;
+    } else {
+      $('pay-note').textContent = 'Payments are processed by a secure, RBI-regulated payment gateway. We never see your card details.';
+      $('pay').addEventListener('click', () => {
+        if (!check()) return;
+        const c = calc();
+        const u = new URL(d.paymentUrl);
+        if (c) u.searchParams.set('amount', String(c.adv * 100));
+        u.searchParams.set('name', val('name'));
+        u.searchParams.set('phone', val('phone'));
+        location.href = u.href;
+      });
+    }
+    calc();
+  </script>
+</BaseLayout>
+
+<style>
+  .field[hidden] { display: none; }
+  .field { display: flex; flex-direction: column; gap: 0.375rem; font-weight: 600; color: var(--color-ink); font-size: 0.95rem; }
+  .field input, .field select {
+    min-height: 3rem; border: 1px solid var(--color-line); border-radius: 0.75rem; padding: 0.625rem 0.875rem;
+    font-weight: 400; font-size: 1rem; background: #fff; color: var(--color-ink);
+  }
+  .field input:focus, .field select:focus { border-color: var(--color-ink); outline: 2px solid var(--color-lime-100); }
+  .chip span { display: inline-flex; min-height: 2.75rem; align-items: center; border-radius: 999px; border: 1px solid var(--color-line); padding: 0 1.1rem; font-weight: 600; cursor: pointer; }
+  .chip input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
+  .chip input:focus-visible + span { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  .vehicle:has(input:checked) { border-color: var(--color-ink); box-shadow: 0 0 0 2px var(--color-lime-100); }
+</style>

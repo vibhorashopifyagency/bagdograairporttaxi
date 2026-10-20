@@ -1,0 +1,76 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import TrustStrip from '../components/TrustStrip.astro';
+import BookCta from '../components/BookCta.astro';
+import ReviewsSlider from '../components/ReviewsSlider.astro';
+import Icon from '../components/Icon.astro';
+import GalleryGrid from '../components/GalleryGrid.astro';
+import { BUSINESS, ORG_ID, SITE } from '../data/site';
+import { GALLERY } from '../data/gallery';
+import { ROUTES } from '../data/routes';
+import { PACKAGES } from '../data/packages';
+const about = { '@type': 'AboutPage', name: `About ${SITE.name}`, url: `${SITE.url}/about/`, about: { '@id': ORG_ID } };
+const since = new Date().getFullYear() - Number(BUSINESS.foundingYear);
+const aboutGallery = [...GALLERY.filter((g) => g.category === 'Our cars'), ...GALLERY.filter((g) => g.category === 'On the road'), ...GALLERY.filter((g) => ['hero', 'toy-train', 'tsomgo'].includes(g.photo))];
+---
+
+<BaseLayout
+  title={`About Us: Local Bagdogra Taxi and Tour Operator since ${BUSINESS.foundingYear}`}
+  description={`${SITE.name} is a local taxi and tour operator based at Bagdogra, running airport transfers and tours across Darjeeling, Sikkim and the Dooars since ${BUSINESS.foundingYear}.`}
+  crumbs={[{ name: 'About', path: '/about/' }]}
+  schema={[about]}
+>
+  <PageHero image="tea-worker" eyebrow={`Bagdogra · since ${BUSINESS.foundingYear}`} title="A local team at Bagdogra, not a call centre" />
+
+  <div class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-14">
+    <div class="prose-site min-w-0">
+      <p class="answer">{SITE.name} is a unit of {BUSINESS.legalName}, a taxi and tour operator based at {BUSINESS.address.locality}, a few minutes from the airport. Since {BUSINESS.foundingYear} we have driven travellers from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling, North Sikkim and the Dooars with our own drivers and cars.</p>
+      <p>The business is run by Pinku Singh, an Army veteran, which is where the name Jai Jawan and the saluting soldier on our badge come from. Travellers who book with us talk to him or his office directly, before the trip and during it.</p>
+      <h2>What we promise every traveller</h2>
+      <ul>
+        <li>One fixed fare, shown before you pay, the same on every page of this site.</li>
+        <li>Drivers who know the hill roads, verified with police records and trained for mountain driving.</li>
+        <li>A real office you can visit, and one phone number that is answered 24 hours a day.</li>
+        <li>A written cancellation and refund policy, not "flexible" or "contact us".</li>
+      </ul>
+
+      <h2>Business details</h2>
+      <ul>
+        <li>Name: {BUSINESS.legalName}</li>
+        <li>Address: {BUSINESS.address.street}, {BUSINESS.address.locality}, {BUSINESS.address.district}, {BUSINESS.address.region} {BUSINESS.address.postalCode}</li>
+        <li>Phone and WhatsApp: <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a></li>
+        {BUSINESS.gstin && <li>GSTIN: {BUSINESS.gstin}</li>}
+        {BUSINESS.registrations.map((r) => <li>{r.name}{r.id && `: ${r.id}`}</li>)}
+        <li>Hours: {BUSINESS.hours}</li>
+      </ul>
+    </div>
+    <aside class="space-y-4 lg:sticky lg:top-24 lg:self-start">
+      <dl class="card grid grid-cols-3 gap-2 p-5 text-center">
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{since}+</dd><dt class="text-xs text-muted">years</dt></div>
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{ROUTES.length}</dd><dt class="text-xs text-muted">fixed routes</dt></div>
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{PACKAGES.length}</dd><dt class="text-xs text-muted">packages</dt></div>
+      </dl>
+      <div class="card p-5">
+        <h2 class="text-lg font-bold">Talk to us</h2>
+        <div class="mt-4 space-y-3">
+          <a class="btn-wa w-full" href={`https://wa.me/${BUSINESS.whatsapp}`} rel="noopener"><Icon name="whatsapp" /> WhatsApp</a>
+          <a class="btn-ghost w-full" href={BUSINESS.phoneHref}><Icon name="phone" class="h-4 w-4 text-lime-text" /> {BUSINESS.phone}</a>
+          <a class="btn-ghost w-full" href={BUSINESS.mapsUrl} rel="noopener"><Icon name="map" class="h-4 w-4 text-lime-text" /> Find us on Google Maps</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <section class="wrap mt-16" aria-labelledby="about-gallery">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div><p class="eyebrow">Gallery</p><h2 id="about-gallery" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Our cars and the roads we drive</h2></div>
+      <a href="/gallery/" class="inline-flex items-center gap-1.5 font-semibold text-lime-text no-underline hover:text-ink">All {GALLERY.length} photos <Icon name="arrow" class="h-4 w-4" /></a>
+    </div>
+    <div class="mt-8"><GalleryGrid items={aboutGallery} dense /></div>
+  </section>
+  <div class="wrap mt-16"><TrustStrip /></div>
+  <div class="mt-16"><ReviewsSlider heading="Reviews from our travellers" /></div>
+  <div class="wrap">
+    <BookCta image="hero" />
+  </div>
+</BaseLayout>

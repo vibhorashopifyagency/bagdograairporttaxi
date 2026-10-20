@@ -1,0 +1,26 @@
+---
+/**
+ * The Jai Jawan Travels badge, recoloured to the site's ink and lime (see
+ * scripts/brand/), beside the wordmark. The dark variant carries a lime outer
+ * ring so the badge still reads on the ink footer.
+ */
+import { BUSINESS } from '../data/site';
+interface Props { dark?: boolean; large?: boolean }
+const { dark = false, large = false } = Astro.props;
+---
+
+<a href="/" class:list={['flex shrink-0 items-center gap-3 font-bold no-underline', dark ? 'text-white' : 'text-ink']} aria-label="Bagdogra Airport Taxi, home">
+  <img
+    src={dark ? '/logo-dark.png' : '/logo.png'}
+    alt=""
+    width="512"
+    height="512"
+    decoding="async"
+    class:list={['shrink-0 rounded-full', large ? 'h-16 w-16' : 'h-11 w-11 sm:h-12 sm:w-12']}
+  />
+  <span class="font-[family-name:var(--font-display)] text-[1.05rem] leading-tight tracking-tight whitespace-nowrap">
+    Bagdogra
+    <span class:list={['block font-sans text-[0.65rem] font-bold tracking-[0.14em] uppercase', dark ? 'text-lime' : 'text-lime-text']}>Airport Taxi</span>
+    {large && <span class:list={['mt-1 block font-sans text-[0.65rem] font-medium tracking-wide', dark ? 'text-white/55' : 'text-muted']}>A unit of {BUSINESS.legalName}</span>}
+  </span>
+</a>

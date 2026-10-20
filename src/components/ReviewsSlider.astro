@@ -1,0 +1,128 @@
+---
+/**
+ * Google reviews in a swipeable row. Plain CSS scroll-snap does the sliding,
+ * so it works with touch, trackpad and keyboard and ships almost no script;
+ * the arrow buttons are a small enhancement. Each card links back to the
+ * review on Google, as Google's terms ask, and to the reviewer's profile.
+ *
+ * While the Google feed is not connected, sample cards are shown and labelled
+ * as samples (see src/data/reviews.ts). They carry `data-sample-reviews`,
+ * which the build check uses to block a live launch.
+ */
+import GoogleLogo from './GoogleLogo.astro';
+import Stars from './Stars.astro';
+import SectionHead from './SectionHead.astro';
+import { GOOGLE } from '../data/reviews';
+interface Props {
+  heading?: string;
+}
+const { heading = 'What travellers say about us' } = Astro.props;
+const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+const tints = ['#111111', '#5a8fb0', '#4f7a00', '#7a4fa3', '#c2410c', '#2f6f61'];
+const count = GOOGLE.count > 0 ? GOOGLE.count.toLocaleString('en-IN') : '';
+---
+
+{GOOGLE.reviews.length > 0 && (
+  <section class="section bg-cream" aria-labelledby="reviews-h" data-reviews data-sample-reviews={GOOGLE.isSample ? 'true' : undefined}>
+    <div class="wrap">
+      <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-end">
+        <SectionHead eyebrow="Google reviews" id="reviews-h" title={heading} lead="Real travellers, real trips from Bagdogra Airport. Every card links to the review on Google." />
+        {GOOGLE.hasRating && (
+          <a href={GOOGLE.url} target="_blank" rel="noopener" class="card group flex items-center gap-4 p-4 no-underline hover:border-ink lg:justify-self-end">
+            <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-line"><GoogleLogo class="h-8 w-8" /></span>
+            <span>
+              <span class="flex items-baseline gap-2">
+                <strong class="font-[family-name:var(--font-display)] text-4xl leading-none text-ink">{GOOGLE.rating.toFixed(1)}</strong>
+                <span class="text-sm text-muted">out of 5</span>
+              </span>
+              <Stars rating={GOOGLE.rating} class="mt-1 h-5 w-5" />
+              <span class="mt-1 block text-sm text-muted group-hover:text-lime-text">{count ? `${count} reviews on Google` : 'Rating on Google Maps'}</span>
+            </span>
+          </a>
+        )}
+      </div>
+
+      <div class="relative mt-10">
+        <ul class="reviews-track -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-4 pb-4 sm:-mx-6 sm:px-6" tabindex="0" aria-label="Google reviews, scroll sideways for more">
+          {GOOGLE.reviews.map((r, i) => (
+            <li class="card relative flex w-[85%] shrink-0 snap-start flex-col p-6 sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.7rem)]">
+              <GoogleLogo class="absolute top-6 right-6 h-5 w-5" />
+              <Stars rating={r.rating} class="h-4.5 w-4.5" />
+              <blockquote class="mt-4 line-clamp-6 text-[1.02rem] leading-relaxed text-ink">“{r.text}”</blockquote>
+              <div class="mt-auto flex items-center gap-3 pt-6">
+                {r.photo ? (
+                  <img src={r.photo} alt="" width="44" height="44" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="h-11 w-11 shrink-0 rounded-full bg-mist object-cover" />
+                ) : (
+                  <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={`background:${tints[i % tints.length]}`} aria-hidden="true">{initials(r.author)}</span>
+                )}
+                <span class="min-w-0">
+                  {r.authorUrl ? (
+                    <a href={r.authorUrl} target="_blank" rel="nofollow noopener" class="block truncate font-semibold text-ink no-underline hover:text-lime-text">{r.author}</a>
+                  ) : (
+                    <span class="block truncate font-semibold text-ink">{r.author}</span>
+                  )}
+                  <span class="block text-xs text-muted">
+                    {r.relative && <time datetime={r.published || undefined}>{r.relative}</time>}
+                    {GOOGLE.isSample && <span class="ml-1 rounded bg-lime-50 px-1.5 py-0.5 font-semibold text-lime-text">Sample review</span>}
+                    {r.url && <a href={r.url} target="_blank" rel="nofollow noopener" class="ml-1">Read on Google</a>}
+                  </span>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div class="mt-2 flex items-center justify-between gap-4">
+          <p class="text-sm text-muted">
+            <a href={GOOGLE.url} target="_blank" rel="noopener" class="font-semibold">{count ? `See all ${count} reviews on Google` : 'See our reviews on Google'}</a>
+            <span aria-hidden="true"> · </span>
+            <a href={GOOGLE.writeReviewUrl} target="_blank" rel="noopener">Travelled with us? Write a review</a>
+          </p>
+          <div class="hidden gap-2 sm:flex">
+            <button type="button" class="reviews-btn" data-dir="-1" aria-label="Previous reviews"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg></button>
+            <button type="button" class="reviews-btn" data-dir="1" aria-label="Next reviews"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg></button>
+          </div>
+        </div>
+        {GOOGLE.isSample && (
+          <p class="mt-4 rounded-xl border border-dashed border-lime/60 bg-lime-50 p-3 text-xs text-ink">
+            <strong>Pre-launch note:</strong> these are sample cards showing how the slider looks. Live Google reviews replace them automatically once the Places API key is set (see docs/launch-checklist.md). The 4.9 rating is the listing's real score.
+          </p>
+        )}
+      </div>
+    </div>
+  </section>
+)}
+
+<style>
+  .reviews-track { scrollbar-width: none; }
+  .reviews-track::-webkit-scrollbar { display: none; }
+  .reviews-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.75rem; height: 2.75rem; border-radius: 9999px;
+    border: 1px solid var(--color-line); background: #fff; color: var(--color-ink);
+    transition: border-color .2s, color .2s, background .2s;
+  }
+  .reviews-btn:hover { border-color: var(--color-ink); color: var(--color-ink); }
+  .reviews-btn:disabled { opacity: 0.35; cursor: default; }
+</style>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>('[data-reviews]')) {
+    const track = root.querySelector<HTMLElement>('.reviews-track')!;
+    const buttons = root.querySelectorAll<HTMLButtonElement>('.reviews-btn');
+    if (!buttons.length) continue;
+    const update = () => {
+      const max = track.scrollWidth - track.clientWidth - 2;
+      buttons[0].disabled = track.scrollLeft <= 2;
+      buttons[1].disabled = track.scrollLeft >= max;
+    };
+    buttons.forEach((b) =>
+      b.addEventListener('click', () => {
+        const card = track.querySelector('li');
+        const step = card ? card.getBoundingClientRect().width + 16 : track.clientWidth;
+        track.scrollBy({ left: step * Number(b.dataset.dir), behavior: 'smooth' });
+      }),
+    );
+    track.addEventListener('scroll', update, { passive: true });
+    update();
+  }
+</script>
