@@ -12,7 +12,7 @@ const fares = Object.fromEntries(ROUTES.map((r) => [r.slug, r.fares]));
 const first = ROUTES[0];
 ---
 
-<div class="qf-shell w-full min-w-0">
+<div class="ring-shell w-full min-w-0" style="--ring-r: 24px">
 <form action="/book/" method="get" class="qf relative z-[1] w-full min-w-0 rounded-[24px] bg-white p-5 shadow-[var(--shadow-float)] sm:p-6">
   <p class="flex items-center gap-2 text-sm font-semibold text-lime-text"><Icon name="shield" class="h-4 w-4" /> Instant fixed fare, no surprises</p>
   <label class="mt-4 block text-sm font-semibold text-ink" for="qf-route">Where are you going?</label>
@@ -58,22 +58,7 @@ const first = ROUTES[0];
 </script>
 
 <style>
-  /* A thin conic ring that turns slowly around the card, with a soft blurred halo of the same
-     gradient behind it. The card itself is opaque, so only the 2px rim and the spill show. */
-  @property --qf-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-  .qf-shell { position: relative; isolation: isolate; border-radius: 26px; padding: 2px; }
-  .qf-shell::before, .qf-shell::after {
-    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-    /* Google's four colours run as one arc: blue, red, yellow, green, then a quiet rim. */
-    background: conic-gradient(from var(--qf-angle),
-      rgba(255,255,255,.14) 0deg, rgba(255,255,255,.14) 170deg,
-      #4285f4 215deg, #ea4335 255deg, #fbbc05 295deg, #34a853 335deg,
-      rgba(255,255,255,.14) 360deg);
-    animation: qf-spin 7s linear infinite;
-  }
-  .qf-shell::after { z-index: -1; inset: -1px; filter: blur(20px); opacity: .6; }
-  @keyframes qf-spin { to { --qf-angle: 360deg; } }
-  @media (prefers-reduced-motion: reduce) { .qf-shell::before, .qf-shell::after { animation: none; } }
+  /* The spinning rim is the shared .ring-shell in global.css. */
   .qf-car span {
     display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--color-line); border-radius: 12px;
     padding: .55rem .75rem; cursor: pointer; color: var(--color-ink); line-height: 1.2;

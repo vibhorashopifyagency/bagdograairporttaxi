@@ -14,7 +14,7 @@ const rows = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport');
     <p class="hidden shrink-0 items-center gap-2 border-r border-white/10 bg-ink-soft px-5 text-[0.68rem] font-bold tracking-[0.14em] text-lime uppercase md:flex">
       <span class="live-dot" aria-hidden="true"></span> Fixed fares · {SITE.faresUpdatedLabel}
     </p>
-    <div class="marquee min-w-0 flex-1" style={`--speed: ${rows.length * 6}s`}>
+    <div class="marquee min-w-0 flex-1" style={`--speed: ${rows.length * 9}s`}>
       <div class="marquee-track">
         {[0, 1].map((copy) => (
           <ul class="flex shrink-0 items-center" aria-hidden={copy === 1 ? 'true' : undefined}>

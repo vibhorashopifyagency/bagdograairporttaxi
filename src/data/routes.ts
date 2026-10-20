@@ -41,7 +41,7 @@ export interface Route {
   faqs: Faq[];
   destination?: string;
   returnSlug?: string;
-  group: 'Darjeeling hills' | 'Sikkim' | 'Siliguri and NJP' | 'Dooars' | 'Nepal and Bhutan borders';
+  group: 'Darjeeling hills' | 'Sikkim' | 'Siliguri and NJP' | 'NJP station' | 'Dooars' | 'Nepal and Bhutan borders';
 }
 
 export const ROUTES: Route[] = [
@@ -237,6 +237,7 @@ export const ROUTES: Route[] = [
         a: 'Yes. We meet trains at NJP with a name board at the main exit and track late-running trains the same way we track flights.',
       },
     ],
+    returnSlug: 'njp-to-bagdogra-airport-taxi',
     group: 'Siliguri and NJP',
   },
   {
@@ -437,7 +438,7 @@ export const ROUTES: Route[] = [
       },
     ],
     destination: 'darjeeling',
-    group: 'Siliguri and NJP',
+    group: 'NJP station',
   },
   {
     slug: 'njp-to-gangtok-taxi',
@@ -461,7 +462,308 @@ export const ROUTES: Route[] = [
       },
     ],
     destination: 'gangtok',
-    group: 'Siliguri and NJP',
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-bagdogra-airport-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Bagdogra Airport (IXB)',
+    fromShort: 'NJP station',
+    toShort: 'Bagdogra Airport',
+    km: 22,
+    duration: '45 minutes',
+    durationIso: 'PT45M',
+    via: 'Siliguri town and NH31 past Matigara',
+    fares: { sedan: 700, suv: 900, innova: 1200, traveller: 2000 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Bagdogra Airport costs ₹700 in a sedan and ₹1,200 in an Innova Crysta. The 22 km drive takes about 45 minutes, longer through Siliguri in the evening rush.',
+    stops: ['Siliguri Junction', 'Matigara', 'Bagdogra Airport departures'],
+    tips: [
+      'Allow 2 hours between your train arriving and your flight. Trains from Kolkata and Guwahati often run late into NJP.',
+      'The driver waits at the platform 1 exit with a name board and tracks your train, so a late arrival costs nothing extra.',
+    ],
+    faqs: [
+      {
+        q: 'How early should I leave NJP for a flight from Bagdogra?',
+        a: 'Leave at least 2 hours before departure. The drive is 45 minutes, and Bagdogra security takes 30 to 45 minutes at busy times.',
+      },
+    ],
+    returnSlug: 'bagdogra-airport-to-njp-taxi',
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-siliguri-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Siliguri',
+    fromShort: 'NJP station',
+    toShort: 'Siliguri',
+    km: 6,
+    duration: '20 to 30 minutes',
+    durationIso: 'PT25M',
+    via: 'Station Feeder Road and Hill Cart Road',
+    fares: { sedan: 400, suv: 500, innova: 700, traveller: 1200 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to any hotel in Siliguri costs ₹400 in a sedan and ₹700 in an Innova Crysta. The 6 km drive takes 20 to 30 minutes.',
+    stops: ['Siliguri Junction', 'Hill Cart Road', 'Sevoke Road and City Centre'],
+    tips: ['Autos and app cabs also cover this short hop, but they wait outside the station and bargain. Our fare is fixed and the driver carries your bags from the platform exit.'],
+    faqs: [
+      {
+        q: 'Can you drop me at the Siliguri bus stand or Tenzing Norgay terminus?',
+        a: 'Yes. Any point in Siliguri, including the Tenzing Norgay bus terminus, Siliguri Junction and Pradhan Nagar, is covered by the same fare.',
+      },
+    ],
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-kalimpong-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Kalimpong',
+    fromShort: 'NJP station',
+    toShort: 'Kalimpong',
+    km: 75,
+    duration: '3 hours',
+    durationIso: 'PT3H',
+    via: 'Sevoke, NH10 along the Teesta to Teesta Bazaar, then the climb to Kalimpong',
+    fares: { sedan: 3000, suv: 3800, innova: 4500, traveller: 7000 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Kalimpong costs ₹3,000 in a sedan and ₹4,500 in an Innova Crysta, one way. The 75 km drive along the Teesta takes about 3 hours.',
+    stops: ['Coronation Bridge at Sevoke', 'Teesta Bazaar', 'Delo viewpoint (on request)'],
+    tips: [
+      'NJP sits on the Sevoke side of Siliguri, so the Kalimpong road is reached without crossing town.',
+      'Morning trains give you a daylight drive along the Teesta gorge, the prettiest part of the trip.',
+    ],
+    faqs: [
+      {
+        q: 'Can I continue from Kalimpong to Lava or Gangtok in the same car?',
+        a: 'Yes. Book a multi-stop trip and we price it as one journey. Kalimpong to Lava is about 1.5 hours and Kalimpong to Gangtok about 3 hours.',
+      },
+    ],
+    destination: 'kalimpong',
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-mirik-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Mirik',
+    fromShort: 'NJP station',
+    toShort: 'Mirik',
+    km: 60,
+    duration: '2 to 2.5 hours',
+    durationIso: 'PT2H15M',
+    via: 'Siliguri, Matigara and Dudhia, then the Mirik road through the tea gardens',
+    fares: { sedan: 2400, suv: 3000, innova: 3600, traveller: 5800 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Mirik costs ₹2,400 in a sedan and ₹3,600 in an Innova Crysta, one way. The 60 km drive by Dudhia and the tea estates takes 2 to 2.5 hours.',
+    stops: ['Balason river at Dudhia', 'Gopaldhara and Thurbo tea gardens', 'Sumendu Lake, Mirik'],
+    tips: [
+      'Mirik is the gentlest hill climb from NJP, with wide bends that suit older travellers and small children.',
+      'You can continue from Mirik to Darjeeling the same day. It adds about 1.5 hours.',
+    ],
+    faqs: [
+      {
+        q: 'Can I visit Mirik on the way to Darjeeling from NJP?',
+        a: 'Yes. NJP to Darjeeling via Mirik adds about 1.5 hours and ₹800 to the sedan fare. Mention it when you book.',
+      },
+    ],
+    destination: 'mirik',
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-kurseong-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Kurseong',
+    fromShort: 'NJP station',
+    toShort: 'Kurseong',
+    km: 50,
+    duration: '2 hours',
+    durationIso: 'PT2H',
+    via: 'Siliguri and Rohini Road through the tea gardens',
+    fares: { sedan: 2200, suv: 2700, innova: 3200, traveller: 5200 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Kurseong costs ₹2,200 in a sedan and ₹3,200 in an Innova Crysta, one way. The 50 km drive up Rohini Road takes about 2 hours.',
+    stops: ['Rohini tea gardens', 'Eagle’s Crag viewpoint', 'Kurseong station on the toy train line'],
+    tips: ['Kurseong is the closest hill stop to NJP. It suits a late train arrival when Darjeeling would mean driving the upper road in fog.'],
+    faqs: [
+      {
+        q: 'Can I take the toy train from Kurseong after the taxi drops me?',
+        a: 'Yes. The Darjeeling Himalayan Railway runs between Kurseong and Darjeeling. We can time the drop for the departure you have booked.',
+      },
+    ],
+    destination: 'kurseong',
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-pelling-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Pelling',
+    fromShort: 'NJP station',
+    toShort: 'Pelling',
+    km: 140,
+    duration: '5.5 to 6 hours',
+    durationIso: 'PT5H45M',
+    via: 'Sevoke, NH10 to Melli, then Jorethang, Legship and Geyzing',
+    fares: { sedan: 5500, suv: 6500, innova: 7500, traveller: 11000 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Pelling costs ₹5,500 in a sedan and ₹7,500 in an Innova Crysta, one way. The 140 km drive through Jorethang takes 5.5 to 6 hours.',
+    stops: ['Melli bridge on the Teesta', 'Jorethang', 'Legship hot springs', 'Geyzing'],
+    tips: [
+      'Choose a train that reaches NJP by late morning. The last two hours to Pelling are on narrow mountain roads best driven in daylight.',
+      'Carry a photo ID for every adult. The Melli check post may ask to see ID when you enter Sikkim.',
+    ],
+    faqs: [
+      {
+        q: 'Is there a break on the NJP to Pelling drive?',
+        a: 'Yes. Your driver stops for lunch at Jorethang or Melli and for tea wherever you like. Short stops are included in the fare.',
+      },
+    ],
+    destination: 'pelling',
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-namchi-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Namchi',
+    fromShort: 'NJP station',
+    toShort: 'Namchi',
+    km: 95,
+    duration: '4 hours',
+    durationIso: 'PT4H',
+    via: 'Sevoke and NH10 to Melli, then up through Majitar to Namchi',
+    fares: { sedan: 4000, suv: 5000, innova: 6000, traveller: 9000 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Namchi costs ₹4,000 in a sedan and ₹6,000 in an Innova Crysta, one way. The 95 km drive by Melli takes about 4 hours.',
+    stops: ['Melli', 'Char Dham at Solophok', 'Samdruptse statue'],
+    tips: ['Namchi sits lower than Gangtok and stays milder in winter, which suits families with small children.'],
+    faqs: [
+      {
+        q: 'Can I visit Char Dham and Samdruptse on the way from NJP?',
+        a: 'Yes. Both are on the way into Namchi. Allow 2 extra hours and we add ₹500 for waiting time.',
+      },
+    ],
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-ravangla-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Ravangla',
+    fromShort: 'NJP station',
+    toShort: 'Ravangla',
+    km: 115,
+    duration: '4.5 to 5 hours',
+    durationIso: 'PT4H45M',
+    via: 'Melli, Namchi and Damthang',
+    fares: { sedan: 4500, suv: 5500, innova: 6500, traveller: 9500 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Ravangla costs ₹4,500 in a sedan and ₹6,500 in an Innova Crysta, one way. The 115 km drive through Namchi takes 4.5 to 5 hours.',
+    stops: ['Namchi', 'Temi Tea Garden (on request)', 'Buddha Park, Ravangla'],
+    tips: ['Ravangla is a natural halfway stop between Gangtok and Pelling if you are touring all of Sikkim.'],
+    faqs: [
+      {
+        q: 'Can I stop at Temi Tea Garden on the way to Ravangla?',
+        a: 'Yes. Temi is a short detour on the way. Tell us when you book and the driver will plan for it.',
+      },
+    ],
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-lataguri-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Lataguri (Gorumara)',
+    fromShort: 'NJP station',
+    toShort: 'Lataguri',
+    km: 75,
+    duration: '2 to 2.5 hours',
+    durationIso: 'PT2H15M',
+    via: 'Sevoke, Coronation Bridge, Odlabari and Malbazar',
+    fares: { sedan: 2600, suv: 3300, innova: 4000, traveller: 6200 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Lataguri, the gateway to Gorumara National Park, costs ₹2,600 in a sedan and ₹4,000 in an Innova Crysta, one way. The 75 km drive through the Dooars tea gardens takes 2 to 2.5 hours.',
+    stops: ['Coronation Bridge', 'Odlabari tea gardens', 'Malbazar'],
+    tips: [
+      'Gorumara is closed to visitors every year from mid-June to mid-September, and on Thursdays the rest of the year.',
+      'Overnight trains reach NJP early. Leave straight away and you can make the afternoon safari slot at Gorumara.',
+    ],
+    faqs: [
+      {
+        q: 'Can you book a Gorumara jungle safari with the NJP transfer?',
+        a: 'Yes. Our Dooars jungle safari package includes the transfer from NJP, the safari slots and a hotel at Lataguri.',
+      },
+    ],
+    destination: 'dooars',
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-jaldapara-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Jaldapara (Madarihat)',
+    fromShort: 'NJP station',
+    toShort: 'Jaldapara',
+    km: 135,
+    duration: '3.5 hours',
+    durationIso: 'PT3H30M',
+    via: 'Sevoke, Malbazar, Chalsa and Birpara on NH17',
+    fares: { sedan: 3800, suv: 4800, innova: 5800, traveller: 8800 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to Jaldapara National Park at Madarihat costs ₹3,800 in a sedan and ₹5,800 in an Innova Crysta, one way. The 135 km drive across the Dooars takes about 3.5 hours.',
+    stops: ['Chalsa viewpoint', 'Birpara', 'Madarihat'],
+    tips: ['Jaldapara is best known for one-horned rhinos. Book the early morning elephant or jeep safari as soon as your dates are fixed.'],
+    faqs: [
+      {
+        q: 'Is it better to take the train on to Hasimara or a taxi from NJP?',
+        a: 'A taxi from NJP takes you straight to your lodge at Madarihat in 3.5 hours with stops on the way. Trains to Hasimara are infrequent and you still need a car for the last 20 km.',
+      },
+    ],
+    destination: 'dooars',
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-phuentsholing-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Phuentsholing (Bhutan border)',
+    fromShort: 'NJP station',
+    toShort: 'Phuentsholing',
+    km: 150,
+    duration: '4 hours',
+    durationIso: 'PT4H',
+    via: 'Sevoke, the Dooars highway through Birpara and Hasimara to Jaigaon',
+    fares: { sedan: 5300, suv: 6300, innova: 7300, traveller: 10800 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to the Bhutan Gate at Jaigaon and Phuentsholing costs ₹5,300 in a sedan and ₹7,300 in an Innova Crysta, one way. The 150 km drive across the Dooars takes about 4 hours.',
+    stops: ['Malbazar', 'Hasimara', 'Jaigaon and the Bhutan Gate'],
+    tips: [
+      'Indian taxis drop at the Bhutan Gate. Travel beyond Phuentsholing needs a Bhutan entry permit and, for most visitors, a Bhutan-registered vehicle.',
+      'Carry a passport or voter ID. Aadhaar is not accepted for the Bhutan entry permit.',
+    ],
+    faqs: [
+      {
+        q: 'Can your taxi drive into Bhutan from NJP?',
+        a: 'Our taxis drop you at the Bhutan Gate in Jaigaon. From there you cross on foot to Phuentsholing, where Bhutan permits and Bhutanese taxis are arranged.',
+      },
+    ],
+    group: 'NJP station',
+  },
+  {
+    slug: 'njp-to-kakarvitta-taxi',
+    from: 'New Jalpaiguri station (NJP)',
+    to: 'Kakarvitta (Nepal border)',
+    fromShort: 'NJP station',
+    toShort: 'Kakarvitta',
+    km: 35,
+    duration: '1 hour',
+    durationIso: 'PT1H',
+    via: 'Siliguri, Bagdogra and Panitanki on the Indian side of the Mechi bridge',
+    fares: { sedan: 1400, suv: 1700, innova: 2000, traveller: 3300 },
+    summary:
+      'A private taxi from New Jalpaiguri (NJP) railway station to the Nepal border at Panitanki and Kakarvitta costs ₹1,400 in a sedan and ₹2,000 in an Innova Crysta. The 35 km drive takes about 1 hour.',
+    stops: ['Siliguri', 'Panitanki border post', 'Mechi bridge'],
+    tips: ['Indian citizens cross into Nepal with a passport or voter ID. Other nationals need a Nepal visa, available at Kakarvitta.'],
+    faqs: [
+      {
+        q: 'Can you drop me at Bhadrapur airport in Nepal from NJP?',
+        a: 'Our taxis drop at Panitanki on the Indian side. From Kakarvitta, Bhadrapur airport is about 45 minutes by Nepali taxi.',
+      },
+    ],
+    group: 'NJP station',
   },
   {
     slug: 'siliguri-to-darjeeling-taxi',
@@ -577,5 +879,6 @@ export const ROUTE_GROUPS = [
   'Sikkim',
   'Dooars',
   'Siliguri and NJP',
+  'NJP station',
   'Nepal and Bhutan borders',
 ] as const;

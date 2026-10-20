@@ -139,7 +139,7 @@ const rows = base.map(fill);
 
 <script>
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const DRIFT = 28; // pixels per second while idle
+  const DRIFT = 20; // pixels per second while idle
   const NUDGE = 1100; // pixels per second when an arrow is pressed
 
   for (const root of document.querySelectorAll<HTMLElement>('[data-reviews]')) {

@@ -89,6 +89,7 @@ const data = {
     </div>
 
     <aside class="lg:sticky lg:top-24 lg:self-start">
+      <div class="ring-shell">
       <div class="card overflow-hidden">
         <div class="bg-ink p-5 text-white">
           <p class="text-sm text-white/70">Your fare</p>
@@ -111,6 +112,7 @@ const data = {
           <li class="flex gap-2"><Icon name="clock" class="h-5 w-5 shrink-0 text-lime-text" />{POLICY.freeWaitMinutes} minutes free waiting after landing</li>
           <li class="flex gap-2"><Icon name="check" class="h-5 w-5 shrink-0 text-lime-text" />Tolls, parking, driver allowance and GST included</li>
         </ul>
+      </div>
       </div>
       <p class="mt-4 text-center text-sm">Prefer to talk? <a href={BUSINESS.phoneHref}>Call {BUSINESS.phone}</a>, open 24 hours.</p>
     </aside>

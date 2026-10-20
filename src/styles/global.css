@@ -93,6 +93,13 @@
   img {
     @apply max-w-full;
   }
+  /* Hand cursor on every action: buttons, and the booking, WhatsApp and call links. */
+  button, input[type="submit"], input[type="button"], [role="button"],
+  a[href^="tel:"], a[href^="https://wa.me"], a[href*="whatsapp"], a[href^="/book"],
+  .btn, .btn-book, .btn-lime, .btn-wa, .btn-ghost, .btn-light {
+    cursor: pointer;
+  }
+  button:disabled, input:disabled { cursor: not-allowed; }
   :focus-visible {
     outline: 3px solid var(--color-lime);
     outline-offset: 2px;
@@ -221,13 +228,34 @@
   @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
   .live-dot { position: relative; display: inline-flex; width: .5rem; height: .5rem; }
-  .live-dot::before { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: var(--color-lime); opacity: .75; animation: ping 1.6s cubic-bezier(0,0,.2,1) infinite; }
+  .live-dot::before { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: var(--color-lime); opacity: .75; animation: ping 2.2s cubic-bezier(0,0,.2,1) infinite; }
   .live-dot::after { content: ''; position: relative; display: block; width: 100%; height: 100%; border-radius: 9999px; background: var(--color-lime); }
   @keyframes ping { 75%, 100% { transform: scale(2.4); opacity: 0; } }
+
+  /* A thin conic ring that turns slowly around a card, with a soft blurred halo of the same
+     gradient behind it. The child must be opaque, so only the 2px rim and the spill show.
+     Set --ring-r to the child's own corner radius; the ring sits 2px outside it. */
+  .ring-shell { position: relative; isolation: isolate; --ring-r: var(--radius-card); border-radius: calc(var(--ring-r) + 2px); padding: 2px; }
+  .ring-shell > * { position: relative; z-index: 1; }
+  .ring-shell::before, .ring-shell::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    /* Google's four colours run as one arc: blue, red, yellow, green, then a quiet rim. */
+    background: conic-gradient(from var(--ring-angle),
+      rgba(255,255,255,.14) 0deg, rgba(255,255,255,.14) 170deg,
+      #4285f4 215deg, #ea4335 255deg, #fbbc05 295deg, #34a853 335deg,
+      rgba(255,255,255,.14) 360deg);
+    animation: ring-spin 10s linear infinite;
+  }
+  .ring-shell::after { z-index: -1; inset: -1px; filter: blur(20px); opacity: .6; }
+  @keyframes ring-spin { to { --ring-angle: 360deg; } }
 
   @media (prefers-reduced-motion: reduce) {
     html.js [data-reveal], html.js [data-reveal-stagger] > * { opacity: 1; animation: none; }
     .marquee { mask-image: none; overflow-x: auto; }
     .marquee-track { animation: none; }
+    .ring-shell::before, .ring-shell::after { animation: none; }
   }
 }
+
+/* Registered so the ring's start angle can be animated. Must sit outside @layer. */
+@property --ring-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
