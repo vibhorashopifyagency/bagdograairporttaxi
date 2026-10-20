@@ -61,42 +61,44 @@ const stats = [
     <Photo name="hero" class="absolute inset-0 h-full w-full object-cover object-[center_40%]" sizes="100vw" loading="eager" fetchpriority="high" alt="" />
     <div class="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-ink/20" aria-hidden="true"></div>
     <div class="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-ink/80 to-transparent" aria-hidden="true"></div>
-    <div class="wrap relative grid min-w-0 grid-cols-1 gap-10 pt-8 pb-28 sm:pt-10 sm:pb-32 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center lg:gap-12 lg:pt-12 lg:pb-36 xl:grid-cols-[minmax(0,1fr)_460px] xl:gap-16">
-      <div class="min-w-0 max-w-3xl">
+    <div class="wrap relative grid min-w-0 grid-cols-1 gap-8 pt-6 pb-24 sm:pt-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-center lg:gap-10 lg:pt-8 lg:pb-24 xl:grid-cols-[minmax(0,1fr)_500px] xl:gap-12">
+      <div class="min-w-0">
         <p class="inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur">
           <span class="inline-flex items-center gap-2"><span class="live-dot" aria-hidden="true"></span>Drivers at Bagdogra Airport 24 hours a day</span>
         </p>
-        <h1 class="display-xl mt-6 max-w-[12ch] font-extrabold tracking-tight text-white">
+        <h1 class="display-xl mt-4 max-w-[12ch] font-extrabold tracking-tight text-white">
           Your ride into the{' '}
           <span class="text-lime">Himalayas</span>{' '}
           starts at arrivals.
         </h1>
-        <p class="mt-6 max-w-xl text-lg leading-relaxed text-white/85 sm:text-xl">
-          Fixed-fare taxis from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling and the Dooars. A verified local driver meets you with a name board, waits free for {POLICY.freeWaitMinutes} minutes if you land late, and you can cancel free up to {POLICY.freeCancelHours} hours before.
+        <p class="mt-4 max-w-xl text-lg leading-relaxed text-white/85">
+          Fixed-fare taxis from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling and the Dooars. A verified local driver meets you at arrivals with a name board.
         </p>
-        <div class="mt-8 flex flex-wrap gap-3">
-          <a href="/book/" class="btn-lime">Book a taxi <Icon name="arrow" /></a>
+        <ul class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm font-medium text-white/90" aria-label="What is included">
+          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Tolls, parking and GST included</li>
+          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> {POLICY.freeWaitMinutes} min free waiting</li>
+          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Free cancellation up to {POLICY.freeCancelHours} h</li>
+        </ul>
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+          <a href="/book/" class="btn-lime lg:hidden">Book a taxi <Icon name="arrow" /></a>
           <a href={waLink('Hi, I would like to book a taxi from Bagdogra Airport.')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> WhatsApp us</a>
+          <GoogleRatingBadge variant="chip" dark />
         </div>
-        <ul class="mt-6 flex flex-wrap gap-2" aria-label="Popular fares">
+        <ul class="mt-4 flex flex-wrap items-center gap-2" aria-label="Popular fares">
+          <li class="mr-1 text-sm font-medium text-white/70">Popular fares</li>
           {anchors.map((r) => <li><a href={`/taxi/${r.slug}/`} class="chip-light no-underline hover:bg-white/25">{r.toShort} <strong class="text-lime">{inr(lowestFare(r))}</strong></a></li>)}
           <li><a href="/taxi/" class="chip-light no-underline hover:bg-white/25">All {ROUTES.length} fares →</a></li>
         </ul>
-        <div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-medium text-white/85">
-          <GoogleRatingBadge variant="chip" dark />
-          <span class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Tolls, parking and GST included</span>
-          <span class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Same car into Gangtok</span>
-        </div>
         {heroReview && (
-          <a href={heroReview.url || GOOGLE.url} target="_blank" rel="nofollow noopener" class="mt-6 hidden max-w-xl items-center gap-3 rounded-2xl bg-white/10 p-3 pr-4 no-underline ring-1 ring-white/15 backdrop-blur transition-colors hover:bg-white/15 sm:flex">
+          <a href={heroReview.url || GOOGLE.url} target="_blank" rel="nofollow noopener" class="mt-4 hidden max-w-xl items-center gap-3 rounded-xl bg-white/10 p-2.5 pr-4 no-underline ring-1 ring-white/15 backdrop-blur transition-colors hover:bg-white/15 sm:flex">
             {heroReview.photo ? (
-              <img src={heroReview.photo} alt="" width="44" height="44" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="h-11 w-11 shrink-0 rounded-full bg-white/20 object-cover" />
+              <img src={heroReview.photo} alt="" width="40" height="40" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="h-10 w-10 shrink-0 rounded-full bg-white/20 object-cover" />
             ) : (
-              <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-lime text-sm font-bold text-ink" aria-hidden="true">{heroReview.author.slice(0, 1)}</span>
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lime text-sm font-bold text-ink" aria-hidden="true">{heroReview.author.slice(0, 1)}</span>
             )}
             <span class="min-w-0">
               <span class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-white/75"><GoogleLogo class="h-3.5 w-3.5" /><Stars rating={heroReview.rating} class="h-3 w-3" /><span class="font-semibold text-white">{heroReview.author}</span>{heroReview.relative && <span>· {heroReview.relative}</span>}</span>
-              <span class="mt-0.5 line-clamp-2 text-sm leading-snug text-white/90">“{heroReview.text}”</span>
+              <span class="mt-0.5 line-clamp-1 text-sm leading-snug text-white/90">“{heroReview.text}”</span>
             </span>
           </a>
         )}
@@ -105,7 +107,7 @@ const stats = [
     </div>
   </section>
 
-  <section class="wrap relative -mt-16 sm:-mt-20">
+  <section class="wrap relative -mt-14 sm:-mt-16">
     <TrustStrip />
   </section>
 
