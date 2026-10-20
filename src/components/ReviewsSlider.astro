@@ -1,8 +1,14 @@
 ---
 /**
- * Google reviews in a swipeable row. Plain CSS scroll-snap does the sliding,
- * so it works with touch, trackpad and keyboard and ships almost no script;
- * the arrow buttons are a small enhancement. Each card links back to the
+ * Google reviews in two rows drifting in opposite directions. Each row is an
+ * ordinary horizontal scroll container with its cards listed twice; a small
+ * script nudges scrollLeft every frame and wraps it at the halfway point, so
+ * the loop is seamless and the row stays a real scroller: the arrows, a
+ * trackpad swipe, touch or a mouse drag all move it, and it pauses while the
+ * pointer is over it, while a link inside has focus, and for a moment after
+ * the visitor scrolls it themselves. Under reduced motion nothing drifts;
+ * the rows are still scrollable. The second copy of each row is hidden from
+ * assistive tech and skipped by the Tab key. Each card links back to the
  * review on Google, as Google's terms ask, and to the reviewer's profile.
  *
  * While the Google feed is not connected, sample cards are shown and labelled
@@ -10,21 +16,30 @@
  * which the build check uses to block a live launch.
  */
 import GoogleLogo from './GoogleLogo.astro';
+import Icon from './Icon.astro';
 import Stars from './Stars.astro';
 import SectionHead from './SectionHead.astro';
 import { GOOGLE } from '../data/reviews';
 interface Props {
   heading?: string;
+  /** Background tone: cream band (default) or plain white, for use straight under the hero. */
+  tone?: 'cream' | 'white';
 }
-const { heading = 'What travellers say about us' } = Astro.props;
+const { heading = 'What travellers say about us', tone = 'cream' } = Astro.props;
 const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 const tints = ['#111111', '#5a8fb0', '#4f7a00', '#7a4fa3', '#c2410c', '#2f6f61'];
 const count = GOOGLE.count > 0 ? GOOGLE.count.toLocaleString('en-IN') : '';
+// Alternate reviews between the two rows, then repeat each row until one copy is
+// wider than any screen, so the wrap point is never visible.
+const all = GOOGLE.reviews;
+const base = all.length > 1 ? [all.filter((_, i) => i % 2 === 0), all.filter((_, i) => i % 2 === 1)] : [all, all];
+const fill = (row: typeof all) => { let out = row; while (out.length < 8) out = out.concat(row); return out; };
+const rows = base.map(fill);
 ---
 
-{GOOGLE.reviews.length > 0 && (
-  <section class="section bg-cream" aria-labelledby="reviews-h" data-reviews data-sample-reviews={GOOGLE.isSample ? 'true' : undefined}>
-    <div class="wrap">
+{all.length > 0 && (
+  <section class:list={['overflow-hidden', tone === 'cream' ? 'section bg-cream' : 'pt-14 pb-2 sm:pt-20']} aria-labelledby="reviews-h" data-reviews data-sample-reviews={GOOGLE.isSample ? 'true' : undefined}>
+    <div class="wrap" data-reveal>
       <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-end">
         <SectionHead eyebrow="Google reviews" id="reviews-h" title={heading} lead="Real travellers, real trips from Bagdogra Airport. Every card links to the review on Google." />
         {GOOGLE.hasRating && (
@@ -41,88 +56,184 @@ const count = GOOGLE.count > 0 ? GOOGLE.count.toLocaleString('en-IN') : '';
           </a>
         )}
       </div>
+    </div>
 
-      <div class="relative mt-10">
-        <ul class="reviews-track -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-4 pb-4 sm:-mx-6 sm:px-6" tabindex="0" aria-label="Google reviews, scroll sideways for more">
-          {GOOGLE.reviews.map((r, i) => (
-            <li class="card relative flex w-[85%] shrink-0 snap-start flex-col p-6 sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.7rem)]">
-              <GoogleLogo class="absolute top-6 right-6 h-5 w-5" />
-              <Stars rating={r.rating} class="h-4.5 w-4.5" />
-              <blockquote class="mt-4 line-clamp-6 text-[1.02rem] leading-relaxed text-ink">“{r.text}”</blockquote>
-              <div class="mt-auto flex items-center gap-3 pt-6">
-                {r.photo ? (
-                  <img src={r.photo} alt="" width="44" height="44" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="h-11 w-11 shrink-0 rounded-full bg-mist object-cover" />
-                ) : (
-                  <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={`background:${tints[i % tints.length]}`} aria-hidden="true">{initials(r.author)}</span>
-                )}
-                <span class="min-w-0">
-                  {r.authorUrl ? (
-                    <a href={r.authorUrl} target="_blank" rel="nofollow noopener" class="block truncate font-semibold text-ink no-underline hover:text-lime-text">{r.author}</a>
+    <div class="mt-10 space-y-4 sm:space-y-5" data-reveal style="--d: 100ms">
+      {rows.map((row, r) => (
+        <div class="rv-row" data-dir={r === 0 ? '1' : '-1'}>
+          <ul class="rv-track flex items-stretch gap-4 py-2 sm:gap-5" aria-label={r === 0 ? 'Google reviews, first row' : 'Google reviews, second row'}>
+            {[0, 1].map((copy) => row.map((rv, i) => (
+              <li class="card relative flex w-[18rem] shrink-0 flex-col p-5 sm:w-[22rem] sm:p-6 lg:w-[24rem]" aria-hidden={copy === 1 ? 'true' : undefined}>
+                <GoogleLogo class="absolute top-5 right-5 h-5 w-5 sm:top-6 sm:right-6" />
+                <Stars rating={rv.rating} class="h-4.5 w-4.5" />
+                <blockquote class="mt-4 line-clamp-4 text-[1.02rem] leading-relaxed text-ink">“{rv.text}”</blockquote>
+                <div class="mt-auto flex items-center gap-3 pt-5">
+                  {rv.photo ? (
+                    <img src={rv.photo} alt="" width="44" height="44" loading="lazy" decoding="async" referrerpolicy="no-referrer" draggable="false" class="h-11 w-11 shrink-0 rounded-full bg-mist object-cover" />
                   ) : (
-                    <span class="block truncate font-semibold text-ink">{r.author}</span>
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={`background:${tints[(r * 3 + i) % tints.length]}`} aria-hidden="true">{initials(rv.author)}</span>
                   )}
-                  <span class="block text-xs text-muted">
-                    {r.relative && <time datetime={r.published || undefined}>{r.relative}</time>}
-                    {GOOGLE.isSample && <span class="ml-1 rounded bg-lime-50 px-1.5 py-0.5 font-semibold text-lime-text">Sample review</span>}
-                    {r.url && <a href={r.url} target="_blank" rel="nofollow noopener" class="ml-1">Read on Google</a>}
+                  <span class="min-w-0">
+                    {rv.authorUrl ? (
+                      <a href={rv.authorUrl} target="_blank" rel="nofollow noopener" draggable="false" class="block truncate font-semibold text-ink no-underline hover:text-lime-text" tabindex={copy === 1 ? -1 : undefined}>{rv.author}</a>
+                    ) : (
+                      <span class="block truncate font-semibold text-ink">{rv.author}</span>
+                    )}
+                    <span class="block text-xs text-muted">
+                      {rv.relative && <time datetime={rv.published || undefined}>{rv.relative}</time>}
+                      {GOOGLE.isSample && <span class="ml-1 rounded bg-lime-50 px-1.5 py-0.5 font-semibold text-lime-text">Sample review</span>}
+                      {rv.url && <a href={rv.url} target="_blank" rel="nofollow noopener" draggable="false" class="ml-1" tabindex={copy === 1 ? -1 : undefined}>Read on Google</a>}
+                    </span>
                   </span>
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <div class="mt-2 flex items-center justify-between gap-4">
-          <p class="text-sm text-muted">
-            <a href={GOOGLE.url} target="_blank" rel="noopener" class="font-semibold">{count ? `See all ${count} reviews on Google` : 'See our reviews on Google'}</a>
-            <span aria-hidden="true"> · </span>
-            <a href={GOOGLE.writeReviewUrl} target="_blank" rel="noopener">Travelled with us? Write a review</a>
-          </p>
-          <div class="hidden gap-2 sm:flex">
-            <button type="button" class="reviews-btn" data-dir="-1" aria-label="Previous reviews"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg></button>
-            <button type="button" class="reviews-btn" data-dir="1" aria-label="Next reviews"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg></button>
-          </div>
+                </div>
+              </li>
+            )))}
+          </ul>
         </div>
-        {GOOGLE.isSample && (
-          <p class="mt-4 rounded-xl border border-dashed border-lime/60 bg-lime-50 p-3 text-xs text-ink">
-            <strong>Pre-launch note:</strong> these are sample cards showing how the slider looks. Live Google reviews replace them automatically once the Places API key is set (see docs/launch-checklist.md). The 4.9 rating is the listing's real score.
-          </p>
-        )}
+      ))}
+    </div>
+
+    <div class="wrap mt-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+        <a href={GOOGLE.writeReviewUrl} target="_blank" rel="noopener" class="btn-book"><Icon name="star" /> Write a review</a>
+        <a href={GOOGLE.url} target="_blank" rel="noopener" class="text-sm font-semibold">{count ? `See all ${count} reviews on Google` : 'See our reviews on Google'}</a>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" class="rv-btn" data-step="-1" aria-label="Scroll reviews back"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg></button>
+        <button type="button" class="rv-btn" data-step="1" aria-label="Scroll reviews forward"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg></button>
       </div>
     </div>
+    {GOOGLE.isSample && (
+      <div class="wrap">
+        <p class="mt-4 rounded-xl border border-dashed border-lime/60 bg-lime-50 p-3 text-xs text-ink">
+          <strong>Pre-launch note:</strong> these are sample cards showing how the slider looks. Live Google reviews replace them automatically once the Places API key is set (see docs/launch-checklist.md). The 4.9 rating is the listing's real score.
+        </p>
+      </div>
+    )}
   </section>
 )}
 
 <style>
-  .reviews-track { scrollbar-width: none; }
-  .reviews-track::-webkit-scrollbar { display: none; }
-  .reviews-btn {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 2.75rem; height: 2.75rem; border-radius: 9999px;
-    border: 1px solid var(--color-line); background: #fff; color: var(--color-ink);
-    transition: border-color .2s, color .2s, background .2s;
+  .rv-row { mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent); }
+  .rv-track {
+    overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    cursor: grab;
+    padding-inline: 1rem;
   }
-  .reviews-btn:hover { border-color: var(--color-ink); color: var(--color-ink); }
-  .reviews-btn:disabled { opacity: 0.35; cursor: default; }
+  .rv-track::-webkit-scrollbar { display: none; }
+  .rv-track.is-dragging { cursor: grabbing; user-select: none; }
+  .rv-track.is-dragging a { pointer-events: none; }
+  .rv-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.75rem; height: 2.75rem; border-radius: 0.75rem;
+    border: 1px solid var(--color-line); background: #fff; color: var(--color-ink);
+    transition: border-color .2s, background .2s;
+  }
+  .rv-btn:hover { border-color: var(--color-ink); }
+  @media (prefers-reduced-motion: reduce) {
+    .rv-row { mask-image: none; }
+  }
 </style>
 
 <script>
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DRIFT = 28; // pixels per second while idle
+  const NUDGE = 1100; // pixels per second when an arrow is pressed
+
   for (const root of document.querySelectorAll<HTMLElement>('[data-reviews]')) {
-    const track = root.querySelector<HTMLElement>('.reviews-track')!;
-    const buttons = root.querySelectorAll<HTMLButtonElement>('.reviews-btn');
-    if (!buttons.length) continue;
-    const update = () => {
-      const max = track.scrollWidth - track.clientWidth - 2;
-      buttons[0].disabled = track.scrollLeft <= 2;
-      buttons[1].disabled = track.scrollLeft >= max;
-    };
-    buttons.forEach((b) =>
-      b.addEventListener('click', () => {
-        const card = track.querySelector('li');
-        const step = card ? card.getBoundingClientRect().width + 16 : track.clientWidth;
-        track.scrollBy({ left: step * Number(b.dataset.dir), behavior: 'smooth' });
+    const rows = [...root.querySelectorAll<HTMLElement>('.rv-row')].map((row) => {
+      const track = row.querySelector<HTMLElement>('.rv-track')!;
+      const items = track.querySelectorAll<HTMLElement>('li');
+      const n = items.length / 2;
+      const s = { track, dir: Number(row.dataset.dir) || 1, hover: false, drag: false, idleUntil: 0, acc: 0, nudge: 0, started: false };
+      // One copy of the cards: the distance from the first card to its twin in the second copy.
+      const period = () => (items[n]?.offsetLeft ?? 0) - (items[0]?.offsetLeft ?? 0);
+      // Jump by one copy at either end; the copies are identical, so nothing visibly moves.
+      const wrap = () => {
+        const p = period();
+        if (p <= 0) return;
+        if (track.scrollLeft >= p) track.scrollLeft -= p;
+        else if (track.scrollLeft < 1) track.scrollLeft += p;
+      };
+      track.addEventListener('scroll', wrap, { passive: true });
+      row.addEventListener('mouseenter', () => (s.hover = true));
+      row.addEventListener('mouseleave', () => (s.hover = false));
+      row.addEventListener('focusin', () => (s.hover = true));
+      row.addEventListener('focusout', () => (s.hover = false));
+      // A trackpad or touch scroll by the visitor holds the drift for a moment.
+      const rest = () => (s.idleUntil = performance.now() + 1500);
+      track.addEventListener('wheel', rest, { passive: true });
+      track.addEventListener('touchstart', rest, { passive: true });
+      track.addEventListener('touchmove', rest, { passive: true });
+      // Mouse drag, with the click suppressed after a real drag so a link is not opened by accident.
+      let startX = 0, startLeft = 0, moved = false;
+      track.addEventListener('pointerdown', (e) => {
+        if (e.pointerType !== 'mouse' || e.button !== 0) return;
+        e.preventDefault();
+        startX = e.clientX; startLeft = track.scrollLeft; moved = false;
+        s.drag = true;
+        track.setPointerCapture(e.pointerId);
+      });
+      track.addEventListener('pointermove', (e) => {
+        if (!s.drag) return;
+        const dx = e.clientX - startX;
+        if (Math.abs(dx) > 4) { moved = true; track.classList.add('is-dragging'); }
+        track.scrollLeft = startLeft - dx;
+      });
+      const end = () => {
+        if (!s.drag) return;
+        s.drag = false;
+        setTimeout(() => track.classList.remove('is-dragging'), 0);
+        if (moved) rest();
+      };
+      track.addEventListener('pointerup', end);
+      track.addEventListener('pointercancel', end);
+      track.addEventListener('click', (e) => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+      return s;
+    });
+
+    // The arrows move both rows one card in the chosen direction; the frame loop does the easing.
+    root.querySelectorAll<HTMLButtonElement>('.rv-btn').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        const step = Number(btn.dataset.step);
+        for (const s of rows) {
+          const card = s.track.querySelector('li');
+          const w = card ? card.getBoundingClientRect().width + 20 : s.track.clientWidth * 0.8;
+          s.nudge += w * step;
+          s.idleUntil = performance.now() + 1500;
+        }
       }),
     );
-    track.addEventListener('scroll', update, { passive: true });
-    update();
+
+    let last = performance.now();
+    let visible = true;
+    new IntersectionObserver(([en]) => (visible = en.isIntersecting), { rootMargin: '100px' }).observe(root);
+    const tick = (now: number) => {
+      const dt = Math.min(64, now - last) / 1000; last = now;
+      if (visible && !document.hidden) {
+        for (const s of rows) {
+          // The backwards row starts one copy in, once layout gives it a width, so it has room to move left.
+          if (!s.started) {
+            const items = s.track.querySelectorAll<HTMLElement>('li');
+            const p = (items[items.length / 2]?.offsetLeft ?? 0) - (items[0]?.offsetLeft ?? 0);
+            if (p > 0) { s.started = true; if (s.dir < 0) s.track.scrollLeft = p - 1; }
+          }
+          if (s.nudge) {
+            const move = Math.sign(s.nudge) * Math.min(Math.abs(s.nudge), NUDGE * dt);
+            s.nudge -= move;
+            s.acc += move;
+          } else if (!reduce && !s.hover && !s.drag && now >= s.idleUntil) {
+            s.acc += s.dir * DRIFT * dt;
+          }
+          // Whole pixels only: some screens round scrollLeft, which would swallow a sub-pixel drift.
+          const whole = Math.trunc(s.acc);
+          if (whole) { s.acc -= whole; s.track.scrollLeft += whole; }
+        }
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 </script>

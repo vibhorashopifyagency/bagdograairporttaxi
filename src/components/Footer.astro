@@ -30,21 +30,21 @@ const year = new Date().getFullYear();
       <GoogleRatingBadge variant="inline" dark class="mt-5" />
     </div>
     <div>
-      <h2 class="text-xs font-bold tracking-[0.14em] text-lime uppercase">Popular taxi routes</h2>
+      <h2 class="text-xs font-semibold tracking-[0.14em] text-white/55 uppercase">Popular taxi routes</h2>
       <ul class="mt-4 space-y-2.5 text-sm">
         {topRoutes.map((r) => <li><a href={`/taxi/${r.slug}/`} class="text-white/70 no-underline hover:text-white">{r.fromShort} to {r.toShort}</a></li>)}
         <li><a href="/taxi/" class="font-semibold text-white no-underline hover:text-lime">All {ROUTES.length} fares</a></li>
       </ul>
     </div>
     <div>
-      <h2 class="text-xs font-bold tracking-[0.14em] text-lime uppercase">Tour packages</h2>
+      <h2 class="text-xs font-semibold tracking-[0.14em] text-white/55 uppercase">Tour packages</h2>
       <ul class="mt-4 space-y-2.5 text-sm">
         {PACKAGES.slice(0, 7).map((p) => <li><a href={`/tour-packages/${p.slug}/`} class="text-white/70 no-underline hover:text-white">{p.name}</a></li>)}
         <li><a href="/tour-packages/" class="font-semibold text-white no-underline hover:text-lime">All {PACKAGES.length} packages</a></li>
       </ul>
     </div>
     <div>
-      <h2 class="text-xs font-bold tracking-[0.14em] text-lime uppercase">Help</h2>
+      <h2 class="text-xs font-semibold tracking-[0.14em] text-white/55 uppercase">Help</h2>
       <ul class="mt-4 space-y-2.5 text-sm">
         <li><a href="/cancellation-refund-policy/" class="text-white/70 no-underline hover:text-white">Cancellation and refunds</a></li>
         <li><a href="/faq/" class="text-white/70 no-underline hover:text-white">FAQ</a></li>

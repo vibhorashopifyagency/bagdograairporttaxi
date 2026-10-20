@@ -1,6 +1,6 @@
 ---
 /**
- * The photographic header for inner pages: a full-bleed photo, a gradient so
+ * The photographic header for inner pages: a full-bleed photo with the text in the page column, a gradient so
  * the title stays readable, eyebrow and h1, plus a slot for chips or copy.
  */
 import Photo from './Photo.astro';
@@ -18,7 +18,7 @@ const { image, title, eyebrow, compact = false } = Astro.props;
   <Photo name={image} class="absolute inset-0 h-full w-full object-cover" sizes="100vw" loading="eager" fetchpriority="high" alt="" />
   <div class="absolute inset-0 bg-gradient-to-t from-ink via-ink/55 to-ink/15" aria-hidden="true"></div>
   <div class:list={['wrap relative flex flex-col justify-end pt-20', compact ? 'min-h-[260px] pb-8 sm:min-h-[320px] sm:pb-10' : 'min-h-[340px] pb-9 sm:min-h-[440px] sm:pb-12']}>
-    {eyebrow && <p class="eyebrow !text-lime">{eyebrow}</p>}
+    {eyebrow && <p class="eyebrow !text-white/70">{eyebrow}</p>}
     <h1 class="mt-2 max-w-4xl text-[2.1rem] leading-[1.08] font-extrabold text-white sm:text-5xl">{title}</h1>
     <slot />
   </div>
