@@ -221,3 +221,38 @@ export function googleReviews() {
     url: r.url,
   }));
 }
+
+/**
+ * One WebPage node per page, so every page names itself, says which site it
+ * belongs to and who publishes it, when it was last changed, and (where the
+ * page opens with an answer paragraph) which text is fit to be read aloud or
+ * quoted. Answer engines use these to pick a passage; search uses
+ * dateModified as a freshness signal.
+ */
+export function webPage(opts: {
+  path: string;
+  name: string;
+  description: string;
+  image: string;
+  modified?: string;
+  /** CSS selectors of the quotable, answer-first passages on the page. */
+  speakable?: string[];
+  type?: 'WebPage' | 'CollectionPage' | 'AboutPage' | 'ContactPage' | 'FAQPage';
+}) {
+  return {
+    '@type': opts.type ?? 'WebPage',
+    '@id': `${abs(opts.path)}#webpage`,
+    url: abs(opts.path),
+    name: opts.name,
+    description: opts.description,
+    inLanguage: SITE.locale,
+    isPartOf: { '@id': WEBSITE_ID },
+    about: { '@id': ORG_ID },
+    publisher: { '@id': ORG_ID },
+    primaryImageOfPage: { '@type': 'ImageObject', url: opts.image },
+    dateModified: opts.modified,
+    speakable: opts.speakable?.length
+      ? { '@type': 'SpeakableSpecification', cssSelector: opts.speakable }
+      : undefined,
+  };
+}

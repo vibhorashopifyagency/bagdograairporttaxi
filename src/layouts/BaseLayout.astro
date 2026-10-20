@@ -6,7 +6,7 @@ import MobileActionBar from '../components/MobileActionBar.astro';
 import Breadcrumbs from '../components/Breadcrumbs.astro';
 import JsonLd from '../components/JsonLd.astro';
 import { PRE_LAUNCH, SITE, BUSINESS } from '../data/site';
-import { businessGraph, breadcrumbs as crumbSchema } from '../lib/schema';
+import { businessGraph, breadcrumbs as crumbSchema, webPage } from '../lib/schema';
 
 interface Props {
   /** Full <title>. Lead with the keyword; the brand is appended. */
@@ -19,9 +19,15 @@ interface Props {
   crumbs?: { name: string; path: string }[];
   ogType?: 'website' | 'article';
   ogImage?: string;
+  /** ISO date the page's facts last changed. Falls back to any Article node's dateModified. */
+  modified?: string;
+  /** CSS selectors of the answer-first passages an assistant may quote or read aloud. */
+  speakable?: string[];
 }
 
-const { title, description, noindex = false, schema = [], crumbs, ogType = 'website', ogImage = '/og/default.png' } = Astro.props;
+const { title, description, noindex = false, schema = [], crumbs, ogType = 'website', ogImage = '/og/default.png', speakable } = Astro.props;
+const articleModified = (schema as { '@type'?: string; dateModified?: string }[]).find((n) => n?.['@type'] === 'Article')?.dateModified;
+const modified = Astro.props.modified ?? articleModified;
 // Append the brand only when it fits in ~65 characters; the keyword matters more.
 const withBrand = `${title} | ${SITE.name}`;
 const fullTitle = title.includes(SITE.name) || withBrand.length > 65 ? title : withBrand;
@@ -33,7 +39,14 @@ const robots = PRE_LAUNCH
     ? 'noindex, follow'
     : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
 const allCrumbs = crumbs ? [{ name: 'Home', path: '/' }, ...crumbs] : undefined;
-const nodes = [...businessGraph(), ...(allCrumbs ? [crumbSchema(allCrumbs)] : []), ...schema];
+// Pages with a photo header pass it as `slot="hero"`, so the breadcrumb can sit on the photo instead of above it.
+const hasHero = Astro.slots.has('hero');
+const nodes = [
+  ...businessGraph(),
+  webPage({ path: Astro.url.pathname, name: fullTitle, description, image: ogImageUrl, modified, speakable }),
+  ...(allCrumbs ? [crumbSchema(allCrumbs)] : []),
+  ...schema,
+];
 ---
 
 <!doctype html>
@@ -54,6 +67,8 @@ const nodes = [...businessGraph(), ...(allCrumbs ? [crumbSchema(allCrumbs)] : []
     <meta name="theme-color" content="#111111" />
     <link rel="sitemap" href="/sitemap-index.xml" />
     <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
+    <link rel="alternate" type="application/rss+xml" href="/feed.xml" title={`${SITE.name}: travel guides`} />
+    {modified && <meta property="article:modified_time" content={`${modified}T00:00:00+05:30`} />}
 
     <!-- Local SEO geo tags (Bagdogra, West Bengal) -->
     <meta name="geo.region" content="IN-WB" />
@@ -84,8 +99,14 @@ const nodes = [...businessGraph(), ...(allCrumbs ? [crumbSchema(allCrumbs)] : []
   </head>
   <body class="min-h-screen">
     <Header />
-    {allCrumbs && <Breadcrumbs items={allCrumbs} />}
+    {allCrumbs && !hasHero && <Breadcrumbs items={allCrumbs} />}
     <main id="main">
+      {hasHero && (
+        <div class="relative">
+          <slot name="hero" />
+          {allCrumbs && <Breadcrumbs items={allCrumbs} tone="light" class="absolute inset-x-0 top-0 z-10" />}
+        </div>
+      )}
       <slot />
     </main>
     <Footer />

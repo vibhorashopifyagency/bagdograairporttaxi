@@ -17,6 +17,8 @@ const { image, title, eyebrow, compact = false } = Astro.props;
 <section class="relative isolate overflow-hidden bg-ink text-white">
   <Photo name={image} class="absolute inset-0 h-full w-full object-cover" sizes="100vw" loading="eager" fetchpriority="high" alt="" />
   <div class="absolute inset-0 bg-gradient-to-t from-ink via-ink/55 to-ink/15" aria-hidden="true"></div>
+  <!-- Darkens the top edge so the breadcrumb the layout overlays stays readable on a bright sky. -->
+  <div class="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-ink/60 to-transparent" aria-hidden="true"></div>
   <div class:list={['wrap relative flex flex-col justify-end pt-20', compact ? 'min-h-[260px] pb-8 sm:min-h-[320px] sm:pb-10' : 'min-h-[340px] pb-9 sm:min-h-[440px] sm:pb-12']}>
     {eyebrow && <p class="eyebrow !text-white/70">{eyebrow}</p>}
     <h1 class="mt-2 max-w-4xl text-[2.1rem] leading-[1.08] font-extrabold text-white sm:text-5xl">{title}</h1>

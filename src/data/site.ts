@@ -26,13 +26,18 @@ export const SITE = {
   // working best in this market (sikkimtravellers.com).
   title:
     'Bagdogra Airport Taxi from ₹600 | Darjeeling, Gangtok & Sikkim Cabs',
+  // Under 160 characters: the price, the places, the proof, then the action.
   description:
-    'Fixed-fare taxis from Bagdogra Airport (IXB) and NJP to Darjeeling, Gangtok, Pelling and the Dooars. Verified drivers, flight tracking, secure payment, free cancellation.',
+    'Fixed-fare taxi from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling and the Dooars from ₹600. Verified drivers, flight tracking, free cancellation.',
   locale: 'en-IN',
   lang: 'en',
   // Shown next to every fare. Update it whenever FARES change.
   faresUpdated: '2026-10',
   faresUpdatedLabel: 'October 2026',
+  // The homepage's dateModified (JSON-LD and the key-facts footnote). Bump it
+  // whenever a fare, a policy or a key fact changes.
+  contentUpdated: '2026-10-20',
+  contentUpdatedLabel: '20 October 2026',
 } as const;
 
 export const BUSINESS = {

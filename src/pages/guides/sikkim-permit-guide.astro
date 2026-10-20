@@ -24,7 +24,7 @@ const faqs = [
   schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
   ogType="article"
 >
-  <PageHero image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
+  <PageHero slot="hero" image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
   <article class="wrap mt-10">
     <header class="max-w-3xl">
       <p class="answer">Indian citizens need no permit for Gangtok, Pelling or Namchi. A protected-area permit is needed for Tsomgo Lake, Nathula, Zuluk and North Sikkim, and it is arranged by a registered tour operator with a photo ID and two photos per person. Foreign nationals need a free Restricted Area Permit for all of Sikkim.</p>

@@ -21,7 +21,7 @@ const aboutGallery = [...GALLERY.filter((g) => g.category === 'Our cars'), ...GA
   crumbs={[{ name: 'About', path: '/about/' }]}
   schema={[about]}
 >
-  <PageHero image="tea-worker" eyebrow={`Bagdogra · since ${BUSINESS.foundingYear}`} title="A local team at Bagdogra, not a call centre" />
+  <PageHero slot="hero" image="tea-worker" eyebrow={`Bagdogra · since ${BUSINESS.foundingYear}`} title="A local team at Bagdogra, not a call centre" />
 
   <div class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-14">
     <div class="prose-site min-w-0">

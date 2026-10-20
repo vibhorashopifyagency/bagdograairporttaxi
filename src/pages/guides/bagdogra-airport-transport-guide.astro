@@ -26,7 +26,7 @@ const faqs = [
   schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
   ogType="article"
 >
-  <PageHero image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
+  <PageHero slot="hero" image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
   <article class="wrap mt-10">
     <header class="max-w-3xl">
       <p class="answer">The fastest door-to-door way from Bagdogra Airport to the hills is a private taxi: {inr(darj.fares.sedan)} to Darjeeling in about 3 hours and {inr(gtk.fares.sedan)} to Gangtok in about 5. Shared jeeps from Siliguri cost far less a seat but are slower and stop at town stands. App cabs serve the plains only.</p>

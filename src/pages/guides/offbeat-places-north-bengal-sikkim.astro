@@ -38,7 +38,7 @@ const places = [
   schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
   ogType="article"
 >
-  <PageHero image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
+  <PageHero slot="hero" image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
   <article class="wrap mt-10">
     <header class="max-w-3xl">
       <p class="answer">The best offbeat places near Bagdogra Airport are Sittong, Chatakpur and Tinchuley (about 3 to 3.5 hours away), Lava, Lolegaon, Rishop and Kolakham (about 4 to 4.5 hours), and Zuluk on the Silk Route (about 6 to 7 hours, permit needed). Most have homestays, quiet forest and views of Kanchenjunga without the crowds of Darjeeling and Gangtok.</p>

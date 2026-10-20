@@ -1,18 +1,22 @@
 ---
 interface Props {
   items: { name: string; path: string }[];
+  /** `light` sits on a photo: white text, no background. */
+  tone?: 'default' | 'light';
+  class?: string;
 }
-const { items } = Astro.props;
+const { items, tone = 'default', class: className } = Astro.props;
+const light = tone === 'light';
 ---
 
-<nav aria-label="Breadcrumb" class="wrap pt-5 text-sm text-muted">
+<nav aria-label="Breadcrumb" class:list={['wrap pt-5 text-sm', light ? 'text-white/70' : 'text-muted', className]}>
   <ol class="flex flex-wrap items-center gap-1.5">
     {items.map((item, i) => (
       <li class="flex items-center gap-1.5">
         {i < items.length - 1 ? (
-          <><a href={item.path} class="text-muted hover:text-lime-text">{item.name}</a><span aria-hidden="true">/</span></>
+          <><a href={item.path} class:list={[light ? 'text-white/80 hover:text-white' : 'text-muted hover:text-lime-text']}>{item.name}</a><span aria-hidden="true">/</span></>
         ) : (
-          <span aria-current="page" class="text-ink">{item.name}</span>
+          <span aria-current="page" class:list={[light ? 'text-white' : 'text-ink']}>{item.name}</span>
         )}
       </li>
     ))}

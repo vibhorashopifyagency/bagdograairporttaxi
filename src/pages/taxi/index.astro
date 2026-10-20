@@ -19,7 +19,7 @@ const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', i
 ---
 
 <BaseLayout title={title} description={description} crumbs={[{ name: 'Taxi fares', path: '/taxi/' }]} schema={[itemList]}>
-  <PageHero image="airport" eyebrow={`${ROUTES.length} routes · updated ${SITE.faresUpdatedLabel}`} title="Taxi fares from Bagdogra Airport, NJP and Siliguri" compact />
+  <PageHero slot="hero" image="airport" eyebrow={`${ROUTES.length} routes · updated ${SITE.faresUpdatedLabel}`} title="Taxi fares from Bagdogra Airport, NJP and Siliguri" compact />
   <div class="wrap section">
     <p class="answer max-w-3xl">
       Every fare below is a fixed, one-way price per car, including fuel, tolls, parking, driver allowance and GST. The only extra is {inr(POLICY.nightCharge)} for pickups between {POLICY.nightChargeFrom} and {POLICY.nightChargeTo}. Fares were last updated in <time datetime={SITE.faresUpdated}>{SITE.faresUpdatedLabel}</time>.

@@ -37,7 +37,7 @@ const desc = `${d.name} travel guide: best time to visit, how many days, top sig
   ogType="article"
   ogImage={`/img/${destinationPhoto(d.slug)}-1600.webp`}
 >
-  <PageHero image={destinationPhoto(d.slug)} eyebrow={`${d.region} · ${d.altitude}`} title={`${d.name} travel guide`}>
+  <PageHero slot="hero" image={destinationPhoto(d.slug)} eyebrow={`${d.region} · ${d.altitude}`} title={`${d.name} travel guide`}>
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> {d.daysNeeded}</span>
       <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {d.howToReach.split('.')[0]}</span>

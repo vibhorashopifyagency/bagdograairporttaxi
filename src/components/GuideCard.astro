@@ -1,0 +1,30 @@
+---
+/**
+ * One travel guide as a photo card: title, one-line description and the
+ * visible "Updated" date that search and answer engines read as a freshness
+ * signal. `featured` makes a taller card for the first slot in a grid.
+ */
+import type { GUIDES } from '../data/guides';
+import { guidePhoto } from '../lib/photos';
+import Photo from './Photo.astro';
+import Icon from './Icon.astro';
+interface Props {
+  guide: (typeof GUIDES)[number];
+  featured?: boolean;
+}
+const { guide: g, featured = false } = Astro.props;
+---
+
+<a href={`/guides/${g.slug}/`} class:list={['card lift group flex flex-col overflow-hidden no-underline', featured && 'lg:row-span-2']}>
+  <span class:list={['relative block overflow-hidden bg-mist', featured ? 'aspect-[16/10] lg:aspect-auto lg:min-h-[260px] lg:flex-1' : 'aspect-[16/9]']}>
+    <Photo name={guidePhoto(g.slug)} class="zoom absolute inset-0 h-full w-full object-cover" sizes={featured ? '(min-width: 1024px) 40vw, 100vw' : '(min-width: 1024px) 30vw, (min-width: 640px) 50vw, 100vw'} alt="" />
+    <span class="photo-fade absolute inset-x-0 bottom-0 h-2/3" aria-hidden="true"></span>
+    <span class="absolute top-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-ink shadow-sm">Travel guide</span>
+    <span class="absolute inset-x-4 bottom-3 text-xs font-medium text-white/90">Updated <time datetime={g.updated}>{g.updatedLabel}</time></span>
+  </span>
+  <span class="flex flex-col p-5">
+    <span class:list={['font-[family-name:var(--font-display)] leading-tight font-bold text-ink group-hover:text-lime-text', featured ? 'text-2xl' : 'text-lg']}>{g.title}</span>
+    <span class:list={['mt-2 text-sm leading-relaxed text-body', !featured && 'line-clamp-2']}>{g.description}</span>
+    <span class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-ink">Read the guide <Icon name="arrow" class="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+  </span>
+</a>

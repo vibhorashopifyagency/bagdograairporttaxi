@@ -1,4 +1,23 @@
 ---
+/**
+ * The homepage, in the order a traveller decides and an answer engine reads:
+ *   1. Hero: the promise, the fare checker, the proof chip.
+ *   2. Trust strip: the four promises beside every Book button.
+ *   3. Fares at a glance: the direct answer to "how much", then the routes.
+ *   4. Fare board: every airport route, drifting.
+ *   5. Cars: the fare depends on the car, so cars follow fares.
+ *   6. Reviews: proof, once the price is known.
+ *   7. How booking works.
+ *   8. Booking ahead versus the airport counter.
+ *   9. Tour packages.
+ *  10. Destinations.
+ *  11. Travel guides (the pages answer engines quote most).
+ *  12. Why us: the people behind the fare.
+ *  13. Key facts: every figure on one dark band, for travellers and assistants.
+ *  14. Gallery, FAQ, book.
+ * The direct answer sits in the first third of the page because that is where
+ * answer engines take most of their quotes from.
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import TrustStrip from '../components/TrustStrip.astro';
 import RouteCard from '../components/RouteCard.astro';
@@ -16,11 +35,14 @@ import ReviewsSlider from '../components/ReviewsSlider.astro';
 import SectionHead from '../components/SectionHead.astro';
 import FareBoard from '../components/FareBoard.astro';
 import PhotoMarquee from '../components/PhotoMarquee.astro';
+import GuideCard from '../components/GuideCard.astro';
+import KeyFacts from '../components/KeyFacts.astro';
 import { ROUTES, inr, lowestFare } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 import { DESTINATIONS } from '../data/destinations';
 import { GENERAL_FAQS } from '../data/faqs';
 import { GALLERY } from '../data/gallery';
+import { GUIDES } from '../data/guides';
 import { GOOGLE } from '../data/reviews';
 import { BUSINESS, POLICY, SITE, waLink } from '../data/site';
 import { VEHICLES } from '../data/vehicles';
@@ -30,6 +52,7 @@ const featured = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport').slice(
 const darj = ROUTES[0];
 const gtk = ROUTES[1];
 const anchors = featured.slice(0, 3);
+const fromFare = inr(Math.min(...ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport').map(lowestFare)));
 // A short, real five-star review for the hero; none while the cards are samples.
 const heroReview = GOOGLE.isSample ? undefined : (GOOGLE.reviews.find((r) => r.rating === 5 && r.text.length < 200) ?? GOOGLE.reviews[0]);
 const steps = [
@@ -53,9 +76,16 @@ const stats = [
   { label: 'Tour packages', value: PACKAGES.length, suffix: '' },
   ...(GOOGLE.count > 0 ? [{ label: 'Google reviews', value: GOOGLE.count, suffix: '' }] : []),
 ];
+const [leadGuide, ...moreGuides] = GUIDES;
 ---
 
-<BaseLayout title={SITE.title} description={SITE.description} schema={[faqPage(GENERAL_FAQS, '/'), ...googleReviews()]}>
+<BaseLayout
+  title={SITE.title}
+  description={SITE.description}
+  modified={SITE.contentUpdated}
+  speakable={['#quick-answer', '#quick-answer-text', '#key-facts dl']}
+  schema={[faqPage(GENERAL_FAQS, '/'), ...googleReviews()]}
+>
   <!-- Hero: one photograph edge to edge, one promise, one form; the content keeps to the page column. -->
   <section class="relative isolate overflow-hidden bg-ink text-white">
     <Photo name="hero" class="absolute inset-0 h-full w-full object-cover object-[center_40%]" sizes="100vw" loading="eager" fetchpriority="high" alt="" />
@@ -66,13 +96,14 @@ const stats = [
         <p class="inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur">
           <span class="inline-flex items-center gap-2"><span class="live-dot" aria-hidden="true"></span>Drivers at Bagdogra Airport 24 hours a day</span>
         </p>
-        <h1 class="display-xl mt-4 max-w-[12ch] font-extrabold tracking-tight text-white">
-          Your ride into the{' '}
-          <span class="text-lime">Himalayas</span>{' '}
-          starts at arrivals.
+        <!-- The h1 carries the search phrase; the romance moves to the line below it. -->
+        <h1 class="display-xl mt-4 max-w-[14ch] font-extrabold tracking-tight text-white">
+          Bagdogra Airport taxi to the{' '}
+          <span class="text-lime">Himalayas</span>,{' '}
+          at a fixed fare.
         </h1>
         <p class="mt-4 max-w-xl text-lg leading-relaxed text-white/85">
-          Fixed-fare taxis from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling and the Dooars. A verified local driver meets you at arrivals with a name board.
+          Your ride into the hills starts at arrivals. Fixed-fare taxis from Bagdogra Airport (IXB) and NJP to Darjeeling, Gangtok, Pelling and the Dooars from {fromFare}, with a verified local driver waiting for you with a name board.
         </p>
         <ul class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm font-medium text-white/90" aria-label="What is included">
           <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Tolls, parking and GST included</li>
@@ -111,24 +142,67 @@ const stats = [
     <TrustStrip />
   </section>
 
-  <!-- Reviews, straight after the promise: proof before the prices. -->
-  <ReviewsSlider tone="white" />
-
-  <!-- Fares at a glance -->
+  <!-- Fares at a glance: the question most visitors arrive with, answered in the first screen after the hero. -->
   <section class="wrap section" aria-labelledby="quick-answer">
     <div data-reveal>
       <SectionHead eyebrow="Fares at a glance" id="quick-answer" title="How much is a taxi from Bagdogra Airport?" linkHref="/taxi/" linkLabel={`All ${ROUTES.length} fares`} />
-      <p class="answer mt-6 max-w-3xl">
-        A private taxi from Bagdogra Airport costs {inr(darj.fares.sedan)} to Darjeeling ({darj.km} km, {darj.duration}) and {inr(gtk.fares.sedan)} to Gangtok ({gtk.km} km, {gtk.duration}) in a sedan, one way. An Innova Crysta costs {inr(darj.fares.innova)} and {inr(gtk.fares.innova)}. Every fare includes tolls, parking, driver allowance and GST.
+      <p class="answer mt-6 max-w-3xl" id="quick-answer-text">
+        A private taxi from Bagdogra Airport costs {inr(darj.fares.sedan)} to Darjeeling ({darj.km} km, {darj.duration}) and {inr(gtk.fares.sedan)} to Gangtok ({gtk.km} km, {gtk.duration}) in a sedan, one way. An Innova Crysta costs {inr(darj.fares.innova)} and {inr(gtk.fares.innova)}. Every fare includes tolls, parking, driver allowance and GST, and was last updated in <time datetime={SITE.faresUpdated}>{SITE.faresUpdatedLabel}</time>.
       </p>
     </div>
     <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
       {featured.map((r) => <RouteCard route={r} />)}
     </div>
-    <p class="mt-5 text-sm text-muted">Night pickups ({POLICY.nightChargeFrom} to {POLICY.nightChargeTo}) add {inr(POLICY.nightCharge)}. That is the only extra, ever.</p>
+    <p class="mt-5 text-sm text-muted">Night pickups ({POLICY.nightChargeFrom} to {POLICY.nightChargeTo}) add {inr(POLICY.nightCharge)}. That is the only extra, ever. Fares to NJP, Siliguri and the Dooars are on the <a href="/taxi/">full fare chart</a>.</p>
   </section>
 
   <FareBoard />
+
+  <!-- Cars: the fare depends on the car, so the cars come straight after the fares. -->
+  <section class="wrap section" aria-labelledby="fleet">
+    <div data-reveal><SectionHead eyebrow="Our cars" id="fleet" title="Which car is right for the hill roads?" lead="Every car is commercially registered, insured and cleaned before each pickup. Child seats on request." /></div>
+    <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
+      {VEHICLES.map((v) => (
+        <a href={`/book/?vehicle=${v.key}`} class="card lift group overflow-hidden no-underline">
+          <div class="aspect-[16/10] overflow-hidden bg-mist"><Photo name={carPhoto[v.key]} class="zoom h-full w-full object-cover" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" /></div>
+          <div class="p-5">
+            <h3 class="text-lg font-bold group-hover:text-lime-text">{v.name}</h3>
+            <p class="text-sm text-muted">{v.models}</p>
+            <p class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm"><strong class="text-ink">{v.seats} seats</strong><span class="text-muted">{v.bags}</span></p>
+            <p class="mt-2 text-sm leading-snug text-body">{v.bestFor}</p>
+            <p class="mt-3 text-sm text-body">Darjeeling from <strong class="text-ink">{inr(darj.fares[v.key])}</strong></p>
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <!-- Reviews: proof, now that the price is known. -->
+  <ReviewsSlider />
+
+  <!-- How booking works -->
+  <section class="relative isolate overflow-hidden bg-ink section text-white" aria-labelledby="how">
+    <div class="wrap">
+    <Photo name="pelling" class="absolute inset-0 h-full w-full object-cover opacity-35" sizes="(min-width: 1536px) 1500px, 100vw" alt="" />
+    <div class="absolute inset-0 bg-gradient-to-b from-ink via-ink/70 to-ink" aria-hidden="true"></div>
+    <div class="relative">
+      <div data-reveal><SectionHead eyebrow="Secure booking in four steps" id="how" title="How do I book a taxi from Bagdogra Airport?" lead="Booked in a minute, confirmed on WhatsApp, driver details the evening before." light /></div>
+      <ol class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
+        {steps.map((s, i) => (
+          <li class="relative rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm transition-colors hover:border-lime/50 hover:bg-white/10">
+            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-lg font-extrabold text-ink">{i + 1}</span>
+            <h3 class="mt-5 text-lg font-semibold text-white">{s.title}</h3>
+            <p class="mt-1.5 text-sm leading-relaxed text-white/70">{s.text}</p>
+          </li>
+        ))}
+      </ol>
+      <div class="mt-10 flex flex-wrap items-center gap-4">
+        <a href="/book/" class="btn-lime">Start booking <Icon name="arrow" /></a>
+        <span class="text-sm text-white/70">Only {POLICY.advancePercent}% now. Free cancellation up to {POLICY.freeCancelHours} hours before.</span>
+      </div>
+    </div>
+    </div>
+  </section>
 
   <!-- Book ahead vs the airport counter -->
   <section class="bg-sand section" aria-labelledby="cmp">
@@ -152,14 +226,48 @@ const stats = [
       </div>
       <div class="mt-8 flex flex-wrap gap-3">
         <a href="/book/" class="btn-book">Lock in my fare <Icon name="arrow" /></a>
-        <a href="/guides/bagdogra-airport-transport-guide/" class="btn-ghost">Compare every option</a>
+        <a href="/guides/bagdogra-airport-transport-guide/" class="btn-ghost">Compare every way to travel</a>
       </div>
     </div>
   </section>
 
-  <!-- Why us: photo and the plain facts -->
-  <section class="wrap section" aria-labelledby="why">
-    <div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16 2xl:gap-24">
+  <!-- Packages -->
+  <section class="wrap section" aria-labelledby="pk">
+    <div data-reveal><SectionHead eyebrow="Tour packages from Bagdogra" id="pk" title="Darjeeling, Sikkim and Dooars tour packages" lead="One private car and driver for the whole trip, hotels with breakfast and dinner, permits arranged. Day-wise plans you can read before you pay." linkHref="/tour-packages/" linkLabel={`All ${PACKAGES.length} packages`} /></div>
+    <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>
+      {PACKAGES.slice(0, 8).map((p, i) => <PackageCard pkg={p} badge={i === 0 ? 'Our pick for a first visit' : undefined} />)}
+    </div>
+  </section>
+
+  <!-- Destinations -->
+  <section class="bg-sand section" aria-labelledby="dest">
+    <div class="wrap-wide">
+      <div data-reveal><SectionHead eyebrow="Where we drive" id="dest" title="Destinations across North Bengal, Sikkim and Bhutan" linkHref="/destinations/" linkLabel="All destination guides" /></div>
+      <div class="mt-10 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4 3xl:grid-cols-6" data-reveal-stagger>
+        {DESTINATIONS.map((d) => <DestinationTile d={d} />)}
+        <a href="/book/" class="lift group relative flex aspect-[4/5] flex-col justify-end overflow-hidden rounded-[var(--radius-card)] bg-ink p-4 text-white no-underline sm:p-6">
+          <span class="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-lime/20 blur-2xl transition-transform duration-500 group-hover:scale-125" aria-hidden="true"></span>
+          <span class="relative block text-[0.7rem] font-bold tracking-[0.12em] text-lime uppercase">Somewhere else?</span>
+          <span class="relative mt-1 block font-[family-name:var(--font-display)] text-xl leading-tight font-bold sm:text-2xl lg:text-[1.75rem]">Name your place</span>
+          <span class="relative mt-1.5 block text-sm leading-snug text-white/80 sm:text-[0.95rem]">We quote any route across the hills.</span>
+          <span class="relative mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-lime sm:mt-4">Get a quote <span aria-hidden="true" class="transition-transform group-hover:translate-x-1">&rarr;</span></span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Travel guides: the pages that answer the questions travellers (and the assistants they ask) bring to us. -->
+  <section class="wrap section" aria-labelledby="guides">
+    <div data-reveal><SectionHead eyebrow="Travel guides from the driver’s seat" id="guides" title="Plan the trip: permits, timings and the best months" lead="Written by the team that drives these roads every day and dated so you know they are current. Permits, Nathula opening days, how to get from the airport to the hills, and when to go." linkHref="/guides/" linkLabel={`All ${GUIDES.length} guides`} /></div>
+    <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr]" data-reveal-stagger>
+      <GuideCard guide={leadGuide} featured />
+      {moreGuides.map((g) => <GuideCard guide={g} />)}
+    </div>
+  </section>
+
+  <!-- Why us: the people behind the fare -->
+  <section class="bg-sand section" aria-labelledby="why">
+    <div class="wrap grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16 2xl:gap-24">
       <div class="relative" data-reveal>
         <div class="overflow-hidden rounded-[28px] shadow-[var(--shadow-float)]">
           <Photo name="airport" class="aspect-[4/3] w-full object-cover" sizes="(min-width: 1024px) 50vw, 100vw" />
@@ -175,11 +283,15 @@ const stats = [
         <p class="eyebrow">A local office, not a call centre</p>
         <h2 id="why" class="display-lg mt-2 font-extrabold">Drivers who know every bend between the airport and the hills</h2>
         <p class="mt-4 text-lg leading-relaxed">
-          We are {BUSINESS.legalName}, based at {BUSINESS.address.locality}, minutes from the terminal, and have been driving travellers up to Darjeeling, Gangtok and beyond since {BUSINESS.foundingYear}. One phone number, answered around the clock, and a fare that is the same on every page of this site.
+          {SITE.name} is a unit of {BUSINESS.legalName}, based at {BUSINESS.address.locality}, minutes from the terminal, and has been driving travellers up to Darjeeling, Gangtok and beyond since {BUSINESS.foundingYear}. One phone number, answered around the clock, and a fare that is the same on every page of this site.
         </p>
+        <blockquote class="mt-6 border-l-4 border-lime pl-5">
+          <p class="font-[family-name:var(--font-display)] text-xl font-semibold text-ink">“{BUSINESS.tagline}.”</p>
+          <footer class="mt-1.5 text-sm text-muted"><cite class="not-italic">{BUSINESS.legalName}, on its <a href={GOOGLE.url} target="_blank" rel="noopener">Google Business Profile</a></cite></footer>
+        </blockquote>
         <dl class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
           {stats.map((s) => (
-            <div class="rounded-2xl bg-sand p-4">
+            <div class="card p-4">
               <dt class="text-xs font-semibold tracking-wide text-muted uppercase">{s.label}</dt>
               <dd class="mt-1 font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink tabular-nums" data-count={s.value} data-suffix={s.suffix}>{s.value}{s.suffix}</dd>
             </div>
@@ -201,73 +313,8 @@ const stats = [
     </div>
   </section>
 
-  <!-- How booking works -->
-  <section class="relative isolate overflow-hidden bg-ink section text-white" aria-labelledby="how">
-    <div class="wrap">
-    <Photo name="pelling" class="absolute inset-0 h-full w-full object-cover opacity-35" sizes="(min-width: 1536px) 1500px, 100vw" alt="" />
-    <div class="absolute inset-0 bg-gradient-to-b from-ink via-ink/70 to-ink" aria-hidden="true"></div>
-    <div class="relative">
-      <div data-reveal><SectionHead eyebrow="Secure booking in four steps" id="how" title="Booked in a minute. Confirmed on WhatsApp." light /></div>
-      <ol class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
-        {steps.map((s, i) => (
-          <li class="relative rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm transition-colors hover:border-lime/50 hover:bg-white/10">
-            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-lg font-extrabold text-ink">{i + 1}</span>
-            <h3 class="mt-5 text-lg font-semibold text-white">{s.title}</h3>
-            <p class="mt-1.5 text-sm leading-relaxed text-white/70">{s.text}</p>
-          </li>
-        ))}
-      </ol>
-      <div class="mt-10 flex flex-wrap items-center gap-4">
-        <a href="/book/" class="btn-lime">Start booking <Icon name="arrow" /></a>
-        <span class="text-sm text-white/70">Only {POLICY.advancePercent}% now. Free cancellation up to {POLICY.freeCancelHours} hours before.</span>
-      </div>
-    </div>
-    </div>
-  </section>
-
-  <!-- Packages -->
-  <section class="wrap section" aria-labelledby="pk">
-    <div data-reveal><SectionHead eyebrow="Tour packages from Bagdogra" id="pk" title="Darjeeling, Sikkim and Dooars tours" lead="One private car and driver for the whole trip, hotels with breakfast and dinner, permits arranged. Day-wise plans you can read before you pay." linkHref="/tour-packages/" linkLabel={`All ${PACKAGES.length} packages`} /></div>
-    <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>
-      {PACKAGES.slice(0, 8).map((p, i) => <PackageCard pkg={p} badge={i === 0 ? 'Our pick for a first visit' : undefined} />)}
-    </div>
-  </section>
-
-  <!-- Cars -->
-  <section class="wrap section" aria-labelledby="fleet">
-    <div data-reveal><SectionHead eyebrow="Our cars" id="fleet" title="Choose the right car for the hills" lead="Every car is commercially registered, insured and cleaned before each pickup. Child seats on request." /></div>
-    <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
-      {VEHICLES.map((v) => (
-        <a href={`/book/?vehicle=${v.key}`} class="card lift group overflow-hidden no-underline">
-          <div class="aspect-[16/10] overflow-hidden bg-mist"><Photo name={carPhoto[v.key]} class="zoom h-full w-full object-cover" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" /></div>
-          <div class="p-5">
-            <h3 class="text-lg font-bold group-hover:text-lime-text">{v.name}</h3>
-            <p class="text-sm text-muted">{v.models}</p>
-            <p class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm"><strong class="text-ink">{v.seats} seats</strong><span class="text-muted">{v.bags}</span></p>
-            <p class="mt-2 text-sm leading-snug text-body">{v.bestFor}</p>
-            <p class="mt-3 text-sm text-body">Darjeeling from <strong class="text-ink">{inr(darj.fares[v.key])}</strong></p>
-          </div>
-        </a>
-      ))}
-    </div>
-  </section>
-
-  <!-- Destinations -->
-  <section class="bg-sand section" aria-labelledby="dest">
-    <div class="wrap-wide">
-      <div data-reveal><SectionHead eyebrow="Where we drive" id="dest" title="Destinations across North Bengal, Sikkim and Bhutan" linkHref="/destinations/" linkLabel="All guides" /></div>
-      <div class="mt-10 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4 3xl:grid-cols-6" data-reveal-stagger>
-        {DESTINATIONS.map((d) => <DestinationTile d={d} />)}
-        <a href="/book/" class="lift group relative flex aspect-[4/5] flex-col justify-end overflow-hidden rounded-[var(--radius-card)] bg-ink p-4 text-white no-underline sm:p-6">
-          <span class="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-lime/20 blur-2xl transition-transform duration-500 group-hover:scale-125" aria-hidden="true"></span>
-          <span class="relative block text-[0.7rem] font-bold tracking-[0.12em] text-lime uppercase">Somewhere else?</span>
-          <span class="relative mt-1 block font-[family-name:var(--font-display)] text-xl leading-tight font-bold sm:text-2xl lg:text-[1.75rem]">Name your place</span>
-          <span class="relative mt-1.5 block text-sm leading-snug text-white/80 sm:text-[0.95rem]">We quote any route across the hills.</span>
-          <span class="relative mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-lime sm:mt-4">Get a quote <span aria-hidden="true" class="transition-transform group-hover:translate-x-1">&rarr;</span></span>
-        </a>
-      </div>
-    </div>
-  </section>
+  <!-- Key facts: every figure in one place, for travellers and the assistants they ask -->
+  <KeyFacts />
 
   <!-- Gallery -->
   <section class="section overflow-hidden" aria-labelledby="gal">
@@ -280,7 +327,7 @@ const stats = [
   </section>
 
   <section class="wrap">
-    <FaqList faqs={GENERAL_FAQS} />
+    <FaqList faqs={GENERAL_FAQS} heading="Bagdogra Airport taxi: questions travellers ask" />
     <BookCta />
   </section>
 </BaseLayout>

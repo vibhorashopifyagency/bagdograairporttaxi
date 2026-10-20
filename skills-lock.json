@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "ai-search-optimization": {
+      "source": "dirnbauer/webconsulting-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ai-search-optimization/SKILL.md",
+      "computedHash": "d2a605b0d2d853438ff8b3d873fe3ec19f64f68cc7f3b7232353a584a5d2766d"
+    },
+    "improve-aeo-geo": {
+      "source": "onvoyage-ai/gtm-engineer-skills",
+      "sourceType": "github",
+      "skillPath": "improve-aeo-geo/SKILL.md",
+      "computedHash": "29ac5b02381b43e7c1989e67886d3f6f54f040bc1ac813c5cd594233808470e9"
+    },
+    "seo-content-writer": {
+      "source": "guia-matthieu/clawfu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/content/seo-content-writer/SKILL.md",
+      "computedHash": "30c3e90684b2667a09ddacedfa69ce990987ebbccce7280c8a9743100a21793c"
+    },
+    "write-seo-geo-content": {
+      "source": "onvoyage-ai/gtm-engineer-skills",
+      "sourceType": "github",
+      "skillPath": "write-seo-geo-content/SKILL.md",
+      "computedHash": "054f62b6063c19b38f678c007e06128af0772c74ae58c9ad92dcfc4728e1c9de"
+    }
+  }
+}

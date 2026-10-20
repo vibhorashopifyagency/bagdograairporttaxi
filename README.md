@@ -40,14 +40,35 @@ chart, the booking form, the JSON-LD offers and llms.txt together.
 ## SEO, AEO and GEO built in
 
 - JSON-LD on every page from one `@id` graph: TravelAgency/LocalBusiness,
-  WebSite, BreadcrumbList, TaxiService with per-car Offers, TouristTrip with
-  day-wise itinerary, TouristDestination, Article and FAQPage.
+  WebSite, WebPage (with `dateModified` and `speakable` where the page opens
+  with an answer), BreadcrumbList, TaxiService with per-car Offers,
+  TouristTrip with day-wise itinerary, TouristDestination, Article and FAQPage.
 - Answer-first opening paragraph on every route, package and guide page, so
-  answer engines can quote it.
+  answer engines can quote it. The homepage adds a "Key facts" definition
+  list (`src/components/KeyFacts.astro`) built from the data files.
 - `robots.txt` (generated) welcomes search and AI crawlers by name.
-- `/llms.txt` and `/llms-full.txt` generated from the same data as the pages.
+- `/llms.txt` (also at `/.well-known/llms.txt`) and `/llms-full.txt`
+  generated from the same data as the pages.
+- `/feed.xml`: RSS of the travel guides, linked from every page's `<head>`,
+  plus `article:modified_time` on every page that has a date.
 - Sitemap (`/sitemap-index.xml`), canonical tags, Open Graph and Twitter cards,
   geo meta tags, web manifest.
+
+### Agent skills for content work
+
+`.claude/skills/` holds four Claude Code skills installed with
+`npx skills add` (pinned in `skills-lock.json`), so content edits follow the
+same playbook every time:
+
+| Skill | Use it for |
+|---|---|
+| `seo-content-writer` | Writing or revising a page: keyword in title/H1/first 100 words, E-E-A-T review, internal links |
+| `ai-search-optimization` | Answer Engine Optimization: question headings, answer-first paragraphs, FAQ and schema patterns, llms.txt |
+| `improve-aeo-geo` | Code-level audit of the site for AI crawlers: robots, schema, headings, freshness, feeds |
+| `write-seo-geo-content` | New guide pages written to be quoted by ChatGPT, Perplexity and AI Overviews, with verified sources only |
+
+Homepage section order and the reasoning behind it are in the comment at the
+top of `src/pages/index.astro`.
 - Real 404 page with `noindex`.
 - 301s from the old `.php` URLs for Apache (`public/.htaccess`),
   Netlify/Cloudflare (`public/_redirects`) and Vercel (`vercel.json`).

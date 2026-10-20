@@ -12,7 +12,7 @@ const contact = { '@type': 'ContactPage', name: `Contact ${SITE.name}`, url: `${
   crumbs={[{ name: 'Contact', path: '/contact/' }]}
   schema={[contact]}
 >
-  <PageHero image="airport" eyebrow={BUSINESS.hours} title="Contact us, day or night" compact />
+  <PageHero slot="hero" image="airport" eyebrow={BUSINESS.hours} title="Contact us, day or night" compact />
   <div class="wrap section">
     <p class="answer max-w-3xl">The quickest way to reach us is WhatsApp on {BUSINESS.phone}. The same number takes calls 24 hours a day, every day of the year.</p>
     <div class="mt-10 grid gap-4 md:grid-cols-3">

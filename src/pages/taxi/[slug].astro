@@ -58,7 +58,7 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
   schema={[routeService(route, path), faqPage(faqs, path)]}
   ogImage={`/img/${routePhoto(route)}-1600.webp`}
 >
-  <PageHero image={routePhoto(route)} eyebrow="Fixed fare · one way · all inclusive" title={`${route.from} to ${route.to} taxi`}>
+  <PageHero slot="hero" image={routePhoto(route)} eyebrow="Fixed fare · one way · all inclusive" title={`${route.from} to ${route.to} taxi`}>
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {route.km} km</span>
       <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> {route.duration}</span>

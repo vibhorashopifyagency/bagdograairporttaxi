@@ -24,7 +24,7 @@ const faqs = [
   schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
   ogType="article"
 >
-  <PageHero image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
+  <PageHero slot="hero" image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
   <article class="wrap mt-10">
     <header class="max-w-3xl">
       <p class="answer">Nathula Pass is the India–China border pass at 4,310 m, about 56 km from Gangtok. It is open only to Indian citizens, usually from Wednesday to Sunday, with a permit applied for a day ahead through a registered operator. Most visitors combine it with Tsomgo Lake and Baba Mandir in one day trip from Gangtok.</p>

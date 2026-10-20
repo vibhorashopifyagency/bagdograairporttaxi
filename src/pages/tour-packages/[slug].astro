@@ -42,7 +42,7 @@ const waText = `Hi, I am interested in the ${pkg.name} tour package (${pkg.night
   schema={[tourTrip(pkg, path), faqPage(faqs, path)]}
   ogImage={`/img/${packagePhoto(pkg)}-1600.webp`}
 >
-  <PageHero image={packagePhoto(pkg)} eyebrow={`${pkg.nights} nights / ${pkg.days} days · from Bagdogra or NJP`} title={`${pkg.name} tour package`}>
+  <PageHero slot="hero" image={packagePhoto(pkg)} eyebrow={`${pkg.nights} nights / ${pkg.days} days · from Bagdogra or NJP`} title={`${pkg.name} tour package`}>
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {pkg.places.join(' · ')}</span>
       {pkg.bestFor.map((b) => <span class="chip-light">{b}</span>)}

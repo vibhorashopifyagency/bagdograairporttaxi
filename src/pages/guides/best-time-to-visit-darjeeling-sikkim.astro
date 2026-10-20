@@ -24,7 +24,7 @@ const faqs = [
   schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
   ogType="article"
 >
-  <PageHero image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
+  <PageHero slot="hero" image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
   <article class="wrap mt-10">
     <header class="max-w-3xl">
       <p class="answer">The best time to visit Darjeeling and Sikkim is October to December for clear Kanchenjunga views, and March to May for spring flowers and mild weather. Come in January to March for snow at Tsomgo and Nathula. Avoid late June to September if you can, as rain and landslides block hill roads.</p>
