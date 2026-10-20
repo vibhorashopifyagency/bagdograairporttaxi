@@ -97,7 +97,7 @@ const nodes = [
     <!-- Marks the document as scripted before first paint, so reveal animations never hide content without JS. -->
     <script is:inline>document.documentElement.classList.add('js');</script>
   </head>
-  <body class="min-h-screen">
+  <body id="top" class="min-h-screen">
     <Header />
     {allCrumbs && !hasHero && <Breadcrumbs items={allCrumbs} />}
     <main id="main">
