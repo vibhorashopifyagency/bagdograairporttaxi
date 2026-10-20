@@ -1,6 +1,7 @@
 ---
 import Logo from './Logo.astro';
 import Icon from './Icon.astro';
+import MountainDrive from './MountainDrive.astro';
 import GoogleRatingBadge from './GoogleRatingBadge.astro';
 import { BUSINESS, SITE, POLICY, waLink } from '../data/site';
 import { ROUTES } from '../data/routes';
@@ -9,7 +10,11 @@ const topRoutes = ROUTES.slice(0, 8);
 const year = new Date().getFullYear();
 ---
 
-<footer class="mt-24 bg-ink pb-24 text-white/70 sm:pb-0">
+<!-- The road into the hills runs along the top of the footer: the near hill is footer ink, so the scene flows straight into it. -->
+<div class="mt-16 h-[clamp(140px,12vw,260px)] overflow-hidden sm:mt-20" aria-hidden="true">
+  <MountainDrive variant="footer" class="h-full" />
+</div>
+<footer class="bg-ink pb-24 text-white/70 sm:pb-0">
   <div class="wrap grid gap-10 py-14 md:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
     <div>
       <Logo dark large />

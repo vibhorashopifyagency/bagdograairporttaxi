@@ -13,7 +13,7 @@
  *  10. Destinations.
  *  11. Travel guides (the pages answer engines quote most).
  *  12. Why us: the people behind the fare.
- *  13. Key facts: every figure on one dark band, for travellers and assistants.
+ *  13. The journey as a story: six moments from arrivals to the drive home, no prices.
  *  14. Gallery, FAQ, book.
  * The direct answer sits in the first third of the page because that is where
  * answer engines take most of their quotes from.
@@ -36,7 +36,7 @@ import SectionHead from '../components/SectionHead.astro';
 import FareBoard from '../components/FareBoard.astro';
 import PhotoMarquee from '../components/PhotoMarquee.astro';
 import GuideCard from '../components/GuideCard.astro';
-import KeyFacts from '../components/KeyFacts.astro';
+import JourneyStory from '../components/JourneyStory.astro';
 import { ROUTES, inr, lowestFare } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 import { DESTINATIONS } from '../data/destinations';
@@ -83,7 +83,7 @@ const [leadGuide, ...moreGuides] = GUIDES;
   title={SITE.title}
   description={SITE.description}
   modified={SITE.contentUpdated}
-  speakable={['#quick-answer', '#quick-answer-text', '#key-facts dl']}
+  speakable={['#quick-answer', '#quick-answer-text', '#journey ol']}
   schema={[faqPage(GENERAL_FAQS, '/'), ...googleReviews()]}
 >
   <!-- Hero: one photograph edge to edge, one promise, one form; the content keeps to the page column. -->
@@ -313,8 +313,8 @@ const [leadGuide, ...moreGuides] = GUIDES;
     </div>
   </section>
 
-  <!-- Key facts: every figure in one place, for travellers and the assistants they ask -->
-  <KeyFacts />
+  <!-- The journey as a story: how the trip feels, from touchdown to the drive home -->
+  <JourneyStory />
 
   <!-- Gallery -->
   <section class="section overflow-hidden" aria-labelledby="gal">

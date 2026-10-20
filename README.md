@@ -44,8 +44,8 @@ chart, the booking form, the JSON-LD offers and llms.txt together.
   with an answer), BreadcrumbList, TaxiService with per-car Offers,
   TouristTrip with day-wise itinerary, TouristDestination, Article and FAQPage.
 - Answer-first opening paragraph on every route, package and guide page, so
-  answer engines can quote it. The homepage adds a "Key facts" definition
-  list (`src/components/KeyFacts.astro`) built from the data files.
+  answer engines can quote it. The homepage tells the trip as a six-chapter
+  story (`src/components/JourneyStory.astro`) with the policies woven in.
 - `robots.txt` (generated) welcomes search and AI crawlers by name.
 - `/llms.txt` (also at `/.well-known/llms.txt`) and `/llms-full.txt`
   generated from the same data as the pages.

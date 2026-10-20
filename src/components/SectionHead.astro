@@ -11,12 +11,14 @@ interface Props {
   center?: boolean;
 }
 const { eyebrow, title, id, lead, linkHref, linkLabel, light = false, center = false } = Astro.props;
+// A `title` slot lets a section put markup inside the heading (an animated word, say) while `title` stays the plain-text fallback.
+const richTitle = Astro.slots.has('title');
 ---
 
 <div class:list={['flex flex-wrap items-end justify-between gap-x-8 gap-y-4', center && 'justify-center text-center']}>
   <div class:list={['max-w-2xl', center && 'mx-auto']}>
     {eyebrow && <p class:list={['eyebrow', light && '!text-white/60']}>{eyebrow}</p>}
-    <h2 id={id} class:list={['mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]', light && 'text-white']}>{title}</h2>
+    <h2 id={id} class:list={['mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]', light && 'text-white']}>{richTitle ? <slot name="title" /> : title}</h2>
     {lead && <p class:list={['mt-3 text-lg leading-relaxed', light ? 'text-white/70' : 'text-body']}>{lead}</p>}
   </div>
   {linkHref && (

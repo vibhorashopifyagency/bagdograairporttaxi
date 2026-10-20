@@ -1,0 +1,218 @@
+---
+/**
+ * The trip as a story, in six chapters, from the arrivals door at Bagdogra to
+ * the drive back down with the photos on your phone. No prices here (the
+ * fare sections above carry those); this band is about how the journey
+ * feels, with the real promises (flight tracking, free waiting, permits, a
+ * 24-hour office) told as moments rather than listed as terms. An ordered
+ * list, so a reader or an assistant can follow it in sequence.
+ */
+import SectionHead from './SectionHead.astro';
+import Photo from './Photo.astro';
+import Icon from './Icon.astro';
+import { BUSINESS, POLICY, waLink } from '../data/site';
+import { ROUTES } from '../data/routes';
+
+const darj = ROUTES.find((r) => r.fromShort === 'Bagdogra Airport' && r.toShort === 'Darjeeling')!;
+
+/*
+ * "Memorable", typed out one language at a time in the heading. English first
+ * so the static (no-JS, reduced-motion) heading reads naturally; the script
+ * below cycles through the rest. Indic words fall back to the system
+ * Devanagari and Bengali faces, since the self-hosted fonts are Latin-only.
+ */
+const memorable = [
+  { lang: 'en', word: 'memorable' },
+  { lang: 'hi', word: 'यादगार' },
+  { lang: 'bn', word: 'স্মরণীয়' },
+  { lang: 'ne', word: 'अविस्मरणीय' },
+  { lang: 'raj', word: 'याद रैवाळो' },
+  { lang: 'es', word: 'inolvidable' },
+  { lang: 'fr', word: 'mémorable' },
+];
+
+interface Chapter { moment: string; title: string; text: string; photo: string; href: string; cta: string }
+const chapters: Chapter[] = [
+  {
+    moment: 'Touchdown',
+    title: 'You step out of arrivals, and your name is already on a board',
+    text: `We track your flight, so your driver is at the door when you walk out, not stuck in a queue. Waiting is free for ${POLICY.freeWaitMinutes} minutes after you land, and a delay never cancels the booking. Bags in, seat belts on, the mountains are three hours away.`,
+    photo: 'airport', href: '/guides/bagdogra-airport-transport-guide/', cta: 'What happens at the airport',
+  },
+  {
+    moment: 'The first hour',
+    title: 'The plains fall away and the tea gardens begin',
+    text: 'Past Siliguri the road starts to climb. Rohini Road winds through tea bushes that run to the horizon, and your driver pulls over at Kurseong for a cup of Darjeeling tea and a plate of momos, at the stall with the best view, because he stops there every week.',
+    photo: 'kurseong', href: '/destinations/kurseong/', cta: 'Kurseong on the way up',
+  },
+  {
+    moment: 'The bend after Ghum',
+    title: 'Kanchenjunga fills the windscreen',
+    text: `Somewhere above Ghum the clouds part and the whole range is there, white and enormous. The toy train whistles past at Batasia Loop. Your driver knows exactly which bend it happens on, after ${darj.km} km of road he has driven a thousand times.`,
+    photo: 'hero', href: '/destinations/darjeeling/', cta: 'Darjeeling guide',
+  },
+  {
+    moment: 'Evening',
+    title: 'Dropped at your hotel door, with the evening still yours',
+    text: 'Chowrasta in Darjeeling or MG Marg in Gangtok: a slow walk, hot thukpa, a sky full of stars. Your driver’s number is saved in your phone, and ours is answered 24 hours a day in case plans change. Nothing to sort out, nothing to pay until the trip is done.',
+    photo: 'gangtok', href: '/destinations/gangtok/', cta: 'Gangtok guide',
+  },
+  {
+    moment: 'The high road',
+    title: 'Yaks on the shore of a frozen lake, 3,753 m up',
+    text: 'The permits for Tsomgo Lake, Nathula and North Sikkim are already stamped; we arranged them while you were packing. A Sikkim-registered car takes you up through pine and rhododendron to prayer flags snapping in the wind. Bring a jacket. You will want the photo.',
+    photo: 'tsomgo', href: '/guides/sikkim-permit-guide/', cta: 'How the permits work',
+  },
+  {
+    moment: 'The way home',
+    title: 'Back down to Bagdogra with a phone full of mountains',
+    text: `The same driver, the same car, timed to your flight, and the stories you will still be telling next winter. ${BUSINESS.tagline}: that is the whole promise, and the reason travellers come back to us for their next trip up the hill.`,
+    photo: 'north-sikkim', href: '/tour-packages/', cta: 'Plan the whole trip',
+  },
+];
+---
+
+<section class="relative isolate overflow-hidden bg-ink section text-white" aria-labelledby="journey" id="journey">
+  <Photo name="pelling" class="absolute inset-0 h-full w-full object-cover object-[center_40%] opacity-30" sizes="100vw" alt="" />
+  <div class="absolute inset-0 bg-gradient-to-b from-ink via-ink/80 to-ink" aria-hidden="true"></div>
+  <div class="absolute -top-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-lime/15 blur-3xl" aria-hidden="true"></div>
+  <div class="wrap relative">
+    <div data-reveal>
+      <SectionHead light eyebrow={`${BUSINESS.tagline}`} id="journey" title="A memorable journey to the hills, from the moment you land" lead="Here is how a trip with us goes: six moments between the arrivals door at Bagdogra and the drive back down, told the way our travellers tell it when they get home.">
+        <Fragment slot="title">
+          A <span class="word-cycle" data-word-cycle data-words={JSON.stringify(memorable)}><span class="sr-only">memorable</span><span class="word-cycle-text" aria-hidden="true" lang="en">memorable</span><span class="word-cycle-caret" aria-hidden="true"></span></span> journey to the hills, from the moment you land
+        </Fragment>
+      </SectionHead>
+    </div>
+
+    <ol class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3" data-reveal-stagger>
+      {chapters.map((c, i) => (
+        <li class="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm transition-colors hover:border-lime/60 hover:bg-white/10">
+          <div class="relative aspect-[16/10] overflow-hidden bg-ink-soft">
+            <Photo name={c.photo} class="zoom absolute inset-0 h-full w-full object-cover" sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" alt="" />
+            <span class="photo-fade absolute inset-x-0 bottom-0 h-2/3" aria-hidden="true"></span>
+            <span class="absolute top-3 left-3 flex items-center gap-2">
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-sm font-extrabold text-ink">{i + 1}</span>
+              <span class="rounded-full bg-ink/70 px-3 py-1 text-[0.7rem] font-bold tracking-[0.14em] text-lime uppercase backdrop-blur">{c.moment}</span>
+            </span>
+          </div>
+          <div class="flex flex-1 flex-col p-5 sm:p-6">
+            <h3 class="font-[family-name:var(--font-display)] text-xl leading-tight font-bold text-white sm:text-[1.35rem]">{c.title}</h3>
+            <p class="mt-3 text-[0.95rem] leading-relaxed text-white/75">{c.text}</p>
+            <a href={c.href} class="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-semibold text-white no-underline hover:text-lime">
+              {c.cta} <Icon name="arrow" class="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </a>
+          </div>
+        </li>
+      ))}
+    </ol>
+
+    <div class="mt-10 flex flex-wrap items-center gap-4" data-reveal>
+      <a href="/book/" class="btn-lime">Start your journey <Icon name="arrow" /></a>
+      <a href={waLink('Hi, I am planning a trip to the hills from Bagdogra Airport. Can you help?')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> Plan it on WhatsApp</a>
+      <span class="text-sm text-white/70">Only {POLICY.advancePercent}% now. Free cancellation up to {POLICY.freeCancelHours} hours before.</span>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Sized to the widest word up front (the script measures them), so the rest of the line never jumps. */
+  .word-cycle { display: inline-block; white-space: nowrap; text-align: left; vertical-align: baseline; }
+  .word-cycle-text { font-family: 'Bricolage', 'Inter', 'Noto Sans Devanagari', 'Noto Sans Bengali', 'Kohinoor Devanagari', 'Kohinoor Bangla', 'Nirmala UI', system-ui, sans-serif; }
+  .word-cycle-caret {
+    display: none;
+    width: 0.08em;
+    height: 0.9em;
+    margin-left: 0.06em;
+    vertical-align: -0.08em;
+    background: var(--color-lime);
+    border-radius: 1px;
+  }
+  .word-cycle.is-live .word-cycle-caret { display: inline-block; animation: caret-blink 1s steps(2, start) infinite; }
+  @keyframes caret-blink { to { visibility: hidden; } }
+  @media (prefers-reduced-motion: reduce) {
+    .word-cycle-caret { display: none !important; }
+  }
+</style>
+
+<script>
+  /*
+   * Typewriter cycle for the word "memorable": type a word in one language
+   * letter by letter, hold it for a second, erase it quickly, and move on to
+   * the next language. Graphemes, not code units, so Devanagari and Bengali
+   * conjuncts and vowel signs appear as whole letters rather than half-drawn
+   * marks. Stops when the heading leaves the viewport and when the reader
+   * prefers reduced motion (the static English word stays).
+   */
+  const TYPE_MS = 95;
+  const ERASE_MS = 35;
+  const HOLD_MS = 1000;
+  const GAP_MS = 250;
+
+  const split = (word: string): string[] => {
+    const Seg = (Intl as unknown as { Segmenter?: new (l: string, o: { granularity: string }) => { segment(s: string): Iterable<{ segment: string }> } }).Segmenter;
+    if (Seg) return Array.from(new Seg('und', { granularity: 'grapheme' }).segment(word), (s) => s.segment);
+    return Array.from(word);
+  };
+
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+  function start(root: HTMLElement) {
+    const text = root.querySelector<HTMLElement>('.word-cycle-text');
+    if (!text) return;
+    let words: { lang: string; word: string }[] = [];
+    try { words = JSON.parse(root.dataset.words || '[]'); } catch { return; }
+    if (words.length < 2) return;
+
+    // Reserve the width of the widest word so the heading does not reflow mid-cycle.
+    const measure = () => {
+      let max = 0;
+      const probe = text.cloneNode(false) as HTMLElement;
+      probe.style.position = 'absolute';
+      probe.style.visibility = 'hidden';
+      probe.style.whiteSpace = 'nowrap';
+      root.appendChild(probe);
+      for (const w of words) { probe.lang = w.lang; probe.textContent = w.word; max = Math.max(max, probe.getBoundingClientRect().width); }
+      probe.remove();
+      root.style.minWidth = `${Math.ceil(max) + 6}px`;
+    };
+    measure();
+    if ('fonts' in document) document.fonts.ready.then(measure);
+
+    let visible = true;
+    let stopped = false;
+    new IntersectionObserver((entries) => { visible = entries[0]?.isIntersecting ?? true; }, { threshold: 0 }).observe(root);
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    mq.addEventListener('change', () => { if (mq.matches) stopped = true; });
+
+    const waitVisible = async () => { while (!visible && !stopped) await sleep(400); };
+
+    (async () => {
+      root.classList.add('is-live');
+      let i = 0;
+      // The first word is already on screen: hold it, then start cycling.
+      await sleep(HOLD_MS + 600);
+      while (!stopped) {
+        // Erase the current word.
+        const current = split(text.textContent || '');
+        while (current.length && !stopped) { current.pop(); text.textContent = current.join(''); await sleep(ERASE_MS); }
+        await sleep(GAP_MS);
+        await waitVisible();
+        // Type the next one.
+        i = (i + 1) % words.length;
+        const next = words[i];
+        text.lang = next.lang;
+        const letters = split(next.word);
+        let typed = '';
+        for (const ch of letters) { if (stopped) break; typed += ch; text.textContent = typed; await sleep(TYPE_MS); }
+        await sleep(HOLD_MS);
+      }
+      // Reduced motion flipped on mid-cycle: settle on the English word.
+      text.lang = words[0].lang; text.textContent = words[0].word; root.classList.remove('is-live');
+    })();
+  }
+
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll<HTMLElement>('[data-word-cycle]').forEach(start);
+  }
+</script>

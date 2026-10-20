@@ -1,0 +1,120 @@
+---
+/**
+ * A small animated scene: a lime taxi driving along a hill road in front of
+ * the Himalaya. Pure inline SVG with SMIL motion, so it needs no script and
+ * costs nothing to load. Two variants:
+ *   footer: the wide scene, hills in ink so it runs straight into the footer.
+ *   mark:   a cropped, pale version used as a watermark inside the mega menu.
+ * Under prefers-reduced-motion the moving car is swapped for a parked one.
+ */
+interface Props { variant?: 'footer' | 'mark'; class?: string }
+const { variant = 'footer', class: cls = '' } = Astro.props;
+
+const W = 2000, H = 300;
+const r = (n: number) => Math.round(n * 10) / 10;
+/** Catmull-Rom through the points, emitted as cubic Béziers. */
+function smooth(pts: number[][]) {
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+    d += ` C${r(p1[0] + (p2[0] - p0[0]) / 6)} ${r(p1[1] + (p2[1] - p0[1]) / 6)} ${r(p2[0] - (p3[0] - p1[0]) / 6)} ${r(p2[1] - (p3[1] - p1[1]) / 6)} ${p2[0]} ${p2[1]}`;
+  }
+  return d;
+}
+const closeDown = (d: string) => `${d} L${W + 20} ${H + 10} L-20 ${H + 10} Z`;
+
+// Far range: jagged, with snow on the tallest peaks.
+const farPts = [[-20, 215], [80, 165], [150, 190], [240, 112], [310, 155], [380, 135], [450, 175], [540, 96], [620, 145], [690, 125], [770, 180], [860, 108], [930, 140], [1010, 82], [1080, 135], [1150, 118], [1240, 165], [1320, 124], [1400, 155], [1480, 102], [1560, 145], [1630, 128], [1720, 175], [1800, 112], [1880, 150], [1950, 135], [2020, 165]];
+const far = 'M' + farPts.map((p) => p.join(' ')).join(' L') + ` L${W + 20} ${H + 10} L-20 ${H + 10} Z`;
+const caps = [[240, 112], [540, 96], [860, 108], [1010, 82], [1480, 102], [1800, 112]]
+  .map(([x, y]) => `M${x - 20} ${y + 20} L${x} ${y} L${x + 20} ${y + 20} L${x + 11} ${y + 15} L${x + 4} ${y + 23} L${x - 5} ${y + 14} L${x - 13} ${y + 19} Z`).join(' ');
+// Mid hills: soft and rolling.
+const mid = closeDown(smooth([[-20, 238], [150, 218], [300, 228], [450, 203], [600, 218], [760, 198], [900, 225], [1050, 208], [1200, 231], [1350, 203], [1500, 218], [1650, 198], [1800, 223], [1950, 208], [2020, 213]]));
+// The near hill carries the road; the car follows this exact path.
+const road = smooth([[-30, 264], [200, 252], [400, 270], [600, 244], [800, 257], [1000, 240], [1200, 262], [1400, 247], [1600, 264], [1800, 242], [2030, 258]]);
+const near = closeDown(road);
+
+const uid = 'drive-' + Math.random().toString(36).slice(2, 8);
+const mark = variant === 'mark';
+// The watermark shows the middle of the scene, and the car only drives that stretch.
+// The footer crop trims most of the sky; the watermark shows the middle of the scene.
+const viewBox = mark ? '640 70 720 230' : `0 60 ${W} ${H - 60}`;
+const carScale = mark ? 2.1 : 1.15;
+const dur = mark ? '11s' : '26s';
+---
+
+<svg class:list={['drive', mark ? 'drive--mark' : 'drive--footer', cls]} viewBox={viewBox} preserveAspectRatio={mark ? 'xMidYMid meet' : 'xMidYMax slice'} aria-hidden="true" focusable="false">
+  <defs>
+    <path id={`${uid}-road`} d={road} />
+    <g id={`${uid}-car`}>
+      <!-- Origin is the road surface under the car, facing right. -->
+      <path class="car-body" d="M-33 -6 V-14 Q-33 -17 -30 -17 H-21 L-12 -28 H13 L23 -17 H31 Q34 -17 34 -14 V-6 Z" />
+      <path class="car-glass" d="M-18 -17 L-11 -25 H-1 V-17 Z M2 -17 V-25 H11 L18 -17 Z" />
+      <rect class="car-sign" x="-7" y="-33" width="14" height="5" rx="1.5" />
+      <circle class="car-lamp" cx="33" cy="-11" r="1.8" />
+      <circle class="car-tail" cx="-32" cy="-11" r="1.6" />
+      <g class="car-wheel" transform="translate(-21 -6)"><circle r="6.5" /><g class="car-spokes"><path d="M-4 0H4M0 -4V4" /><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".55s" repeatCount="indefinite" /></g></g>
+      <g class="car-wheel" transform="translate(21 -6)"><circle r="6.5" /><g class="car-spokes"><path d="M-4 0H4M0 -4V4" /><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".55s" repeatCount="indefinite" /></g></g>
+    </g>
+  </defs>
+
+  <circle class="sun" cx="1250" cy="100" r="28" />
+  <g class="cloud">
+    <ellipse cx="330" cy="130" rx="60" ry="14" /><ellipse cx="360" cy="120" rx="36" ry="16" />
+    <animateTransform attributeName="transform" type="translate" values="0 0; 40 0; 0 0" dur="48s" repeatCount="indefinite" />
+  </g>
+  <g class="cloud">
+    <ellipse cx="1130" cy="104" rx="70" ry="13" /><ellipse cx="1165" cy="94" rx="40" ry="16" />
+    <animateTransform attributeName="transform" type="translate" values="0 0; -50 0; 0 0" dur="60s" repeatCount="indefinite" />
+  </g>
+  <path class="far" d={far} />
+  <path class="cap" d={caps} />
+  <path class="mid" d={mid} />
+  <path class="near" d={near} />
+  <path class="road" d={road} />
+  <path class="dash" d={road} />
+
+  <!-- Moving car: the group gets the motion, the inner group the size. -->
+  <g class="car-anim">
+    <animateMotion dur={dur} repeatCount="indefinite" rotate="auto" calcMode="linear" keyPoints={mark ? '0.3;0.7' : '0;1'} keyTimes="0;1">
+      <mpath href={`#${uid}-road`} />
+    </animateMotion>
+    <use href={`#${uid}-car`} transform={`scale(${carScale})`} />
+  </g>
+  <!-- Parked car for reduced motion. -->
+  <g class="car-still" transform={`translate(1000 240) scale(${carScale})`}><use href={`#${uid}-car`} /></g>
+</svg>
+
+<style>
+  .drive { display: block; width: 100%; }
+  .drive--footer {
+    --far: #e6e7ea; --cap: #fff; --mid: #3d4451; --near: #111111;
+    --road: rgb(255 255 255 / 70%); --dash: rgb(255 255 255 / 95%);
+    --sun: #a1e005; --cloud: rgb(17 17 17 / 5%); --wheel: #2a2f36; --glass: #111111;
+  }
+  .drive--mark {
+    --far: #efefed; --cap: #fff; --mid: #e3e3e0; --near: #d7d8d3;
+    --road: #fff; --dash: #a6a7a1;
+    --sun: #c9ef66; --cloud: rgb(17 17 17 / 4%); --wheel: #111111; --glass: #111111;
+  }
+  .sun { fill: var(--sun); }
+  .cloud { fill: var(--cloud); }
+  .far { fill: var(--far); }
+  .cap { fill: var(--cap); }
+  .mid { fill: var(--mid); }
+  .near { fill: var(--near); }
+  .road { fill: none; stroke: var(--road); stroke-width: 7; stroke-linecap: round; }
+  .dash { fill: none; stroke: var(--dash); stroke-width: 1.4; stroke-dasharray: 14 12; }
+  .car-body { fill: #a1e005; }
+  .car-glass { fill: var(--glass); opacity: .85; }
+  .car-sign { fill: #111111; }
+  .car-lamp { fill: #fff7c2; }
+  .car-tail { fill: #ff5a3c; }
+  .car-wheel circle { fill: var(--wheel); }
+  .car-spokes path { stroke: #fff; stroke-width: 1.4; opacity: .6; }
+  .car-still { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .car-anim { display: none; }
+    .car-still { display: inline; }
+  }
+</style>
