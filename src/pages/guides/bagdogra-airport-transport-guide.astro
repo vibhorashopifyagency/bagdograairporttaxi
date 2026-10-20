@@ -1,14 +1,9 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import PageHero from '../../components/PageHero.astro';
-import { guidePhoto } from '../../lib/photos';
-import FaqList from '../../components/FaqList.astro';
-import BookCta from '../../components/BookCta.astro';
+import GuideLayout from '../../layouts/GuideLayout.astro';
+import RouteCard from '../../components/RouteCard.astro';
 import { guideBySlug } from '../../data/guides';
 import { routeBySlug, inr } from '../../data/routes';
-import { article, faqPage } from '../../lib/schema';
 const g = guideBySlug('bagdogra-airport-transport-guide');
-const path = `/guides/${g.slug}/`;
 const darj = routeBySlug('bagdogra-airport-to-darjeeling-taxi')!;
 const gtk = routeBySlug('bagdogra-airport-to-gangtok-taxi')!;
 const faqs = [
@@ -17,46 +12,54 @@ const faqs = [
   { q: 'What is the cheapest way from Bagdogra to Darjeeling?', a: 'A shared jeep from Siliguri at about ₹300 a seat, after a short taxi or auto ride from the airport. It is cheap but slow, and drops you at the Darjeeling motor stand rather than your hotel.' },
   { q: 'Is there a helicopter from Bagdogra to Gangtok?', a: 'Sikkim Tourism runs a helicopter service when weather allows, costing several thousand rupees a seat with strict luggage limits. Check the current schedule with Sikkim Tourism before planning around it.' },
 ];
+const facts = [
+  { label: 'Taxi to Darjeeling', value: `${inr(darj.fares.sedan)} · about 3 h` },
+  { label: 'Taxi to Gangtok', value: `${inr(gtk.fares.sedan)} · about 5 h` },
+  { label: 'Shared jeep', value: 'About ₹300 a seat from Siliguri' },
+  { label: 'Uber and Ola', value: 'Plains only, not the hills' },
+];
 ---
 
-<BaseLayout
+<GuideLayout
+  guide={g}
   title="Bagdogra Airport to Darjeeling and Gangtok: Every Way Compared"
-  description={g.description}
-  crumbs={[{ name: 'Travel guides', path: '/guides/' }, { name: 'Bagdogra Airport transport guide', path }]}
-  schema={[article({ headline: g.title, description: g.description, path, modified: g.updated }), faqPage(faqs, path)]}
-  ogType="article"
+  crumb="Bagdogra Airport transport guide"
+  faqs={faqs}
+  facts={facts}
+  packages={['darjeeling-gangtok-tour-package', 'darjeeling-tour-package', 'gangtok-tsomgo-nathula-tour-package']}
+  askNote="Tell us your flight number and we meet you at arrivals with a name board. Delays cost nothing."
+  waText="Hi, I am landing at Bagdogra and need a taxi to the hills."
+  ctaHeading="Book your airport pickup"
 >
-  <PageHero slot="hero" image={guidePhoto(g.slug)} eyebrow={`Travel guide · updated ${g.updatedLabel}`} title={g.title} />
-  <article class="wrap mt-10">
-    <header class="max-w-3xl">
-      <p class="answer">The fastest door-to-door way from Bagdogra Airport to the hills is a private taxi: {inr(darj.fares.sedan)} to Darjeeling in about 3 hours and {inr(gtk.fares.sedan)} to Gangtok in about 5. Shared jeeps from Siliguri cost far less a seat but are slower and stop at town stands. App cabs serve the plains only.</p>
-    </header>
-    <div class="prose-site mt-8">
-      <h2>Every option compared</h2>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>Option</th><th>Darjeeling</th><th>Gangtok</th><th>Good for</th></tr></thead>
-          <tbody>
-            <tr><td><strong>Private taxi (pre-booked)</strong></td><td>{inr(darj.fares.sedan)}, ~3 h</td><td>{inr(gtk.fares.sedan)}, ~5 h</td><td>Families, late flights, hotel drop</td></tr>
-            <tr><td>Prepaid counter taxi</td><td>Fixed, varies</td><td>Fixed, varies</td><td>No plan, daytime arrivals</td></tr>
-            <tr><td>Uber / Ola</td><td>Rarely available</td><td>Rarely available</td><td>Siliguri and NJP only</td></tr>
-            <tr><td>Shared jeep (from Siliguri)</td><td>~₹300 a seat</td><td>~₹400 a seat</td><td>Solo budget travellers</td></tr>
-            <tr><td>Bus (from Siliguri)</td><td>Cheapest</td><td>Cheapest</td><td>Time is no concern</td></tr>
-            <tr><td>Helicopter</td><td>Not offered</td><td>Several thousand ₹ a seat</td><td>When weather and seats allow</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="text-sm text-muted">Shared jeep, bus and helicopter prices are typical figures from {g.updatedLabel} and change often. Taxi fares are our own fixed fares.</p>
-      <h2>When a private taxi is worth it</h2>
-      <ul>
-        <li>You land after 2 pm and want to reach the hills before dark.</li>
-        <li>You are travelling with children, elderly parents or a lot of luggage.</li>
-        <li>Your hotel is outside the town centre, where shared jeeps do not go.</li>
-        <li>You want to stop at Kurseong, Mirik or the Teesta on the way.</li>
-      </ul>
-      <p>See the full <a href="/taxi/">fare chart</a>, or go straight to <a href={`/taxi/${darj.slug}/`}>Bagdogra to Darjeeling</a> or <a href={`/taxi/${gtk.slug}/`}>Bagdogra to Gangtok</a>.</p>
-    </div>
-    <div class="max-w-3xl"><FaqList faqs={faqs} /></div>
-    <BookCta />
-  </article>
-</BaseLayout>
+  <p slot="answer" class="answer">The fastest door-to-door way from Bagdogra Airport to the hills is a private taxi: {inr(darj.fares.sedan)} to Darjeeling in about 3 hours and {inr(gtk.fares.sedan)} to Gangtok in about 5. Shared jeeps from Siliguri cost far less a seat but are slower and stop at town stands. App cabs serve the plains only.</p>
+
+  <section slot="aside" class="card p-5" aria-labelledby="tx-h">
+    <h2 id="tx-h" class="text-base font-bold">Our fixed fares</h2>
+    <div class="mt-3 grid gap-3"><RouteCard route={darj} compact /><RouteCard route={gtk} compact /></div>
+    <a href="/taxi/" class="mt-3 block text-sm font-semibold text-ink no-underline hover:text-lime-text">See all 32 fares →</a>
+  </section>
+
+  <h2>Every option compared</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Option</th><th>Darjeeling</th><th>Gangtok</th><th>Good for</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Private taxi (pre-booked)</strong></td><td>{inr(darj.fares.sedan)}, ~3 h</td><td>{inr(gtk.fares.sedan)}, ~5 h</td><td>Families, late flights, hotel drop</td></tr>
+        <tr><td>Prepaid counter taxi</td><td>Fixed, varies</td><td>Fixed, varies</td><td>No plan, daytime arrivals</td></tr>
+        <tr><td>Uber / Ola</td><td>Rarely available</td><td>Rarely available</td><td>Siliguri and NJP only</td></tr>
+        <tr><td>Shared jeep (from Siliguri)</td><td>~₹300 a seat</td><td>~₹400 a seat</td><td>Solo budget travellers</td></tr>
+        <tr><td>Bus (from Siliguri)</td><td>Cheapest</td><td>Cheapest</td><td>Time is no concern</td></tr>
+        <tr><td>Helicopter</td><td>Not offered</td><td>Several thousand ₹ a seat</td><td>When weather and seats allow</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="text-sm text-muted">Shared jeep, bus and helicopter prices are typical figures from {g.updatedLabel} and change often. Taxi fares are our own fixed fares.</p>
+  <h2>When a private taxi is worth it</h2>
+  <ul>
+    <li>You land after 2 pm and want to reach the hills before dark.</li>
+    <li>You are travelling with children, elderly parents or a lot of luggage.</li>
+    <li>Your hotel is outside the town centre, where shared jeeps do not go.</li>
+    <li>You want to stop at Kurseong, Mirik or the Teesta on the way.</li>
+  </ul>
+  <p>See the full <a href="/taxi/">fare chart</a>, or go straight to <a href={`/taxi/${darj.slug}/`}>Bagdogra to Darjeeling</a> or <a href={`/taxi/${gtk.slug}/`}>Bagdogra to Gangtok</a>.</p>
+</GuideLayout>

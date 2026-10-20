@@ -191,6 +191,43 @@
   .answer {
     @apply rounded-2xl border border-line bg-lime-50 p-4 text-[1.0625rem] leading-relaxed text-ink sm:p-5;
   }
+  /* Guide bodies: running text keeps a readable measure while tables and cards use the whole column. */
+  .prose-flow { max-width: none; }
+  .prose-flow > :not(.table-scroll):not(.full) { max-width: 48rem; }
+  .prose-flow .table-scroll { @apply my-5; }
+  .prose-flow h2 { scroll-margin-top: 6rem; }
+
+  /* Fact tiles on guide pages. Each tile carries its own --tint: at rest the colour is only a soft
+     blurred shadow beneath the white card; on hover it floods the background. */
+  .fact {
+    --tint: var(--color-lime);
+    @apply relative rounded-[var(--radius-card)] bg-white p-5;
+    border: 1px solid color-mix(in srgb, var(--tint) 28%, var(--color-line));
+    box-shadow: 0 1px 2px rgb(17 17 17 / 4%), 0 22px 44px -18px color-mix(in srgb, var(--tint) 75%, transparent);
+    transition: background-color .3s ease, border-color .3s ease, box-shadow .3s ease, transform .3s ease;
+  }
+  .fact:hover {
+    background-color: color-mix(in srgb, var(--tint) 18%, #fff);
+    border-color: color-mix(in srgb, var(--tint) 55%, #fff);
+    box-shadow: 0 2px 4px rgb(17 17 17 / 6%), 0 28px 56px -16px color-mix(in srgb, var(--tint) 95%, transparent);
+    transform: translateY(-3px);
+  }
+  .fact-label {
+    @apply inline-flex items-center gap-2 text-[0.7rem] font-bold tracking-[0.12em] uppercase;
+    color: color-mix(in srgb, var(--tint) 45%, var(--color-ink));
+  }
+  .fact-label::before {
+    content: ''; width: .5rem; height: .5rem; border-radius: 9999px; flex: none;
+    background: var(--tint);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--tint) 22%, transparent);
+  }
+  /* Pop entrance: tiles scale up one after another once the reveal observer marks the grid. */
+  html.js [data-reveal-stagger][data-pop].in > * { animation: pop .9s cubic-bezier(.34, 1.4, .64, 1) 200ms backwards; }
+  html.js [data-reveal-stagger][data-pop].in > :nth-child(2) { animation-delay: 550ms; }
+  html.js [data-reveal-stagger][data-pop].in > :nth-child(3) { animation-delay: 900ms; }
+  html.js [data-reveal-stagger][data-pop].in > :nth-child(4) { animation-delay: 1250ms; }
+  html.js [data-reveal-stagger][data-pop].in > :nth-child(n+5) { animation-delay: 1600ms; }
+  @keyframes pop { from { opacity: 0; transform: scale(.82); } 70% { opacity: 1; transform: scale(1.04); } to { opacity: 1; transform: none; } }
   .table-scroll {
     @apply overflow-x-auto rounded-2xl border border-line bg-white;
   }

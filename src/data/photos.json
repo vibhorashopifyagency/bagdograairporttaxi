@@ -268,5 +268,16 @@
     "license": "CC BY-SA 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
     "source": "https://commons.wikimedia.org/wiki/File:Force_Traveller,_Leh-Manali_Highway.jpg"
+  },
+  "founder": {
+    "alt": "Pinku Singh, founder of Jai Jawan Travels, at his desk in the Bagdogra office",
+    "width": 2016,
+    "height": 1512,
+    "file": "founder.jpeg",
+    "artist": "Jai Jawan Travels",
+    "license": "Own photograph",
+    "licenseUrl": "",
+    "source": "",
+    "own": true
   }
 }

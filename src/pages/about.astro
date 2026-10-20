@@ -5,6 +5,7 @@ import TrustStrip from '../components/TrustStrip.astro';
 import BookCta from '../components/BookCta.astro';
 import ReviewsSlider from '../components/ReviewsSlider.astro';
 import Icon from '../components/Icon.astro';
+import Photo from '../components/Photo.astro';
 import GalleryGrid from '../components/GalleryGrid.astro';
 import { BUSINESS, ORG_ID, SITE } from '../data/site';
 import { GALLERY } from '../data/gallery';
@@ -61,6 +62,33 @@ const aboutGallery = [...GALLERY.filter((g) => g.category === 'Our cars'), ...GA
       </div>
     </aside>
   </div>
+  {/* TODO(pre-launch): the note below is drafted in the owner's voice from what the current site and reviews say; have Pinku Singh approve or rewrite it. */}
+  <section class="mt-16 bg-cream py-14 sm:py-20" aria-labelledby="founder-note">
+    <div class="wrap grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
+      <figure class="m-0">
+        <div class="overflow-hidden rounded-2xl bg-mist">
+          <Photo name="founder" class="aspect-[4/3] h-auto w-full object-cover" sizes="(min-width: 1024px) 46vw, 100vw" />
+        </div>
+        <figcaption class="mt-3 text-sm text-muted">Pinku Singh at the {BUSINESS.legalName} office, {BUSINESS.address.street}, {BUSINESS.address.locality}.</figcaption>
+      </figure>
+      <div class="max-w-2xl">
+        <p class="eyebrow">A note from the founder</p>
+        <h2 id="founder-note" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Why I run this the way I do</h2>
+        <div class="mt-6 space-y-4 text-lg leading-relaxed text-body">
+          <p>I served in the Army before I came home to Bagdogra and started this business in {BUSINESS.foundingYear}. Two things stayed with me from those years: you keep your word, and you look after the people in your charge. That is how I wanted a taxi service to be run.</p>
+          <p>So the fare you see on this site is the fare you pay. The car arrives when we said it would. The driver knows the hill road, because he drives it every week. And if anything goes wrong on the way, you can ring me or my office directly. The number is on every page.</p>
+          <p>Most of our travellers land at Bagdogra after a long journey and want to reach Darjeeling or Gangtok without any fuss. That is what we are here for.</p>
+        </div>
+        <div class="mt-8 flex items-center gap-4 border-t border-line pt-6">
+          <div>
+            <p class="font-[family-name:var(--font-display)] text-xl font-extrabold text-ink">Pinku Singh</p>
+            <p class="text-sm text-muted">Founder, {BUSINESS.legalName} · Bagdogra Airport Taxi</p>
+          </div>
+          <p class="ml-auto hidden text-sm italic text-muted sm:block">“{BUSINESS.tagline}”</p>
+        </div>
+      </div>
+    </div>
+  </section>
   <section class="wrap mt-16" aria-labelledby="about-gallery">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div><p class="eyebrow">Gallery</p><h2 id="about-gallery" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Our cars and the roads we drive</h2></div>

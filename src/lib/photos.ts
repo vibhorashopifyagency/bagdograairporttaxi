@@ -8,7 +8,7 @@ import type { Route } from '../data/routes';
 import type { TourPackage } from '../data/packages';
 
 export type PhotoKey = keyof typeof photos;
-export const PHOTOS = photos as Record<PhotoKey, { alt: string; width: number; height: number; file: string; artist: string; license: string; licenseUrl: string; source: string }>;
+export const PHOTOS = photos as Record<PhotoKey, { alt: string; width: number; height: number; file: string; artist: string; license: string; licenseUrl: string; source: string; own?: boolean }>;
 
 const DESTINATION: Record<string, PhotoKey> = {
   darjeeling: 'toy-train',

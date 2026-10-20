@@ -8,6 +8,9 @@
 // Originals are cached in .photos-cache/ (gitignored). The processed WebP
 // files and photos.json are committed, so a normal build needs no network.
 // To swap a photo, change its Commons file name below and run the script.
+//
+// The business's own photographs live in scripts/photos-own/ and are listed in
+// OWN below; they are resized the same way but need no licence or credit.
 import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -50,6 +53,11 @@ export const PHOTOS = {
   'car-traveller': { file: 'Force Traveller, Leh-Manali Highway.jpg', alt: 'A Force Traveller on a mountain highway' },
 };
 
+/** key -> the business's own photo in scripts/photos-own/ and its alt text. */
+export const OWN = {
+  founder: { file: 'founder.jpeg', alt: 'Pinku Singh, founder of Jai Jawan Travels, at his desk in the Bagdogra office' },
+};
+
 const exists = (u) => access(u).then(() => true, () => false);
 const headers = { 'User-Agent': UA };
 
@@ -78,9 +86,10 @@ for (const p of Object.values(meta.query.pages)) {
 }
 
 const out = {};
-for (const [key, p] of Object.entries(PHOTOS)) {
-  const cached = new URL(key + '.bin', CACHE);
-  if (force || !(await exists(cached))) {
+const all = [...Object.entries(PHOTOS), ...Object.entries(OWN).map(([k, p]) => [k, { ...p, own: true }])];
+for (const [key, p] of all) {
+  const cached = p.own ? new URL(`../scripts/photos-own/${p.file}`, import.meta.url) : new URL(key + '.bin', CACHE);
+  if (!p.own && (force || !(await exists(cached)))) {
     const url = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p.file)}?width=2000`;
     const res = await fetch(url, { headers });
     if (!res.ok) throw new Error(`${key}: ${res.status} for ${p.file}`);
@@ -95,7 +104,9 @@ for (const [key, p] of Object.entries(PHOTOS)) {
     if (!force && (await exists(target))) continue;
     await img.clone().resize({ width: Math.min(w, width), withoutEnlargement: true }).webp({ quality: w >= 1600 ? 70 : 74 }).toFile(fileURLToPath(target));
   }
-  const credit = byFile[p.file] ?? { artist: 'Unknown', license: 'See source', licenseUrl: '', source: '' };
+  const credit = p.own
+    ? { artist: 'Jai Jawan Travels', license: 'Own photograph', licenseUrl: '', source: '', own: true }
+    : byFile[p.file] ?? { artist: 'Unknown', license: 'See source', licenseUrl: '', source: '' };
   out[key] = { alt: p.alt, width, height, file: p.file, ...credit };
   console.log(`photos: ${key} ${width}x${height} ${credit.license} ${credit.artist}`);
 }

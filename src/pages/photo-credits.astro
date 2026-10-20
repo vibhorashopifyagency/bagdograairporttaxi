@@ -6,7 +6,8 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Photo from '../components/Photo.astro';
 import { PHOTOS } from '../lib/photos';
-const entries = Object.entries(PHOTOS).sort(([a], [b]) => a.localeCompare(b));
+// The business's own photographs (own: true) need no attribution and are left out.
+const entries = Object.entries(PHOTOS).filter(([, p]) => !p.own).sort(([a], [b]) => a.localeCompare(b));
 ---
 
 <BaseLayout
