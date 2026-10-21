@@ -1,17 +1,23 @@
 ---
 /**
- * The bar above a long list: a date range (from, to, or both) and how many
- * rows a page shows. Applying dates starts the list again from the top and
- * keeps the list's other filters (search, status, tab).
+ * The toolbar above a long list: a date range (see DateRangePicker) and how
+ * many rows a page shows, all one height. Choosing dates starts the list
+ * again from the top and keeps its other filters (search, status, tab).
+ * Anything passed in the "start" slot (the Upcoming / Past tabs) sits first.
  */
+import DateRangePicker from './DateRangePicker.astro';
 import RowsPicker from './RowsPicker.astro';
+import { todayIST } from '../../server/dashboard';
+import type { PresetKey } from '../../lib/date-range';
 
 interface Props {
   /** Which date the range applies to, as people say it: "Last booked", "Received". */
   dateLabel: string;
   from: string | null;
   to: string | null;
-  /** A choice of which date to filter by (bookings: pickup or booked on). */
+  /** Quick picks offered in the calendar, in order. */
+  presets: PresetKey[];
+  /** A choice of which date to filter by (bookings: pickup or booked on). The first option is the default. */
   by?: { name: string; value: string; options: [value: string, label: string][] };
   /** The list's other filters, carried through when dates are applied. */
   keep?: Record<string, string | null | undefined>;
@@ -21,27 +27,12 @@ interface Props {
   rowsHref: (n: number) => string;
   class?: string;
 }
-const { dateLabel, from, to, by, keep = {}, clearHref, rows, rowsHref, class: extra } = Astro.props;
+const { dateLabel, from, to, presets, by, keep = {}, clearHref, rows, rowsHref, class: extra } = Astro.props;
 ---
 
-<div class:list={['flex flex-wrap items-end justify-between gap-3', extra]}>
-  <form method="get" class="flex flex-wrap items-end gap-2" aria-label={`Filter by ${dateLabel.toLowerCase()}`}>
-    {Object.entries(keep).map(([k, v]) => v && <input type="hidden" name={k} value={v} />)}
-    {by && (
-      <label class="a-field w-full sm:w-auto">
-        Date
-        <select name={by.name}>
-          {by.options.map(([value, label]) => <option value={value} selected={value === by.value}>{label}</option>)}
-        </select>
-      </label>
-    )}
-    {/* From and To stay side by side, even on a phone. */}
-    <span class="flex w-full gap-2 sm:w-auto">
-      <label class="a-field min-w-0 flex-1">{by ? 'From' : `${dateLabel} from`}<input type="date" name="from" value={from ?? ''} max={to ?? undefined} class="w-full sm:w-[10.5rem]" /></label>
-      <label class="a-field min-w-0 flex-1">To<input type="date" name="to" value={to ?? ''} min={from ?? undefined} class="w-full sm:w-[10.5rem]" /></label>
-    </span>
-    <button type="submit" class="btn-ghost px-4 text-sm">Apply</button>
-    {(from || to) && <a href={clearHref} class="inline-flex min-h-12 items-center px-2 text-sm font-semibold text-body hover:text-ink">Clear dates</a>}
-  </form>
-  <RowsPicker current={rows} href={rowsHref} />
-</div>
+<form method="get" class:list={['flex flex-wrap items-center gap-x-3 gap-y-2.5', extra]} aria-label="Filters">
+  {Object.entries(keep).map(([k, v]) => v && <input type="hidden" name={k} value={v} />)}
+  <slot name="start" />
+  <DateRangePicker label={dateLabel} from={from} to={to} today={todayIST()} presets={presets} by={by} clearHref={clearHref} />
+  <RowsPicker class="ml-auto" current={rows} href={rowsHref} />
+</form>

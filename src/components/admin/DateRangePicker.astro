@@ -1,0 +1,438 @@
+---
+/**
+ * The date range field on the admin lists. One button shows the dates in
+ * force ("Pickup date · 11–12 Sept 2026"); it opens a calendar to pick a
+ * range: two months side by side on a laptop, one month in a sheet from the
+ * bottom on a phone, with quick picks (Today, Next 7 days, This month ...).
+ * Apply writes ?from= and ?to= into the surrounding form and sends it.
+ *
+ * Keyboard: arrows move a day or a week, Home and End go to the start and end
+ * of the week, Page Up and Page Down a month, Enter picks, Esc closes.
+ */
+import { PRESETS, rangeLabel, type PresetKey } from '../../lib/date-range';
+
+interface Props {
+  /** What the dates are, as people say it: "Last booked", "Received". */
+  label: string;
+  from: string | null;
+  to: string | null;
+  /** Today in India, YYYY-MM-DD. */
+  today: string;
+  presets: PresetKey[];
+  /** A choice of which date to filter by (bookings: pickup date or booked on). The first option is the default. */
+  by?: { name: string; value: string; options: [value: string, label: string][] };
+  /** The same list without dates, for the clear button. */
+  clearHref: string;
+}
+const { label, from, to, today, presets, by, clearHref } = Astro.props;
+const set = Boolean(from || to);
+const shownLabel = by ? (by.options.find(([v]) => v === by.value)?.[1] ?? label) : label;
+const id = `drp-${Math.random().toString(36).slice(2, 8)}`;
+const icon = (d: string, size = 18) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const calendar = '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/>';
+---
+
+<div class="drp" data-drp data-today={today}>
+  <input type="hidden" name="from" value={from ?? ''} disabled={!from} data-drp-from />
+  <input type="hidden" name="to" value={to ?? ''} disabled={!to} data-drp-to />
+  {by && <input type="hidden" name={by.name} value={by.value} data-default={by.options[0]![0]} disabled={!set || by.value === by.options[0]![0]} data-drp-by />}
+
+  <div class:list={['drp-field', set && 'is-set']}>
+    <button type="button" class="drp-trigger" popovertarget={id} aria-haspopup="dialog" data-drp-trigger>
+      <span class="drp-icon" set:html={icon(calendar)} />
+      <span class="drp-text">
+        <span class="drp-label">{shownLabel}</span>
+        <span class="drp-value">{set ? rangeLabel(from, to) : 'Any date'}</span>
+      </span>
+      <span class="drp-caret" set:html={icon('<path d="m6 9 6 6 6-6"/>', 16)} />
+    </button>
+    {set && <a href={clearHref} class="drp-clear" aria-label="Clear dates" title="Clear dates" set:html={icon('<path d="M18 6 6 18M6 6l12 12"/>', 16)} />}
+  </div>
+
+  <div id={id} popover class="drp-pop" role="dialog" aria-label={`Choose dates: ${shownLabel.toLowerCase()}`} data-drp-pop>
+    <div class="drp-head">
+      <span class="drp-title">Choose dates</span>
+      {by && (
+        <span class="drp-seg" role="group" aria-label="Which date">
+          {by.options.map(([value, text]) => <button type="button" data-by-value={value} aria-pressed={value === by.value ? 'true' : 'false'}>{text}</button>)}
+        </span>
+      )}
+      <button type="button" class="drp-close" popovertarget={id} popovertargetaction="hide" aria-label="Close" set:html={icon('<path d="M18 6 6 18M6 6l12 12"/>', 20)} />
+    </div>
+    <div class="drp-body">
+      <div class="drp-presets" role="group" aria-label="Quick picks">
+        {presets.map((k) => <button type="button" class="drp-preset" data-preset={k} aria-pressed="false">{PRESETS[k].label}</button>)}
+      </div>
+      <div class="drp-months" data-drp-months></div>
+    </div>
+    <div class="drp-foot">
+      <span class="drp-summary" data-drp-summary aria-live="polite"></span>
+      <span class="drp-actions">
+        <button type="button" class="drp-reset" data-drp-reset>Clear</button>
+        <button type="button" class="btn-book drp-apply" data-drp-apply>Apply</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<style is:global>
+  /* The field */
+  .drp-field {
+    display: inline-flex; align-items: stretch; max-width: 100%; min-height: 3rem;
+    border: 1px solid var(--color-line); border-radius: 14px; background: #fff; transition: border-color 0.15s;
+  }
+  .drp-field:hover, .drp.is-open .drp-field { border-color: var(--color-ink); }
+  .drp-field.is-set { border-color: var(--color-ink); }
+  .drp-trigger {
+    display: flex; flex: 1 1 auto; align-items: center; gap: 0.7rem; min-width: 0; padding: 0.4rem 0.85rem 0.4rem 0.45rem;
+    border: 0; border-radius: 13px; background: transparent; color: var(--color-ink); font: inherit; text-align: left; cursor: pointer;
+  }
+  .drp-icon { display: grid; flex: none; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 10px; background: var(--color-mist); }
+  .drp-field.is-set .drp-icon { background: var(--color-lime); }
+  .drp-text { display: flex; min-width: 0; flex-direction: column; line-height: 1.2; }
+  .drp-label { font-size: 0.75rem; font-weight: 500; color: var(--color-muted); }
+  .drp-value { overflow: hidden; font-size: 0.95rem; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+  .drp-field:not(.is-set) .drp-value { font-weight: 500; color: var(--color-body); }
+  .drp-caret { display: grid; flex: none; margin-left: auto; color: var(--color-muted); transition: transform 0.15s; }
+  .drp.is-open .drp-caret { transform: rotate(180deg); }
+  .drp-clear {
+    display: grid; flex: none; place-items: center; width: 2.75rem; border-left: 1px solid var(--color-line);
+    border-radius: 0 13px 13px 0; color: var(--color-muted);
+  }
+  .drp-clear:hover { background: var(--color-mist); color: var(--color-ink); }
+
+  /* The calendar */
+  .drp-pop {
+    position: fixed; inset: auto; width: max-content; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px);
+    margin: 0; padding: 0; overflow: auto; border: 1px solid var(--color-line); border-radius: 20px;
+    background: #fff; color: var(--color-ink); box-shadow: var(--shadow-float);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+  .drp-pop:popover-open { display: flex; flex-direction: column; }
+  @starting-style { .drp-pop:popover-open { opacity: 0; transform: translateY(-6px); } }
+  .drp-pop::backdrop { background: transparent; }
+  .drp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1rem; padding: 0.9rem 1.25rem; }
+  .drp-title { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; }
+  .drp-close { display: none; place-items: center; width: 2.5rem; height: 2.5rem; border: 1px solid var(--color-line); border-radius: 12px; background: #fff; color: var(--color-ink); cursor: pointer; }
+  .drp-seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--color-mist); }
+  .drp-seg button {
+    min-height: 2.25rem; padding: 0 0.9rem; border: 0; border-radius: 9px; background: transparent;
+    color: var(--color-body); font: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer;
+  }
+  .drp-seg button[aria-pressed='true'] { background: #fff; color: var(--color-ink); font-weight: 600; box-shadow: 0 1px 3px rgb(17 17 17 / 12%); }
+  .drp-body { display: flex; border-top: 1px solid #eceef1; }
+  .drp-presets { display: flex; min-width: 10rem; flex-direction: column; gap: 2px; padding: 0.75rem; border-right: 1px solid #eceef1; }
+  .drp-preset {
+    min-height: 2.5rem; padding: 0 0.75rem; border: 0; border-radius: 10px; background: transparent;
+    color: var(--color-body); font: inherit; font-size: 0.9rem; text-align: left; cursor: pointer;
+  }
+  .drp-preset:hover { background: var(--color-mist); color: var(--color-ink); }
+  .drp-preset[aria-pressed='true'] { background: var(--color-lime-50); color: #3f6200; font-weight: 600; }
+  .drp-months { display: flex; gap: 1.75rem; padding: 0.75rem 1.25rem 1rem; }
+  .drp-month { width: 17.5rem; }
+  .drp-month-head { display: flex; align-items: center; gap: 0.5rem; height: 2.5rem; margin-bottom: 0.25rem; }
+  .drp-month-title { flex: 1; font-size: 0.95rem; font-weight: 600; text-align: center; }
+  .drp-nav, .drp-nav-gap { display: grid; flex: none; place-items: center; width: 2.25rem; height: 2.25rem; }
+  .drp-nav { border: 1px solid var(--color-line); border-radius: 10px; background: #fff; color: var(--color-ink); cursor: pointer; }
+  .drp-nav:hover { border-color: var(--color-ink); }
+  .drp-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 2px; }
+  .drp-dow { display: grid; place-items: center; height: 2rem; font-size: 0.75rem; font-weight: 600; color: var(--color-muted); }
+  .drp-day {
+    display: grid; place-items: center; aspect-ratio: 1; padding: 0; border: 0; background: transparent;
+    color: var(--color-ink); font: inherit; font-size: 0.9rem; font-variant-numeric: tabular-nums; cursor: pointer;
+  }
+  .drp-day > span { display: grid; place-items: center; width: 100%; max-width: 2.5rem; aspect-ratio: 1; border-radius: 999px; transition: background-color 0.1s; }
+  .drp-day:hover > span { background: var(--color-mist); }
+  .drp-day:focus-visible { outline: none; }
+  .drp-day:focus-visible > span { outline: 3px solid var(--color-lime); outline-offset: 1px; }
+  .drp-day.is-today > span { box-shadow: inset 0 0 0 1.5px var(--color-lime-text); font-weight: 600; }
+  /* The band between the two ends; a lighter one while choosing the end. */
+  .drp-day.is-in { background: var(--color-lime-50); }
+  .drp-day.is-in.is-preview { background: var(--color-mist); }
+  .drp-day.is-in.is-row-start { border-radius: 999px 0 0 999px; }
+  .drp-day.is-in.is-row-end { border-radius: 0 999px 999px 0; }
+  .drp-day.is-in.is-row-start.is-row-end { border-radius: 999px; }
+  .drp-day.band-right:not(.is-row-end) { background: linear-gradient(90deg, transparent 50%, var(--color-lime-50) 50%); }
+  .drp-day.band-left:not(.is-row-start) { background: linear-gradient(90deg, var(--color-lime-50) 50%, transparent 50%); }
+  .drp-day.is-preview.band-right:not(.is-row-end) { background: linear-gradient(90deg, transparent 50%, var(--color-mist) 50%); }
+  .drp-day.is-preview.band-left:not(.is-row-start) { background: linear-gradient(90deg, var(--color-mist) 50%, transparent 50%); }
+  .drp-day.is-start > span, .drp-day.is-end > span { background: var(--color-ink); color: #fff; font-weight: 600; box-shadow: none; }
+  .drp-day.is-hover-end > span { box-shadow: inset 0 0 0 2px var(--color-ink); background: #fff; }
+  .drp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; padding: 0.85rem 1.25rem; border-top: 1px solid #eceef1; }
+  .drp-summary { flex: 1 1 14rem; color: var(--color-body); font-size: 0.9rem; }
+  .drp-summary strong { color: var(--color-ink); }
+  .drp-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+  .drp-reset { min-height: 2.75rem; padding: 0 0.9rem; border: 0; border-radius: 12px; background: transparent; color: var(--color-body); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+  .drp-reset:hover { background: var(--color-mist); color: var(--color-ink); }
+  .drp-apply { min-height: 2.75rem; padding: 0.5rem 1.4rem; font-size: 0.95rem; }
+
+  /* On a phone the calendar is a sheet from the bottom, one month wide, and fills the width. */
+  @media (max-width: 639.98px) {
+    /* First and full width in the toolbar, so tabs and the rows switch share the next line. */
+    .drp { order: -1; }
+    .drp, .drp-field { width: 100%; }
+    .drp-pop { inset: auto 0 0 0; width: 100%; max-width: none; max-height: 92dvh; border: 0; border-radius: 24px 24px 0 0; }
+    @starting-style { .drp-pop:popover-open { opacity: 0; transform: translateY(24px); } }
+    .drp-pop::backdrop { background: rgb(17 17 17 / 55%); }
+    .drp-head { padding: 1rem 1rem 0.75rem; }
+    .drp-title { order: 1; }
+    .drp-close { display: grid; order: 2; }
+    .drp-seg { order: 3; width: 100%; }
+    .drp-seg button { flex: 1; }
+    .drp-body { flex-direction: column; border-top: 0; }
+    .drp-presets { flex-direction: row; min-width: 0; gap: 0.5rem; padding: 0 1rem 0.75rem; overflow-x: auto; border-right: 0; scrollbar-width: none; }
+    .drp-preset { flex: none; min-height: 2.5rem; padding: 0 0.95rem; border: 1px solid var(--color-line); border-radius: 999px; white-space: nowrap; }
+    .drp-preset[aria-pressed='true'] { border-color: #b5d97a; }
+    .drp-months { padding: 0.25rem 1rem 0.5rem; border-top: 1px solid #eceef1; }
+    .drp-month { width: 100%; }
+    /* Columns stretch with the screen; rows stay one thumb tall. */
+    .drp-day { aspect-ratio: auto; height: 2.875rem; }
+    .drp-day > span { width: 2.75rem; max-width: 100%; height: 2.75rem; aspect-ratio: auto; }
+    .drp-foot { padding: 0.75rem 1rem max(env(safe-area-inset-bottom), 1rem); }
+    .drp-summary { flex-basis: 100%; }
+    .drp-actions { width: 100%; }
+    .drp-reset, .drp-apply { flex: 1 1 0; }
+  }
+</style>
+
+<script>
+  import { PRESETS, dayNumber, daysIn, longDay, monthEnd, monthStart, monthTitle, rangeLabel, shiftDay, shiftMonth, weekday, type Day, type PresetKey } from '../../lib/date-range';
+
+  const DOW = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  const wide = matchMedia('(min-width: 640px)');
+  const twoMonths = matchMedia('(min-width: 900px)');
+  const svg = (d: string) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
+  /** The same day in a month n months away, kept inside that month (31 Jan + 1 month = 28 Feb). */
+  const sameDayInMonth = (d: Day, n: number) => {
+    const m = shiftMonth(d, n);
+    return shiftDay(m, Math.min(dayNumber(d), dayNumber(monthEnd(m))) - 1);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-drp]').forEach((root) => {
+    const q = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+    const form = root.closest('form');
+    const pop = q<HTMLElement>('[data-drp-pop]');
+    const trigger = q<HTMLButtonElement>('[data-drp-trigger]');
+    const monthsEl = q<HTMLElement>('[data-drp-months]');
+    const summary = q<HTMLElement>('[data-drp-summary]');
+    const inFrom = q<HTMLInputElement>('[data-drp-from]');
+    const inTo = q<HTMLInputElement>('[data-drp-to]');
+    const inBy = root.querySelector<HTMLInputElement>('[data-drp-by]');
+    const presetButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-preset]')];
+    const today = root.dataset.today!;
+    if (!form || !('showPopover' in pop)) return;
+
+    let from: Day | null = null;
+    let to: Day | null = null;
+    let hover: Day | null = null;
+    let view = today;
+    let focusDay = today;
+    let shown = 1;
+
+    const lastShown = () => monthEnd(shiftMonth(view, shown - 1));
+    const visible = (d: Day) => d >= view && d <= lastShown();
+
+    /** Builds the month grids; paint() then marks the range on them. */
+    function render() {
+      shown = twoMonths.matches ? 2 : 1;
+      if (!visible(focusDay)) focusDay = [from, to, today].find((d): d is Day => Boolean(d && visible(d))) ?? view;
+      let html = '';
+      for (let i = 0; i < shown; i++) {
+        const m = shiftMonth(view, i);
+        const end = monthEnd(m);
+        html += `<div class="drp-month"><div class="drp-month-head">`;
+        html += i === 0 ? `<button type="button" class="drp-nav" data-nav="-1" aria-label="Previous month">${svg('m15 18-6-6 6-6')}</button>` : '<span class="drp-nav-gap"></span>';
+        html += `<span class="drp-month-title">${monthTitle(m)}</span>`;
+        html += i === shown - 1 ? `<button type="button" class="drp-nav" data-nav="1" aria-label="Next month">${svg('m9 18 6-6-6-6')}</button>` : '<span class="drp-nav-gap"></span>';
+        html += `</div><div class="drp-grid">${DOW.map((d) => `<span class="drp-dow" aria-hidden="true">${d}</span>`).join('')}`;
+        html += '<span></span>'.repeat(weekday(m));
+        for (let d = m; d <= end; d = shiftDay(d, 1)) {
+          const edge = `${weekday(d) === 0 || d === m ? ' is-row-start' : ''}${weekday(d) === 6 || d === end ? ' is-row-end' : ''}`;
+          html += `<button type="button" class="drp-day${edge}" data-day="${d}" data-edge="${edge.trim()}" aria-label="${esc(longDay(d))}${d === today ? ', today' : ''}"><span>${dayNumber(d)}</span></button>`;
+        }
+        html += '</div></div>';
+      }
+      monthsEl.innerHTML = html;
+      paint();
+    }
+
+    /** Marks the chosen range (or the one being chosen) on the days shown. */
+    function paint() {
+      const end = to ?? (from && hover && hover > from ? hover : null);
+      const preview = !to && Boolean(end);
+      for (const b of monthsEl.querySelectorAll<HTMLButtonElement>('[data-day]')) {
+        const d = b.dataset.day!;
+        const c = ['drp-day'];
+        if (b.dataset.edge) c.push(b.dataset.edge);
+        if (d === today) c.push('is-today');
+        if (d === from) c.push('is-start');
+        if (to && d === to) c.push('is-end');
+        if (preview && d === end) c.push('is-hover-end');
+        if (from && end && end > from) {
+          if (d > from && d < end) c.push('is-in');
+          if (d === from) c.push('band-right');
+          if (d === end) c.push('band-left');
+          if (preview) c.push('is-preview');
+        }
+        b.className = c.join(' ');
+        b.setAttribute('aria-pressed', d === from || d === to ? 'true' : 'false');
+        b.tabIndex = d === focusDay ? 0 : -1;
+      }
+      for (const p of presetButtons) {
+        const [a, z] = PRESETS[p.dataset.preset as PresetKey].range(today);
+        p.setAttribute('aria-pressed', a === from && z === to ? 'true' : 'false');
+      }
+      if (from && to) {
+        const n = daysIn(from, to);
+        summary.innerHTML = `<strong>${rangeLabel(from, to)}</strong> · ${n} ${n === 1 ? 'day' : 'days'}`;
+      } else if (from) {
+        summary.innerHTML = `<strong>${rangeLabel(from, from)}</strong> · now the last day, or Apply for just this one`;
+      } else {
+        summary.textContent = 'Pick the first day.';
+      }
+    }
+
+    function pick(d: Day) {
+      if (!from || to) [from, to] = [d, null];
+      else if (d < from) from = d;
+      else to = d;
+      hover = null;
+      focusDay = d;
+      paint();
+    }
+
+    /** Puts the choice into the form and sends it: the list starts again from the top. */
+    function apply() {
+      if (from && !to) to = from;
+      inFrom.value = from ?? '';
+      inTo.value = to ?? '';
+      inFrom.disabled = !from;
+      inTo.disabled = !to;
+      if (inBy) inBy.disabled = !from || inBy.value === inBy.dataset.default;
+      pop.hidePopover();
+      form!.requestSubmit();
+    }
+
+    /** Under the button on a laptop, flipped above it when there is no room below; a sheet on a phone. */
+    function place() {
+      if (!wide.matches) {
+        pop.style.removeProperty('top');
+        pop.style.removeProperty('left');
+        return;
+      }
+      const r = trigger.getBoundingClientRect();
+      const w = pop.offsetWidth;
+      const h = pop.offsetHeight;
+      const left = Math.max(12, Math.min(r.left, innerWidth - w - 12));
+      let top = r.bottom + 8;
+      if (top + h > innerHeight - 12) top = r.top - h - 8 >= 12 ? r.top - h - 8 : Math.max(12, innerHeight - h - 12);
+      pop.style.left = `${left}px`;
+      pop.style.top = `${top}px`;
+    }
+    const onResize = () => {
+      if ((twoMonths.matches ? 2 : 1) !== shown) render();
+      place();
+    };
+
+    // Before it shows: start from the dates in force (not a half-made choice
+    // from last time), build the months and put it roughly under the button.
+    pop.addEventListener('beforetoggle', (e) => {
+      if ((e as ToggleEvent).newState !== 'open') return;
+      from = inFrom.value || null;
+      to = inTo.value || null;
+      hover = null;
+      if (inBy) for (const b of root.querySelectorAll<HTMLButtonElement>('[data-by-value]')) b.setAttribute('aria-pressed', b.dataset.byValue === inBy.value ? 'true' : 'false');
+      view = monthStart(from ?? to ?? today);
+      focusDay = from ?? to ?? today;
+      render();
+      if (wide.matches) {
+        const r = trigger.getBoundingClientRect();
+        pop.style.left = `${Math.max(12, r.left)}px`;
+        pop.style.top = `${r.bottom + 8}px`;
+      }
+    });
+    // Once it shows: the exact place, now that its size is known, and focus on a day.
+    pop.addEventListener('toggle', (e) => {
+      const open = (e as ToggleEvent).newState === 'open';
+      root.classList.toggle('is-open', open);
+      if (open) {
+        place();
+        monthsEl.querySelector<HTMLElement>('[tabindex="0"]')?.focus({ preventScroll: true });
+        addEventListener('scroll', place, { passive: true });
+        addEventListener('resize', onResize);
+      } else {
+        removeEventListener('scroll', place);
+        removeEventListener('resize', onResize);
+      }
+    });
+
+    monthsEl.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      const nav = t.closest<HTMLElement>('[data-nav]');
+      if (nav) {
+        view = shiftMonth(view, Number(nav.dataset.nav));
+        render();
+        place();
+        monthsEl.querySelector<HTMLElement>(`[data-nav="${nav.dataset.nav}"]`)?.focus();
+        return;
+      }
+      const day = t.closest<HTMLElement>('[data-day]')?.dataset.day;
+      if (day) pick(day);
+    });
+    monthsEl.addEventListener('mouseover', (e) => {
+      const day = (e.target as HTMLElement).closest<HTMLElement>('[data-day]')?.dataset.day ?? null;
+      if (from && !to && day !== hover) {
+        hover = day;
+        paint();
+      }
+    });
+    monthsEl.addEventListener('mouseleave', () => {
+      if (hover) {
+        hover = null;
+        paint();
+      }
+    });
+    monthsEl.addEventListener('keydown', (e) => {
+      const d = (e.target as HTMLElement).dataset?.day;
+      if (!d) return;
+      const step: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+      let next: Day | null = null;
+      if (e.key in step) next = shiftDay(d, step[e.key]!);
+      else if (e.key === 'Home') next = shiftDay(d, -weekday(d));
+      else if (e.key === 'End') next = shiftDay(d, 6 - weekday(d));
+      else if (e.key === 'PageUp') next = sameDayInMonth(d, -1);
+      else if (e.key === 'PageDown') next = sameDayInMonth(d, 1);
+      if (!next) return;
+      e.preventDefault();
+      focusDay = next;
+      if (from && !to) hover = next;
+      if (!visible(next)) {
+        view = next < view ? monthStart(next) : shiftMonth(monthStart(next), -(shown - 1));
+        render();
+        place();
+      } else paint();
+      monthsEl.querySelector<HTMLElement>(`[data-day="${next}"]`)?.focus();
+    });
+
+    for (const p of presetButtons) {
+      p.addEventListener('click', () => {
+        [from, to] = PRESETS[p.dataset.preset as PresetKey].range(today);
+        apply();
+      });
+    }
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-by-value]')) {
+      b.addEventListener('click', () => {
+        inBy!.value = b.dataset.byValue!;
+        for (const o of root.querySelectorAll<HTMLButtonElement>('[data-by-value]')) o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+      });
+    }
+    q<HTMLButtonElement>('[data-drp-reset]').addEventListener('click', () => {
+      from = to = null;
+      apply();
+    });
+    q<HTMLButtonElement>('[data-drp-apply]').addEventListener('click', apply);
+  });
+</script>

@@ -68,20 +68,21 @@ const origin = Astro.url.origin;
 
     {deleted && <p class="a-msg a-msg-ok m-0" role="status">{deleted}</p>}
 
-    <nav aria-label="Which trips" class="flex gap-1 self-start rounded-xl border border-line bg-white p-1">
-      <a href={listHref('/admin/itineraries/', { from, to })(null)} aria-current={showPast ? undefined : 'page'} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'font-medium text-body' : 'bg-ink font-semibold text-white']}>Upcoming</a>
-      <a href={listHref('/admin/itineraries/', { show: 'past', from, to })(null)} aria-current={showPast ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>Past trips</a>
-    </nav>
-
     <ListFilters
       dateLabel="Trip date"
+      presets={showPast ? ['yesterday', 'last7', 'last30', 'lastMonth'] : ['today', 'tomorrow', 'next7', 'thisMonth', 'nextMonth']}
       from={from}
       to={to}
       keep={{ show }}
       clearHref={listHref('/admin/itineraries/', { show })(null)}
       rows={size}
       rowsHref={(n) => withParams(Astro.url, { rows: String(n) })}
-    />
+    >
+      <nav slot="start" aria-label="Which trips" class="flex gap-1 rounded-[14px] border border-line bg-white p-1">
+        <a href={listHref('/admin/itineraries/', { from, to })(null)} aria-current={showPast ? undefined : 'page'} class:list={['inline-flex min-h-10 items-center rounded-[10px] px-4 text-sm no-underline transition-colors', showPast ? 'font-medium text-body hover:bg-mist hover:text-ink' : 'bg-ink font-semibold text-white']}>Upcoming</a>
+        <a href={listHref('/admin/itineraries/', { show: 'past', from, to })(null)} aria-current={showPast ? 'page' : undefined} class:list={['inline-flex min-h-10 items-center rounded-[10px] px-4 text-sm no-underline transition-colors', showPast ? 'bg-ink font-semibold text-white' : 'font-medium text-body hover:bg-mist hover:text-ink']}>Past trips</a>
+      </nav>
+    </ListFilters>
 
     {rows.length === 0 ? (
       <div class="a-card p-8 text-body">

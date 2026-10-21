@@ -95,6 +95,7 @@ const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '
 
     <ListFilters
       dateLabel="Last booked"
+      presets={['last7', 'last30', 'thisMonth', 'lastMonth']}
       from={from}
       to={to}
       keep={{ q }}

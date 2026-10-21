@@ -14,15 +14,15 @@ interface Props {
 const { current, href, class: extra } = Astro.props;
 ---
 
-<nav aria-label="Rows per page" class:list={['flex items-center gap-2', extra]}>
-  <span class="text-sm text-muted">Rows</span>
-  <span class="flex gap-1 rounded-xl border border-line bg-white p-1">
+<nav aria-label="Rows per page" class:list={['flex items-center gap-2.5', extra]}>
+  <span class="text-sm font-medium text-muted">Rows</span>
+  <span class="flex gap-1 rounded-[14px] border border-line bg-white p-1">
     {ROW_CHOICES.map((n) => (
       <a
         href={href(n)}
         aria-current={n === current ? 'true' : undefined}
         aria-label={`${n} rows a page`}
-        class:list={['inline-flex min-h-10 min-w-10 items-center justify-center rounded-[9px] px-3 text-sm no-underline', n === current ? 'bg-ink font-semibold text-white' : 'font-medium text-body hover:text-ink']}
+        class:list={['inline-flex min-h-10 min-w-11 items-center justify-center rounded-[10px] px-3 text-sm tabular-nums no-underline transition-colors', n === current ? 'bg-ink font-semibold text-white' : 'font-medium text-body hover:bg-mist hover:text-ink']}
       >
         {n}
       </a>

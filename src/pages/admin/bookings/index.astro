@@ -124,15 +124,21 @@ const confirmText = (x: typeof b.$inferSelect) =>
     )}
 
     <nav aria-label="Filter by status" class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-      <a href={filterHref(null)} aria-current={status ? undefined : 'page'} class:list={['shrink-0 rounded-full border px-3.5 py-2 text-sm no-underline', status ? 'border-line bg-white font-medium text-body' : 'border-ink bg-ink font-semibold text-white']}>All · {total}</a>
-      {BOOKING_STATUSES.map((s) => (
-        <a href={filterHref(s)} aria-current={status === s ? 'page' : undefined} class:list={['shrink-0 rounded-full border px-3.5 py-2 text-sm no-underline', status === s ? 'border-ink bg-ink font-semibold text-white' : 'border-line bg-white font-medium text-body']}>{STATUS_LABEL[s][0]} · {countOf.get(s) ?? 0}</a>
-      ))}
+      {[null, ...BOOKING_STATUSES].map((s) => {
+        const on = status === s;
+        return (
+          <a href={filterHref(s)} aria-current={on ? 'page' : undefined} class:list={['inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm no-underline transition-colors', on ? 'border-ink bg-ink font-semibold text-white' : 'border-line bg-white font-medium text-body hover:border-ink hover:text-ink']}>
+            {s ? STATUS_LABEL[s][0] : 'All'}
+            <span class:list={['tabular-nums', on ? 'text-white/70' : 'text-muted']}>{(s ? (countOf.get(s) ?? 0) : total).toLocaleString('en-IN')}</span>
+          </a>
+        );
+      })}
     </nav>
 
     <ListFilters
       dateLabel="Date"
       by={{ name: 'by', value: by, options: [['pickup', 'Pickup date'], ['booked', 'Booked on']] }}
+      presets={['today', 'tomorrow', 'next7', 'last7', 'thisMonth', 'lastMonth']}
       from={from}
       to={to}
       keep={{ q, status, pick }}
