@@ -104,6 +104,16 @@ default).
   template so a host that returns 200 for it doesn't index it.
 - Googlebot has file-size limits per content type (documented 2026 in the
   crawler docs); very large HTML is truncated.
+- **Site moves with URL changes** (a redesign that changes paths counts, even
+  on the same domain): map every old URL to its new equivalent and use
+  server-side 301/308 redirects. "Keep the redirects for as long as possible,
+  generally at least 1 year"; from users' perspective, indefinitely. "Don't
+  redirect many old URLs to one irrelevant single URL destination, such as
+  the home page" (it may be treated as a soft 404); a many-to-one redirect is
+  fine only where content was merged. Images, downloads and other embedded
+  URLs "need to be moved in the same way": keep the old URL or redirect it.
+  A copy at a different path does nothing. Change of Address is only for a
+  domain or subdomain change. (Checked 21 Oct 2026.)
 
 ## 6. JavaScript
 
@@ -193,6 +203,7 @@ https://developers.google.com/crawling/docs/ in November 2025.
 - https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
 - https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap
 - https://developers.google.com/search/docs/crawling-indexing/http-network-errors
+- https://developers.google.com/search/docs/crawling-indexing/site-move-with-url-changes
 - https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics
 - https://developers.google.com/search/docs/crawling-indexing/javascript/lazy-loading
 - https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing

@@ -1,0 +1,96 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+
+// Already signed in: straight to the dashboard.
+if (Astro.locals.user) return Astro.redirect('/admin/', 303);
+const nextRaw = Astro.url.searchParams.get('next') ?? '/admin/';
+// Only ever send people back into the admin area.
+const next = /^\/admin(\/|$)/.test(nextRaw) ? nextRaw : '/admin/';
+---
+
+<AdminLayout title="Sign in" bare>
+  <div class="mx-auto max-w-md">
+    <form id="login" class="card space-y-4 p-6" data-next={next}>
+      <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Sign in</h1>
+      <p id="msg" class="a-msg a-msg-error" role="alert" hidden></p>
+
+      <div id="step-password" class="space-y-4">
+        <label class="a-field">Username<input name="username" required autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
+        <label class="a-field">Password<input name="password" type="password" required autocomplete="current-password" /></label>
+      </div>
+
+      <div id="step-code" class="space-y-4" hidden>
+        <p class="text-body">Enter the 6-digit code from your authenticator app.</p>
+        <label class="a-field"><span id="code-label">Code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" /></label>
+        <label class="flex items-center gap-3 text-sm font-semibold text-body">
+          <input type="checkbox" name="trust" class="h-5 w-5 accent-[#111111]" /> Trust this device for 30 days
+        </label>
+        <button type="button" id="use-backup" class="text-sm font-semibold underline">Use a backup code instead</button>
+      </div>
+
+      <button class="btn-book w-full" type="submit" id="submit">Sign in</button>
+      <p class="text-center text-sm"><a href="/admin/recover/">Forgot your password?</a></p>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('login') as HTMLFormElement;
+    const msg = document.getElementById('msg')!;
+    const submit = document.getElementById('submit') as HTMLButtonElement;
+    const stepPw = document.getElementById('step-password')!;
+    const stepCode = document.getElementById('step-code')!;
+    const codeLabel = document.getElementById('code-label')!;
+    const field = (n: string) => form.elements.namedItem(n) as HTMLInputElement;
+    let stage: 'password' | 'totp' | 'backup' = 'password';
+
+    const show = (text: string) => { msg.textContent = text; msg.hidden = !text; };
+    const post = (path: string, body: unknown) =>
+      fetch(`/api/auth/${path}/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+    async function errorText(res: Response, fallback: string) {
+      const j = await res.json().catch(() => null);
+      if (res.status === 429) return j?.message || 'Too many attempts. Wait a few minutes and try again.';
+      if (j?.code === 'BANNED_USER') return 'This account has been switched off. Ask the admin.';
+      return fallback;
+    }
+
+    document.getElementById('use-backup')!.addEventListener('click', () => {
+      stage = 'backup';
+      codeLabel.textContent = 'Backup code';
+      field('code').inputMode = 'text';
+      field('code').focus();
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      show('');
+      submit.disabled = true;
+      try {
+        if (stage === 'password') {
+          const res = await post('sign-in/username', { username: field('username').value.trim(), password: field('password').value, rememberMe: true });
+          if (!res.ok) return show(await errorText(res, 'Wrong username or password.'));
+          const j = await res.json();
+          if (j?.twoFactorRedirect) {
+            stage = 'totp';
+            stepPw.hidden = true;
+            stepCode.hidden = false;
+            submit.textContent = 'Verify';
+            field('code').focus();
+            return;
+          }
+        } else {
+          const path = stage === 'totp' ? 'two-factor/verify-totp' : 'two-factor/verify-backup-code';
+          const res = await post(path, { code: field('code').value.trim(), trustDevice: field('trust').checked });
+          if (!res.ok) return show(await errorText(res, 'That code did not work. Try the newest code.'));
+        }
+        location.href = form.dataset.next || '/admin/';
+      } catch {
+        show('No connection. Check the internet and try again.');
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  </script>
+</AdminLayout>

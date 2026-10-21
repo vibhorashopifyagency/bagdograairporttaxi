@@ -1,0 +1,113 @@
+---
+/**
+ * Temporary bookings list: every booking saved from the website, newest
+ * first. The full "today board" dashboard replaces this page once the owner
+ * approves the design mock.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { audit } from '../../server/admin';
+import { getDb, schema } from '../../server/db';
+import { ipHash } from '../../server/security';
+import { desc, ilike, or, type SQL } from 'drizzle-orm';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, 60);
+const digits = q.replace(/\D/g, '');
+let where: SQL | undefined;
+if (q) {
+  const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
+  where = or(
+    ilike(schema.bookings.ref, like),
+    ilike(schema.bookings.customerName, like),
+    digits.length >= 4 ? ilike(schema.bookings.customerPhone, `%${digits}%`) : undefined,
+  );
+}
+
+const rows = await getDb()
+  .select()
+  .from(schema.bookings)
+  .where(where)
+  .orderBy(desc(schema.bookings.createdAt))
+  .limit(200);
+await audit({ actorId: user.id, action: 'view_bookings', entity: 'bookings', detail: { count: rows.length, q: q || undefined }, ipHash: ipHash(Astro.request) });
+
+const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
+const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
+const phoneLabel = (d: string) => (d.length === 12 && d.startsWith('91') ? `+91 ${d.slice(2, 7)} ${d.slice(7)}` : `+${d}`);
+const STATUS: Record<string, [string, string]> = {
+  new: ['New', 'bg-amber/20 text-[#8a5300]'],
+  contacted: ['Contacted', 'bg-[#eef0f3] text-body'],
+  confirmed: ['Confirmed', 'bg-lime-50 text-[#3f6200]'],
+  driver_assigned: ['Driver assigned', 'bg-lime-50 text-[#3f6200]'],
+  completed: ['Completed', 'bg-[#eef0f3] text-body'],
+  cancelled: ['Cancelled', 'bg-[#fde8e7] text-[#b42318]'],
+  no_show: ['No-show', 'bg-[#fde8e7] text-[#b42318]'],
+};
+---
+
+<AdminLayout title="Bookings">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Bookings</h1>
+      <p class="mt-1 text-sm text-muted">Every request from the website, newest first. The full dashboard arrives once its design is approved.</p>
+    </div>
+    <form method="get" class="flex w-full gap-2 sm:w-auto" role="search">
+      <label class="a-field flex-1"><span class="sr-only">Search</span><input name="q" value={q} placeholder="Name, mobile or BAT- reference" class="w-full sm:w-72" /></label>
+      <button class="btn-book" type="submit">Search</button>
+    </form>
+  </div>
+
+  {rows.length === 0 ? (
+    <div class="card mt-6 p-8 text-center text-body">{q ? 'No bookings match that search.' : 'No bookings yet. They appear here the moment a customer presses Confirm on WhatsApp.'}</div>
+  ) : (
+    <div class="card mt-6 overflow-x-auto">
+      <table class="a-table">
+        <thead>
+          <tr><th>Received</th><th>Pickup</th><th>Trip</th><th>Customer</th><th>Fare</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((b) => {
+            const [label, cls] = STATUS[b.status] ?? [b.status, 'bg-mist'];
+            return (
+              <tr>
+                <td class="whitespace-nowrap" data-label="Received">
+                  <strong class="block font-mono text-sm">{b.ref}</strong>
+                  <span class="text-sm text-muted">{when.format(b.createdAt)}</span>
+                </td>
+                <td class="whitespace-nowrap" data-label="Pickup">
+                  <strong class="block">{day.format(new Date(`${b.pickupDate}T00:00:00Z`))}, {b.pickupTime}</strong>
+                  {b.flight && <span class="text-sm text-muted">{b.flight}</span>}
+                </td>
+                <td data-label="Trip">
+                  <span class="block font-semibold">{b.tripName}</span>
+                  <span class="text-sm text-muted">{b.pax} {b.pax === 1 ? 'person' : 'people'}{b.dropAddress ? ` · ${b.dropAddress}` : ''}</span>
+                </td>
+                <td data-label="Customer">
+                  {b.customerPhone ? (
+                    <>
+                      <span class="block font-semibold">{b.customerName}</span>
+                      <span class="flex flex-wrap gap-3 text-sm">
+                        <a href={`tel:+${b.customerPhone}`}>{phoneLabel(b.customerPhone)}</a>
+                        <a href={`https://wa.me/${b.customerPhone}?text=${encodeURIComponent(`Namaste ${b.customerName}, about your booking ${b.ref}: `)}`} target="_blank" rel="noopener">WhatsApp</a>
+                      </span>
+                    </>
+                  ) : (
+                    <span class="text-sm text-muted">Details removed after 24 months</span>
+                  )}
+                </td>
+                <td class="whitespace-nowrap" data-label="Fare">
+                  <strong class="block">{inr(b.fareTotal)}</strong>
+                  {b.fareMismatch && <span class="a-badge bg-[#fde8e7] text-[#b42318]" title={`The page showed ${inr(b.fareShown)}`}>Page showed {inr(b.fareShown)}</span>}
+                </td>
+                <td data-label="Status"><span class:list={['a-badge', cls]}>{label}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</AdminLayout>

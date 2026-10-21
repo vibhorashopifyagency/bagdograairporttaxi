@@ -7,3 +7,4 @@ node_modules/
 .vercel/
 lighthouse/
 .photos-cache/
+.data/

@@ -1,6 +1,6 @@
 # Admin, live editing and bookings dashboard: plan and todo list
 
-Status: plan agreed and every open question settled on 21 October 2026. Nothing is built yet.
+Status: plan agreed and every open question settled on 21 October 2026. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, with a temporary bookings list at /admin/. Not yet deployed. Going-live steps are in docs/admin-setup.md.
 
 ## Decisions taken by the owner
 
@@ -33,7 +33,7 @@ The site is static today, with all content in TypeScript files and no server. Bo
 
 ## Things to know before starting
 
-- **Vercel Pro is required.** The free Hobby plan is for non-commercial use only, and a taxi business is commercial. Pro is charged per team member per month.
+- **Vercel Pro is a terms question, not a technical one.** Everything works on the free Hobby plan. Vercel's terms limit Hobby to personal, non-commercial use, so a business site there can be asked to upgrade or be paused. Pro is charged per team member per month. The owner decides when.
 - **Neon's free tier should be enough at first.** Bookings and content are small. Upgrade only if storage or traffic grows.
 - **Customer data brings legal duties.** India's Digital Personal Data Protection Act 2023 applies to names and mobile numbers. The plan covers a consent line on the form, a retention period, an access log and delete-on-request.
 - **WhatsApp must open in the same click.** Browsers block pop-ups opened after a network wait. So WhatsApp opens instantly and the database save runs alongside it, not before it.
@@ -70,44 +70,44 @@ The dashboard should feel like the business: mountains, roads, a veteran-run tea
 - [ ] The dashboard installs to the home screen like an app.
 
 **Approval before building**
-- [ ] Mock the dashboard home screen and the itinerary popup, at phone and laptop size, and get the owner's yes before any dashboard code is written.
+- [ ] Mock the dashboard home screen and the itinerary popup, at phone and laptop size, and get the owner's yes before any dashboard code is written. *(Mock published on 21 October 2026: https://claude.ai/artifact/Cu63my3bhrhAk4apHDoFLS. Waiting for the owner's yes.)*
 
 ## Phase 0: foundation
 
-- [ ] Upgrade the Vercel team to Pro and connect the GitHub repository.
+- [ ] Connect the GitHub repository to Vercel. Upgrade to Pro when the owner decides (see above).
 - [ ] Add Neon from the Vercel Marketplace, with separate database branches for production and preview deployments.
-- [ ] Add the Vercel adapter to Astro: public pages pre-rendered, admin and API routes server-rendered.
-- [ ] Add Drizzle ORM with versioned migrations, and Zod schemas built from the existing data types.
+- [x] Add the Vercel adapter to Astro: public pages pre-rendered, admin and API routes server-rendered.
+- [x] Add Drizzle ORM with versioned migrations, and Zod schemas built from the existing data types.
 - [ ] Add Vercel Blob storage for uploaded images.
-- [ ] Store secrets as Vercel environment variables only, never in the repository.
+- [x] Store secrets as Vercel environment variables only, never in the repository.
 - [ ] Set up a staging site on a preview branch that uses its own database branch.
 
 ## Phase 1: logins and roles
 
-- [ ] Add authentication with Better Auth: username and password, passwords hashed, sessions stored in Neon.
-- [ ] Create the first two accounts: one admin, one staff.
-- [ ] Two roles. **Admin** can do everything, including managing staff and business details. **Staff** can view and manage all bookings and customers, but cannot edit content, business details or policies.
-- [ ] A per-staff permission switch, "can record payments", off by default and changed only by the admin.
-- [ ] Admin can add, deactivate and reset staff accounts, and set a new password for staff.
-- [ ] Admin password recovery without email login: one-time recovery codes created at setup and kept offline.
-- [ ] Two-factor login with an authenticator app recommended for the admin, optional for staff.
-- [ ] Rate-limit the login page and lock an account after repeated failed attempts.
-- [ ] Log every sign-in and every view or change of customer data, with who and when.
+- [x] Add authentication with Better Auth: username and password, passwords hashed, sessions stored in Neon.
+- [ ] Create the first two accounts: one admin, one staff. *(Built: /admin/setup/ for the admin, the Team page for staff. The owner creates them after deploy.)*
+- [x] Two roles. **Admin** can do everything, including managing staff and business details. **Staff** can view and manage all bookings and customers, but cannot edit content, business details or policies.
+- [x] A per-staff permission switch, "can record payments", off by default and changed only by the admin.
+- [x] Admin can add, deactivate and reset staff accounts, and set a new password for staff.
+- [x] Admin password recovery without email login: one-time recovery codes created at setup and kept offline.
+- [x] Two-factor login with an authenticator app recommended for the admin, optional for staff.
+- [x] Rate-limit the login page and lock an account after repeated failed attempts.
+- [x] Log every sign-in and every view or change of customer data, with who and when. *(Sign-ins, failed sign-ins, team changes and every opening of the bookings list are logged; new screens must add their own entries.)*
 
 ## Phase 2: bookings saved to the database (first visible win)
 
 This phase can go live before content editing is built.
 
-- [ ] Give each booking a short reference such as BAT-7K2Q9M, created in the browser.
-- [ ] Put the reference in the WhatsApp message so staff can match a chat to a record.
-- [ ] On "Confirm on WhatsApp", open WhatsApp immediately and send the booking to the API in the same click.
-- [ ] If the save fails, keep the booking in the browser and retry on the next visit, so no booking is lost.
-- [ ] Save the booking the same way when a customer scans the QR code to pay first, so those bookings are recorded too.
-- [ ] Re-check the fare on the server so a tampered price is flagged.
-- [ ] Spam protection: hidden honeypot field, rate limit per phone and IP, optional Cloudflare Turnstile.
-- [ ] Add a consent line on the form that links to the privacy policy.
-- [ ] Save a customer record keyed by mobile number, so repeat customers are recognised.
-- [ ] Email each new booking to the address in business details, currently bagdograairporttaxi@gmail.com, as a backup to WhatsApp.
+- [x] Give each booking a short reference such as BAT-7K2Q9M, created in the browser.
+- [x] Put the reference in the WhatsApp message so staff can match a chat to a record.
+- [x] On "Confirm on WhatsApp", open WhatsApp immediately and send the booking to the API in the same click.
+- [x] If the save fails, keep the booking in the browser and retry on the next visit, so no booking is lost.
+- [ ] Save the booking the same way when a customer scans the QR code to pay first, so those bookings are recorded too. *(The payment button already saves the booking; the QR code itself comes in Phase 3b.)*
+- [x] Re-check the fare on the server so a tampered price is flagged.
+- [x] Spam protection: hidden honeypot field, rate limit per phone and IP. *(Cloudflare Turnstile left out until spam actually appears.)*
+- [x] Add a consent line on the form that links to the privacy policy.
+- [x] Save a customer record keyed by mobile number, so repeat customers are recognised.
+- [x] Email each new booking to the address in business details, currently bagdograairporttaxi@gmail.com, as a backup to WhatsApp. *(Needs a Resend account and DNS records; see docs/admin-setup.md.)*
 
 ## Phase 3: bookings and customers dashboard
 
@@ -193,7 +193,7 @@ A "Send itinerary" button on every booking, and in the quick actions, opens a po
 
 ## Phase 7: privacy, safety and handover
 
-- [ ] Update the privacy policy: what is stored, why, for how long and who can see it.
+- [x] Update the privacy policy: what is stored, why, for how long and who can see it.
 - [ ] Remove names and mobile numbers from bookings 24 months after the trip date, automatically every night. Trip, fare and payment totals stay for the accounts.
 - [ ] Customer data export and deletion on request, from the customer page.
 - [ ] Daily database backups, which Neon provides, plus a tested restore.

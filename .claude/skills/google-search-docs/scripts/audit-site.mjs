@@ -12,8 +12,10 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 const args = process.argv.slice(2);
-const dir = args.find((a) => !a.startsWith('--'));
+let dir = args.find((a) => !a.startsWith('--'));
 if (!dir) { console.error('usage: audit-site.mjs <dist-dir> [--site https://example.com] [--json]'); process.exit(2); }
+// Adapter builds (Vercel, Netlify, Node) put the static pages in <dist>/client.
+if (!(await stat(join(dir, 'index.html')).catch(() => null)) && (await stat(join(dir, 'client', 'index.html')).catch(() => null))) dir = join(dir, 'client');
 const siteArg = args.includes('--site') ? args[args.indexOf('--site') + 1] : undefined;
 const asJson = args.includes('--json');
 

@@ -60,10 +60,10 @@ export const BUSINESS = {
     postalCode: '734014',
     country: 'IN',
   },
-  // Bagdogra Airport (IXB) area. Replace with the office's own pin.
-  geo: { lat: 26.6812, lng: 88.3286 }, // TODO(pre-launch): office coordinates
+  // The office pin, from the owner on 21 Oct 2026 (six decimals; Google asks for at least five).
+  geo: { lat: 26.703019, lng: 88.337305 },
   mapsUrl: 'https://maps.app.goo.gl/WTafG6NNSiPbbmVG7', // Google Business Profile (from the owner)
-  hours: 'Open 24 hours, every day',
+  hours: 'Open 24 hours, every day', // Owner's decision, 21 Oct 2026. The Google Business Profile must say the same (it showed Mon–Sat 08:00–22:00 on 20 Oct).
   gstin: '', // TODO(pre-launch): GSTIN, shown on About and in the footer when set
   sameAs: [
     'https://maps.app.goo.gl/WTafG6NNSiPbbmVG7',

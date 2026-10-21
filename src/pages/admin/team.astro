@@ -1,0 +1,159 @@
+---
+/**
+ * Team: admin only. Add staff or another admin, set a new password,
+ * deactivate or reactivate an account, and switch "can record payments"
+ * on or off for each staff member.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { audit, checkNewAccount, createAccount, isAdmin } from '../../server/admin';
+import { getAuth } from '../../server/auth';
+import { getDb, schema } from '../../server/db';
+import { ipHash } from '../../server/security';
+import { asc, eq } from 'drizzle-orm';
+
+export const prerender = false;
+
+const me = Astro.locals.user!;
+if (!isAdmin(me)) return new Response('Only the admin can open this page.', { status: 403 });
+
+const db = getDb();
+const auth = getAuth();
+const headers = Astro.request.headers;
+const ip = ipHash(Astro.request);
+let error = '';
+let ok = '';
+const draft = { name: '', username: '', role: 'staff' };
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? '');
+  const userId = String(f.get('userId') ?? '');
+  const [target] = userId ? await db.select().from(schema.user).where(eq(schema.user.id, userId)) : [];
+  try {
+    if (intent === 'create') {
+      draft.name = String(f.get('name') ?? '');
+      draft.username = String(f.get('username') ?? '').trim().toLowerCase();
+      draft.role = String(f.get('role') ?? 'staff');
+      const password = String(f.get('password') ?? '');
+      error = checkNewAccount({ ...draft, password }) ?? '';
+      if (!error) {
+        const [taken] = await db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.username, draft.username));
+        if (taken) error = 'That username is already in use.';
+      }
+      if (!error) {
+        const created = await createAccount({ ...draft, password, role: draft.role as 'admin' | 'staff' }, headers);
+        await audit({ actorId: me.id, action: 'user_created', entity: 'user', entityId: created.id, detail: { role: draft.role }, ipHash: ip });
+        ok = `${draft.name} can now sign in as ${draft.username}. Give them the password in person.`;
+        draft.name = draft.username = '';
+        draft.role = 'staff';
+      }
+    } else if (!target) {
+      error = 'That account no longer exists.';
+    } else if (intent === 'password') {
+      const newPassword = String(f.get('password') ?? '');
+      if (newPassword.length < 10 || newPassword.length > 128) error = 'Passwords must be 10 to 128 characters.';
+      else {
+        await auth.api.setUserPassword({ body: { userId, newPassword }, headers });
+        if (userId !== me.id) await auth.api.revokeUserSessions({ body: { userId }, headers });
+        await audit({ actorId: me.id, action: 'password_set', entity: 'user', entityId: userId, ipHash: ip });
+        ok = `New password set for ${target.name}. They have been signed out everywhere.`;
+      }
+    } else if (intent === 'deactivate') {
+      if (userId === me.id) error = 'You cannot deactivate your own account.';
+      else {
+        await auth.api.banUser({ body: { userId, banReason: 'Deactivated by the admin' }, headers });
+        await audit({ actorId: me.id, action: 'user_deactivated', entity: 'user', entityId: userId, ipHash: ip });
+        ok = `${target.name} can no longer sign in.`;
+      }
+    } else if (intent === 'reactivate') {
+      await auth.api.unbanUser({ body: { userId }, headers });
+      await audit({ actorId: me.id, action: 'user_reactivated', entity: 'user', entityId: userId, ipHash: ip });
+      ok = `${target.name} can sign in again.`;
+    } else if (intent === 'payments') {
+      const allow = f.get('allow') === '1';
+      await db.update(schema.user).set({ canRecordPayments: allow }).where(eq(schema.user.id, userId));
+      await audit({ actorId: me.id, action: allow ? 'payments_allowed' : 'payments_revoked', entity: 'user', entityId: userId, ipHash: ip });
+      ok = allow ? `${target.name} can now record payments.` : `${target.name} can no longer record payments.`;
+    }
+  } catch (e) {
+    console.error('[team]', e);
+    error = (e as { body?: { message?: string } })?.body?.message ?? 'That did not work. Try again.';
+  }
+}
+
+const people = await db
+  .select({
+    id: schema.user.id,
+    name: schema.user.name,
+    username: schema.user.username,
+    role: schema.user.role,
+    banned: schema.user.banned,
+    canRecordPayments: schema.user.canRecordPayments,
+    twoFactorEnabled: schema.user.twoFactorEnabled,
+  })
+  .from(schema.user)
+  .orderBy(asc(schema.user.createdAt));
+---
+
+<AdminLayout title="Team">
+  <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Team</h1>
+  <p class="mt-1 text-sm text-muted">Admins can do everything. Staff see and manage all bookings and customers, and record payments only when you switch it on.</p>
+  {error && <p class="a-msg a-msg-error mt-4" role="alert">{error}</p>}
+  {ok && <p class="a-msg a-msg-ok mt-4" role="status">{ok}</p>}
+
+  <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <section class="space-y-4">
+      {people.map((p) => (
+        <article class="card space-y-4 p-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <strong class="text-lg">{p.name}</strong>
+            <span class="text-muted">@{p.username}</span>
+            <span class:list={['a-badge', p.role === 'admin' ? 'bg-ink text-white' : 'bg-[#eef0f3] text-body']}>{p.role === 'admin' ? 'Admin' : 'Staff'}</span>
+            {p.banned && <span class="a-badge bg-[#fde8e7] text-[#b42318]">Deactivated</span>}
+            {p.twoFactorEnabled && <span class="a-badge bg-lime-50 text-[#3f6200]">Two-factor on</span>}
+            {p.id === me.id && <span class="text-sm text-muted">(you)</span>}
+          </div>
+          {p.role === 'staff' && (
+            <form method="post" class="flex flex-wrap items-center gap-3">
+              <input type="hidden" name="intent" value="payments" />
+              <input type="hidden" name="userId" value={p.id} />
+              <input type="hidden" name="allow" value={p.canRecordPayments ? '0' : '1'} />
+              <span class="text-sm text-body">Can record payments: <strong>{p.canRecordPayments ? 'Yes' : 'No'}</strong></span>
+              <button class="btn-ghost min-h-10 px-4 py-2 text-sm" type="submit">{p.canRecordPayments ? 'Turn off' : 'Turn on'}</button>
+            </form>
+          )}
+          <div class="flex flex-wrap items-end gap-3">
+            <form method="post" class="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="intent" value="password" />
+              <input type="hidden" name="userId" value={p.id} />
+              <label class="a-field"><span class="text-sm">New password</span><input name="password" type="password" minlength="10" required autocomplete="new-password" class="w-56" /></label>
+              <button class="btn-ghost min-h-12 px-4 text-sm" type="submit">Set password</button>
+            </form>
+            {p.id !== me.id && (
+              <form method="post">
+                <input type="hidden" name="intent" value={p.banned ? 'reactivate' : 'deactivate'} />
+                <input type="hidden" name="userId" value={p.id} />
+                <button class="btn-ghost min-h-12 px-4 text-sm" type="submit">{p.banned ? 'Reactivate' : 'Deactivate'}</button>
+              </form>
+            )}
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <form method="post" class="card h-fit space-y-4 p-5">
+      <h2 class="font-[family-name:var(--font-display)] text-xl font-bold">Add a person</h2>
+      <input type="hidden" name="intent" value="create" />
+      <label class="a-field">Name<input name="name" required value={draft.name} /></label>
+      <label class="a-field">Username<input name="username" required value={draft.username} autocapitalize="none" spellcheck="false" pattern="[a-z0-9_.]{3,30}" /></label>
+      <label class="a-field">Password <span class="font-normal text-muted">(at least 10 characters)</span><input name="password" type="password" minlength="10" required autocomplete="new-password" /></label>
+      <label class="a-field">Role
+        <select name="role">
+          <option value="staff" selected={draft.role === 'staff'}>Staff</option>
+          <option value="admin" selected={draft.role === 'admin'}>Admin</option>
+        </select>
+      </label>
+      <button class="btn-book w-full" type="submit">Add</button>
+    </form>
+  </div>
+</AdminLayout>

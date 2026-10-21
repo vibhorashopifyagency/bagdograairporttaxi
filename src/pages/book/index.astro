@@ -84,6 +84,9 @@ const data = {
           <label class="field"><span>Full name</span><input name="name" required autocomplete="name" /></label>
           <label class="field"><span>Mobile (WhatsApp)</span><input name="phone" type="tel" required autocomplete="tel" inputmode="tel" placeholder="+91" /></label>
         </fieldset>
+        <div class="hp" aria-hidden="true">
+          <label>Leave this empty<input name="website" tabindex="-1" autocomplete="off" /></label>
+        </div>
         <p id="err" class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert"></p>
       </form>
     </div>
@@ -107,6 +110,7 @@ const data = {
           <button type="button" id="wa" class="btn-wa w-full"><Icon name="whatsapp" /> Confirm on WhatsApp</button>
           <button type="button" id="pay" class="btn-book w-full"><Icon name="shield" /> Pay advance securely</button>
           <p class="text-xs text-muted" id="pay-note"></p>
+          <p class="text-xs text-muted">We save your name, mobile number and trip details to arrange this booking. <a href="/privacy/">Privacy policy</a></p>
         </div>
         <ul class="space-y-2 border-t border-line bg-mist p-5 text-sm">
           <li class="flex gap-2"><Icon name="refund" class="h-5 w-5 shrink-0 text-lime-text" />Free cancellation up to {POLICY.freeCancelHours} hours before pickup. <a href="/cancellation-refund-policy/">Policy</a></li>
@@ -135,6 +139,43 @@ const data = {
     const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
     const val = (n: string) => ((f.elements.namedItem(n) as HTMLInputElement | null)?.value ?? '').trim();
     const kind = () => (f.querySelector('input[name=kind]:checked') as HTMLInputElement).value;
+
+    // Every request gets a short reference, shown in the WhatsApp message and
+    // saved with the booking so the office can match the two. The same details
+    // sent twice keep the same reference, so the server saves them once.
+    const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    const newRef = () => 'BAT-' + Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => ALPHABET[x % ALPHABET.length]).join('');
+    let ref = newRef();
+    let lastSent = '';
+    function payload(channel: 'whatsapp' | 'payment') {
+      const c = calc();
+      const p = {
+        kind: kind(), route: val('route'), package: val('package'), vehicle: c.vehicle,
+        date: val('date'), time: val('time'), flight: val('flight'), pax: Math.max(1, parseInt(val('pax'), 10) || 1),
+        drop: val('drop'), name: val('name'), phone: val('phone'),
+        fareShown: c.total, advanceShown: c.adv, consent: true, website: val('website'),
+      };
+      const sig = JSON.stringify(p);
+      if (lastSent && sig !== lastSent) ref = newRef();
+      lastSent = sig;
+      return { ...p, ref, channel };
+    }
+    // Save the booking without making the customer wait. If the network or
+    // the server fails, keep it in this browser; BaseLayout retries it on the
+    // next page view, and the server ignores a reference it already has.
+    const PENDING = 'bat-pending-bookings';
+    function keep(p: object) {
+      try {
+        const q = JSON.parse(localStorage.getItem(PENDING) || '[]');
+        q.push({ ...p, savedAt: Date.now() });
+        localStorage.setItem(PENDING, JSON.stringify(q.slice(-10)));
+      } catch { /* private mode: nothing more we can do; WhatsApp still has it */ }
+    }
+    function save(p: object) {
+      fetch('/api/bookings/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p), keepalive: true })
+        .then((r) => { if (r.status >= 500) keep(p); })
+        .catch(() => keep(p));
+    }
 
     // Prefill from links such as /book/?route=…&vehicle=… or ?package=…
     const q = new URLSearchParams(location.search);
@@ -219,6 +260,7 @@ const data = {
         : [`Route: ${c.route!.name}`, `Car: ${d.vehicles[c.vehicle]}`, `Fare shown: ${inr(c.total)} (advance ${inr(c.adv)})`];
       return [
         'New booking request',
+        `Booking ref: ${ref}`,
         ...lines,
         `Date: ${val('date')} at ${val('time')}`,
         val('flight') && `Flight/train: ${val('flight')}`,
@@ -233,7 +275,10 @@ const data = {
     f.addEventListener('change', calc);
     $('wa').addEventListener('click', () => {
       if (!check()) return;
+      const p = payload('whatsapp');
+      // Opened first and in the same click, or the browser blocks the window.
       window.open(`https://wa.me/${d.whatsapp}?text=${encodeURIComponent(message())}`, '_blank', 'noopener');
+      save(p);
     });
     if (!d.paymentUrl) {
       $('pay-note').textContent = 'A secure payment link (UPI, card or net banking) is sent with your WhatsApp confirmation.';
@@ -242,6 +287,7 @@ const data = {
       $('pay-note').textContent = 'Payments are processed by a secure, RBI-regulated payment gateway. We never see your card details.';
       $('pay').addEventListener('click', () => {
         if (!check()) return;
+        save(payload('payment'));
         const c = calc();
         const u = new URL(d.paymentUrl);
         u.searchParams.set('amount', String(c.adv * 100));
@@ -255,6 +301,7 @@ const data = {
 </BaseLayout>
 
 <style>
+  .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
   .field[hidden] { display: none; }
   .field { display: flex; flex-direction: column; gap: 0.375rem; font-weight: 600; color: var(--color-ink); font-size: 0.95rem; }
   .field input, .field select {

@@ -1,0 +1,147 @@
+---
+/**
+ * My account: change password, switch on two-factor login, and make new
+ * recovery codes. Password and two-factor changes run in the browser because
+ * Better Auth issues a fresh session cookie for them.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { audit, createRecoveryCodes, unusedRecoveryCodes } from '../../server/admin';
+import { getAuth } from '../../server/auth';
+import { ipHash } from '../../server/security';
+
+export const prerender = false;
+
+const me = Astro.locals.user!;
+let codes: string[] = [];
+let codesError = '';
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  if (f.get('intent') === 'recovery-codes') {
+    try {
+      await getAuth().api.verifyPassword({ body: { password: String(f.get('password') ?? '') }, headers: Astro.request.headers });
+      codes = await createRecoveryCodes(me.id);
+      await audit({ actorId: me.id, action: 'recovery_codes_created', entity: 'user', entityId: me.id, ipHash: ipHash(Astro.request) });
+    } catch {
+      codesError = 'That password is not right.';
+    }
+  }
+}
+const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id);
+---
+
+<AdminLayout title="My account">
+  <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">My account</h1>
+  <p class="mt-1 text-sm text-muted">Signed in as {me.name} (@{me.username}).</p>
+
+  <div class="mt-6 grid gap-6 lg:grid-cols-2">
+    <form id="pw" class="card space-y-4 p-5">
+      <h2 class="font-[family-name:var(--font-display)] text-xl font-bold">Change password</h2>
+      <p class="a-msg" data-msg hidden></p>
+      <label class="a-field">Current password<input name="current" type="password" required autocomplete="current-password" /></label>
+      <label class="a-field">New password <span class="font-normal text-muted">(at least 10 characters)</span><input name="next" type="password" required minlength="10" autocomplete="new-password" /></label>
+      <label class="a-field">New password again<input name="confirm" type="password" required minlength="10" autocomplete="new-password" /></label>
+      <button class="btn-book" type="submit">Change password</button>
+      <p class="text-xs text-muted">This signs you out on your other devices.</p>
+    </form>
+
+    <section id="tfa" class="card space-y-4 p-5" data-enabled={me.twoFactorEnabled ? '1' : '0'}>
+      <h2 class="font-[family-name:var(--font-display)] text-xl font-bold">Two-factor login</h2>
+      <p class="a-msg" data-msg hidden></p>
+      {me.twoFactorEnabled ? (
+        <form id="tfa-off" class="space-y-4">
+          <p class="a-msg a-msg-ok">On. Signing in asks for a code from your authenticator app.</p>
+          <label class="a-field">Password, to switch it off<input name="password" type="password" required autocomplete="current-password" /></label>
+          <button class="btn-ghost" type="submit">Switch off</button>
+        </form>
+      ) : (
+        <>
+          <p class="text-body">Adds a 6-digit code from an app such as Google Authenticator to every sign-in. {me.role === 'admin' ? 'Strongly recommended for the admin.' : ''}</p>
+          <form id="tfa-start" class="space-y-4">
+            <label class="a-field">Your password<input name="password" type="password" required autocomplete="current-password" /></label>
+            <button class="btn-book" type="submit">Set up two-factor login</button>
+          </form>
+          <form id="tfa-verify" class="space-y-4" hidden>
+            <p class="text-body">1. Scan this with your authenticator app, or type the key by hand.</p>
+            <div id="tfa-qr" class="w-48 rounded-lg bg-white p-2"></div>
+            <p class="break-all font-mono text-sm" id="tfa-secret"></p>
+            <p class="text-body">2. Save these backup codes. Each works once if your phone is lost.</p>
+            <div class="a-codes" id="tfa-backup"></div>
+            <label class="a-field">3. Enter the 6-digit code the app shows<input name="code" inputmode="numeric" required autocomplete="one-time-code" /></label>
+            <button class="btn-book" type="submit">Turn on</button>
+          </form>
+        </>
+      )}
+    </section>
+
+    <section class="card space-y-4 p-5 lg:col-span-2">
+      <h2 class="font-[family-name:var(--font-display)] text-xl font-bold">Recovery codes</h2>
+      <p class="text-body">These let you set a new password if you forget it. You have <strong>{remaining}</strong> unused {remaining === 1 ? 'code' : 'codes'}.</p>
+      {codes.length > 0 && (
+        <>
+          <p class="a-msg a-msg-ok">Your new codes. Write them down now and keep them away from this device. The old codes no longer work.</p>
+          <div class="a-codes max-w-md">{codes.map((c) => <span class="rounded-lg bg-mist px-3 py-2">{c}</span>)}</div>
+        </>
+      )}
+      {codesError && <p class="a-msg a-msg-error" role="alert">{codesError}</p>}
+      <form method="post" class="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="intent" value="recovery-codes" />
+        <label class="a-field">Your password<input name="password" type="password" required autocomplete="current-password" class="w-64" /></label>
+        <button class="btn-ghost" type="submit">Make new recovery codes</button>
+      </form>
+    </section>
+  </div>
+
+  <script>
+    import { renderSVG } from 'uqr';
+
+    const post = (path: string, body: unknown) =>
+      fetch(`/api/auth/${path}/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const say = (box: Element, text: string, ok = false) => {
+      const m = box.querySelector<HTMLElement>('[data-msg]')!;
+      m.textContent = text;
+      m.className = `a-msg ${ok ? 'a-msg-ok' : 'a-msg-error'}`;
+      m.hidden = !text;
+    };
+    const val = (form: HTMLFormElement, n: string) => (form.elements.namedItem(n) as HTMLInputElement).value;
+
+    const pw = document.getElementById('pw') as HTMLFormElement;
+    pw.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (val(pw, 'next') !== val(pw, 'confirm')) return say(pw, 'The two new passwords are different.');
+      const res = await post('change-password', { currentPassword: val(pw, 'current'), newPassword: val(pw, 'next'), revokeOtherSessions: true });
+      if (!res.ok) return say(pw, res.status === 429 ? 'Too many attempts. Wait a minute.' : 'The current password is not right, or the new one is too short.');
+      pw.reset();
+      say(pw, 'Password changed.', true);
+    });
+
+    const tfa = document.getElementById('tfa')!;
+    const start = document.getElementById('tfa-start') as HTMLFormElement | null;
+    const verify = document.getElementById('tfa-verify') as HTMLFormElement | null;
+    start?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await post('two-factor/enable', { password: val(start, 'password') });
+      if (!res.ok) return say(tfa, 'That password is not right.');
+      const { totpURI, backupCodes } = (await res.json()) as { totpURI: string; backupCodes: string[] };
+      document.getElementById('tfa-qr')!.innerHTML = renderSVG(totpURI);
+      document.getElementById('tfa-secret')!.textContent = `Key: ${new URL(totpURI).searchParams.get('secret') ?? ''}`;
+      const box = document.getElementById('tfa-backup')!;
+      box.replaceChildren(...backupCodes.map((c) => Object.assign(document.createElement('span'), { className: 'rounded-lg bg-mist px-3 py-2', textContent: c })));
+      start.hidden = true;
+      verify!.hidden = false;
+      say(tfa, '');
+    });
+    verify?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await post('two-factor/verify-totp', { code: val(verify, 'code').trim() });
+      if (!res.ok) return say(tfa, 'That code did not work. Wait for a new one and try again.');
+      location.reload();
+    });
+    const off = document.getElementById('tfa-off') as HTMLFormElement | null;
+    off?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await post('two-factor/disable', { password: val(off, 'password') });
+      if (!res.ok) return say(tfa, 'That password is not right.');
+      location.reload();
+    });
+  </script>
+</AdminLayout>

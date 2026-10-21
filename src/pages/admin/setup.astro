@@ -1,0 +1,80 @@
+---
+/**
+ * First-run setup: creates the first admin account. Works only while no
+ * account exists AND the SETUP_TOKEN environment variable is set, and asks
+ * for that token, so nobody else can claim the admin account first.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { audit, checkNewAccount, countUsers, createAccount, createRecoveryCodes } from '../../server/admin';
+import { env } from '../../server/env';
+import { ipHash } from '../../server/security';
+import { timingSafeEqual } from 'node:crypto';
+
+export const prerender = false;
+
+if ((await countUsers()) > 0) return new Response('Not found', { status: 404 });
+const setupToken = env('SETUP_TOKEN');
+
+let error = '';
+let codes: string[] = [];
+let createdUsername = '';
+const form = { name: '', username: '' };
+
+if (Astro.request.method === 'POST' && setupToken) {
+  const f = await Astro.request.formData();
+  const token = String(f.get('token') ?? '');
+  form.name = String(f.get('name') ?? '');
+  form.username = String(f.get('username') ?? '').trim().toLowerCase();
+  const password = String(f.get('password') ?? '');
+  const a = Buffer.from(token);
+  const b = Buffer.from(setupToken);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    error = 'The setup code is wrong.';
+    await audit({ action: 'setup_failed', ipHash: ipHash(Astro.request) });
+  } else if (password !== String(f.get('confirm') ?? '')) {
+    error = 'The two passwords are different.';
+  } else {
+    error = checkNewAccount({ ...form, password, role: 'admin' }) ?? '';
+    if (!error) {
+      const user = await createAccount({ ...form, password, role: 'admin' });
+      codes = await createRecoveryCodes(user.id);
+      createdUsername = form.username;
+      await audit({ actorId: user.id, action: 'admin_created', entity: 'user', entityId: user.id, ipHash: ipHash(Astro.request) });
+    }
+  }
+}
+---
+
+<AdminLayout title="First-time setup" bare>
+  <div class="mx-auto max-w-lg">
+    {codes.length > 0 ? (
+      <section class="card space-y-5 p-6">
+        <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Admin account created</h1>
+        <p>Your username is <strong>{createdUsername}</strong>.</p>
+        <p class="a-msg a-msg-ok">
+          Write down these recovery codes and keep them somewhere safe, away from this device. Each one works once and lets you set a new password if you forget it. They will not be shown again.
+        </p>
+        <div class="a-codes">{codes.map((c) => <span class="rounded-lg bg-mist px-3 py-2">{c}</span>)}</div>
+        <p class="text-sm text-muted">Then remove SETUP_TOKEN from the Vercel environment variables. This page closes by itself now that an account exists.</p>
+        <a href="/admin/login/" class="btn-book">Go to sign in</a>
+      </section>
+    ) : !setupToken ? (
+      <section class="card space-y-3 p-6">
+        <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Setup is locked</h1>
+        <p>To create the first admin account, set a SETUP_TOKEN environment variable and reload this page.</p>
+      </section>
+    ) : (
+      <form method="post" class="card space-y-4 p-6">
+        <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Create the admin account</h1>
+        <p class="text-muted">This page works once. After this, the admin adds staff from the Team page.</p>
+        {error && <p class="a-msg a-msg-error" role="alert">{error}</p>}
+        <label class="a-field">Setup code<input name="token" required autocomplete="off" /></label>
+        <label class="a-field">Your name<input name="name" required value={form.name} autocomplete="name" /></label>
+        <label class="a-field">Username<input name="username" required value={form.username} autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-z0-9_.]{3,30}" /></label>
+        <label class="a-field">Password <span class="font-normal text-muted">(at least 10 characters)</span><input name="password" type="password" required minlength="10" autocomplete="new-password" /></label>
+        <label class="a-field">Password again<input name="confirm" type="password" required minlength="10" autocomplete="new-password" /></label>
+        <button class="btn-book w-full" type="submit">Create admin account</button>
+      </form>
+    )}
+  </div>
+</AdminLayout>

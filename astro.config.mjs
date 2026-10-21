@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
+import vercel from '@astrojs/vercel';
 import { GUIDES } from './src/data/guides';
 import { SITE } from './src/data/site';
 
@@ -10,6 +11,7 @@ import { SITE } from './src/data/site';
 // homepage, fares and packages (SITE.contentUpdated), each guide (its own
 // `updated`) and the destination guides (SITE.destinationsUpdated). Other
 // pages are listed without a date rather than with a made-up one.
+/** @param {string} pathname */
 const lastmod = (pathname) => {
   if (pathname === '/') return SITE.contentUpdated;
   const guide = pathname.match(/^\/guides\/([^/]+)\/$/);
@@ -19,13 +21,15 @@ const lastmod = (pathname) => {
   return undefined;
 };
 
-// Same setup as vibhora.com: every page prerenders to static HTML, CSS is
-// inlined so nothing blocks first paint, and the only font is a self-hosted,
-// preloaded Inter. No adapter, so the output deploys to any static host
-// (Vercel, Netlify, Cloudflare Pages or the current cPanel/Apache server).
+// Every public page still prerenders to static HTML, CSS is inlined so
+// nothing blocks first paint, and the only font is a self-hosted, preloaded
+// Inter. The Vercel adapter adds server routes for the admin area (/admin/)
+// and the API (/api/): only files with `export const prerender = false` run
+// on the server, so the public site never waits on the database.
 export default defineConfig({
   site: 'https://bagdograairporttaxi.com',
   trailingSlash: 'always',
+  adapter: vercel({ maxDuration: 15 }),
   build: {
     inlineStylesheets: 'always',
   },
@@ -33,13 +37,20 @@ export default defineConfig({
     prefetchAll: true,
     defaultStrategy: 'hover',
   },
-  // Old .php URLs are 301-redirected at the host: public/_redirects
-  // (Netlify, Cloudflare), public/.htaccess (Apache/cPanel) and vercel.json.
+  // Old-site pages and images are 301-redirected at the host: vercel.json is
+  // the master copy; public/_redirects (Netlify, Cloudflare) and
+  // public/.htaccess (Apache/cPanel) mirror it, checked by verify-build.mjs.
   integrations: [
     sitemap({
       filter: (page) => {
         const { pathname } = new URL(page);
-        return !pathname.startsWith('/404') && !pathname.startsWith('/book/thanks');
+        return (
+          !pathname.startsWith('/404') &&
+          !pathname.startsWith('/book/thanks') &&
+          !pathname.startsWith('/admin') &&
+          !pathname.startsWith('/api') &&
+          !pathname.startsWith('/trip')
+        );
       },
       serialize: (item) => {
         const date = lastmod(new URL(item.url).pathname);

@@ -1,0 +1,48 @@
+---
+/** Set a new password with a one-time recovery code (no email needed). */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { recoverWithCode } from '../../server/admin';
+import { ipHash } from '../../server/security';
+
+export const prerender = false;
+
+let error = '';
+let done = false;
+let username = '';
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  username = String(f.get('username') ?? '');
+  const newPassword = String(f.get('password') ?? '');
+  if (newPassword !== String(f.get('confirm') ?? '')) {
+    error = 'The two passwords are different.';
+  } else {
+    const result = await recoverWithCode({ username, code: String(f.get('code') ?? ''), newPassword, ipHash: ipHash(Astro.request) });
+    if (result) error = result;
+    else done = true;
+  }
+}
+---
+
+<AdminLayout title="Reset password" bare>
+  <div class="mx-auto max-w-md">
+    {done ? (
+      <section class="card space-y-4 p-6">
+        <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Password changed</h1>
+        <p>That recovery code is now used up. You have been signed out on every device.</p>
+        <a href="/admin/login/" class="btn-book">Sign in</a>
+      </section>
+    ) : (
+      <form method="post" class="card space-y-4 p-6">
+        <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Reset password</h1>
+        <p class="text-muted">Use one of the recovery codes you saved when your account was made. Staff can also ask the admin to set a new password.</p>
+        {error && <p class="a-msg a-msg-error" role="alert">{error}</p>}
+        <label class="a-field">Username<input name="username" required value={username} autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
+        <label class="a-field">Recovery code<input name="code" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-23456" /></label>
+        <label class="a-field">New password <span class="font-normal text-muted">(at least 10 characters)</span><input name="password" type="password" required minlength="10" autocomplete="new-password" /></label>
+        <label class="a-field">New password again<input name="confirm" type="password" required minlength="10" autocomplete="new-password" /></label>
+        <button class="btn-book w-full" type="submit">Set new password</button>
+        <p class="text-center text-sm"><a href="/admin/login/">Back to sign in</a></p>
+      </form>
+    )}
+  </div>
+</AdminLayout>

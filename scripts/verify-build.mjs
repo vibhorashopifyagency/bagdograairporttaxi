@@ -9,10 +9,14 @@
 //     ineligible and a manual-action risk), every Article date carries a
 //     timezone, every <img> has alt text, and every sitemap <lastmod> is a
 //     valid date.
-import { readFile, readdir } from 'node:fs/promises';
+//  6. Old-site redirects: every target in vercel.json exists in the build,
+//     and the public/_redirects and public/.htaccess fallbacks match it.
+import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const DIST = 'dist';
+// A plain static build writes to dist/; with the Vercel adapter the static
+// pages land in dist/client/ (server routes go to the function).
+const DIST = await access('dist/client/index.html').then(() => 'dist/client', () => 'dist');
 const problems = [];
 const warnings = [];
 
@@ -74,6 +78,25 @@ try {
   }
   if (!/<lastmod>/.test(sm)) warnings.push('sitemap: no <lastmod> on any URL');
 } catch { problems.push('sitemap-0.xml missing'); }
+
+// Old-site URLs Google indexed must keep landing somewhere real. Rules with
+// patterns (the .php catch-all, the www host) are left to check-live.mjs.
+const literal = (s) => !/[:(*]/.test(s);
+const { redirects = [] } = JSON.parse(await readFile('vercel.json', 'utf8'));
+const oldUrls = new Map(redirects.filter((r) => !r.has && literal(r.source)).map((r) => [r.source, r.destination]));
+for (const [from, to] of oldUrls) {
+  const exists = to.endsWith('/') ? pages.has(to) : await access(join(DIST, to)).then(() => true, () => false);
+  if (!exists) problems.push(`vercel.json: ${from} redirects to ${to}, which is not in the build`);
+}
+const fallbacks = {
+  'public/_redirects': [...(await readFile('public/_redirects', 'utf8')).matchAll(/^(\/\S+)\s+(\S+)\s+30[18]$/gm)].map((m) => [m[1], m[2]]),
+  'public/.htaccess': [...(await readFile('public/.htaccess', 'utf8')).matchAll(/^RewriteRule \^([^$(]+)\$ (\S+) \[L,R=301\]$/gm)].map((m) => ['/' + m[1].replace(/\\\./g, '.'), m[2]]),
+};
+for (const [file, rules] of Object.entries(fallbacks)) {
+  const theirs = new Map(rules.filter(([from]) => literal(from)));
+  for (const [from, to] of oldUrls) if (theirs.get(from) !== to) problems.push(`${file}: ${from} should redirect to ${to} as in vercel.json`);
+  for (const [from] of theirs) if (!oldUrls.has(from)) problems.push(`${file}: redirects ${from} but vercel.json does not`);
+}
 
 if (anyLive) {
   const all = (await Promise.all(files.map((f) => readFile(f, 'utf8')))).join('\n');

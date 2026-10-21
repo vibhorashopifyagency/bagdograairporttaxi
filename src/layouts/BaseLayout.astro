@@ -143,5 +143,25 @@ const nodes = [
         document.querySelectorAll('[data-reveal], [data-reveal-stagger]').forEach((el) => el.classList.add('in'));
       }
     </script>
+    {/* Retries a booking the booking page could not save (no network, server down). Does nothing when the queue is empty. */}
+    <script is:inline>
+      (function () {
+        try {
+          var k = 'bat-pending-bookings';
+          var q = JSON.parse(localStorage.getItem(k) || '[]');
+          if (!q.length) return;
+          localStorage.removeItem(k);
+          q.filter(function (p) { return Date.now() - (p.savedAt || 0) < 7 * 864e5; }).forEach(function (p) {
+            fetch('/api/bookings/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p), keepalive: true })
+              .then(function (r) { if (r.status >= 500) throw 0; })
+              .catch(function () {
+                var c = JSON.parse(localStorage.getItem(k) || '[]');
+                c.push(p);
+                localStorage.setItem(k, JSON.stringify(c.slice(-10)));
+              });
+          });
+        } catch (e) {}
+      })();
+    </script>
   </body>
 </html>

@@ -1,0 +1,92 @@
+---
+/**
+ * Shell for /admin/ pages. Deliberately plain for now: the full dashboard
+ * look waits for the owner's approval of the mock. Never indexed, never cached.
+ */
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  /** Hide the top navigation (login, setup, recovery). */
+  bare?: boolean;
+}
+const { title, bare = false } = Astro.props;
+const user = Astro.locals.user;
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/admin/', label: 'Bookings' },
+  ...(user?.role === 'admin' ? [{ href: '/admin/team/', label: 'Team' }] : []),
+  { href: '/admin/account/', label: 'My account' },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} · Admin · Bagdogra Airport Taxi</title>
+    <link rel="icon" href="/logo-192.png" sizes="192x192" type="image/png" />
+  </head>
+  <body class="min-h-screen bg-mist font-sans text-ink antialiased">
+    <header class="bg-ink text-white">
+      <div class="wrap flex flex-wrap items-center gap-x-6 gap-y-3 py-3">
+        <a href="/admin/" class="flex items-center gap-3 text-white no-underline">
+          <img src="/logo-dark.png" alt="" width="44" height="44" class="h-11 w-11" />
+          <span class="font-[family-name:var(--font-display)] text-lg font-bold leading-tight">
+            Bagdogra Airport Taxi
+            <span class="block font-sans text-xs font-medium text-white/60">Admin</span>
+          </span>
+        </a>
+        {!bare && user && (
+          <nav aria-label="Admin" class="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:flex-1">
+            {nav.map((n) => (
+              <a
+                href={n.href}
+                class:list={[
+                  'rounded-lg px-3 py-2 text-sm font-semibold no-underline',
+                  path === n.href ? 'bg-lime text-ink' : 'text-white/85 hover:bg-white/10',
+                ]}
+                aria-current={path === n.href ? 'page' : undefined}
+              >{n.label}</a>
+            ))}
+            <span class="ml-auto hidden text-sm text-white/70 md:inline">{user.name} · {user.role === 'admin' ? 'Admin' : 'Staff'}</span>
+            <button type="button" id="sign-out" class="ml-auto rounded-lg md:ml-0 border border-white/25 px-3 py-2 text-sm font-semibold text-white hover:bg-white/10">Sign out</button>
+          </nav>
+        )}
+      </div>
+    </header>
+    <main class="wrap py-8">
+      <slot />
+    </main>
+    <script>
+      document.getElementById('sign-out')?.addEventListener('click', async () => {
+        await fetch('/api/auth/sign-out/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        location.href = '/admin/login/';
+      });
+    </script>
+    <style is:global>
+      .a-field { display: flex; flex-direction: column; gap: 0.375rem; font-weight: 600; font-size: 0.9rem; color: var(--color-body); }
+      .a-field input, .a-field select, .a-field textarea {
+        min-height: 3rem; border: 1px solid #d5d9e0; border-radius: 0.75rem; padding: 0.5rem 0.875rem;
+        font: inherit; font-weight: 400; font-size: 1rem; color: var(--color-ink); background: #fff;
+      }
+      .a-field input:focus, .a-field select:focus, .a-field textarea:focus { outline: 3px solid var(--color-lime); outline-offset: 1px; }
+      .a-msg { border-radius: 0.75rem; padding: 0.75rem 1rem; font-size: 0.95rem; }
+      .a-msg-error { background: #fde8e7; color: #8f1d14; }
+      .a-msg-ok { background: var(--color-lime-50); color: #3f6200; }
+      .a-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+      .a-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+      .a-table th { text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: #5c6373; font-weight: 700; padding: 0.75rem; border-bottom: 1px solid var(--color-line); }
+      .a-table td { padding: 0.75rem; border-bottom: 1px solid #f0f1f3; vertical-align: top; }
+      @media (max-width: 767px) {
+        .a-table thead { display: none; }
+        .a-table tr { display: block; padding: 0.875rem 1rem; border-bottom: 1px solid var(--color-line); }
+        .a-table td { display: block; border: 0; padding: 0.2rem 0; }
+        .a-table td[data-label]::before { content: attr(data-label); display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #5c6373; margin-top: 0.4rem; }
+      }
+      .a-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.05rem; }
+    </style>
+  </body>
+</html>
