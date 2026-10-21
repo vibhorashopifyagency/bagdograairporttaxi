@@ -11,10 +11,10 @@ grep -rn "TODO(pre-launch)" src/
 ## 1. Business details (`src/data/site.ts`)
 - [ ] Main phone number, `tel:` link and WhatsApp number (one number everywhere)
 - [ ] Booking email address
-- [ ] Office street address and map coordinates (must match Google Business Profile exactly)
+- [ ] Office street address and map coordinates (must match Google Business Profile exactly; Google wants at least 5 decimal places on the coordinates)
 - [ ] Google Business Profile link (`mapsUrl`)
 - [ ] Registered business name and year founded
-- [ ] GSTIN (shows in the footer and on About once set)
+- [ ] GSTIN (shows in the footer and on About once set, and goes into the structured data as `taxID`)
 - [ ] Profile URLs for `sameAs`: Google Business Profile, TripAdvisor, Facebook, Instagram, Justdial
 
 ## 2. Policies (`POLICY` in `src/data/site.ts`)
@@ -56,11 +56,14 @@ stay linked from the footer).
 - [ ] Run `npm run og` after changing the hero photo so the share card matches
 
 ## 7. Google reviews (live data in place, API key makes it automatic)
-The rating badge, the reviews slider and the AggregateRating/Review schema
-now use the listing's real figures: 4.9 from 129 reviews and its ten most
-relevant reviews, copied verbatim from the Google Business Profile on
-20 Oct 2026 into `src/data/google-reviews.json` (listing: Bagdogra Airport
-Taxi, behind Ashok Nagar Club; place ID `ChIJgebDZQJH5DkR9JC1zX1LUU0`).
+The rating badge and the reviews slider now use the listing's real figures:
+4.9 from 129 reviews and its ten most relevant reviews, copied verbatim from
+the Google Business Profile on 20 Oct 2026 into
+`src/data/google-reviews.json` (listing: Bagdogra Airport Taxi, behind Ashok
+Nagar Club; place ID `ChIJgebDZQJH5DkR9JC1zX1LUU0`). They are shown as HTML
+only: Google's review-snippet guidelines do not allow a business to mark up
+its own reviews or ratings copied from Google, so there is no
+AggregateRating or Review schema and the build fails if any is added.
 The "x months ago" labels are as of that date, so set up the feed below and
 they refresh with every build. Note the live site shows hours as Mon–Sat
 08:00–22:00 while `BUSINESS.hours` says open 24 hours: pick one and keep it
@@ -93,4 +96,6 @@ the same on the site and the Google listing.
 - [ ] Make sure the host serves `404.html` with a real 404 status
 - [ ] Submit `https://bagdograairporttaxi.com/sitemap-index.xml` in Google Search Console and Bing Webmaster Tools
 - [ ] Request removal of the old `/404.php` URL in Search Console
-- [ ] Test with Google's Rich Results Test on the homepage, a route page and a package page
+- [ ] Run `npm run audit:google` on the final build and clear every FAIL
+- [ ] Test with Google's Rich Results Test on the homepage, a route page, a package page and a guide page (expect Breadcrumb, Article, LocalBusiness/Organization and image-licence items; no FAQ, which Google retired)
+- [ ] In Search Console, use URL Inspection on the same pages to confirm they are crawlable and the structured data is read

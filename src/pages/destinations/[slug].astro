@@ -33,7 +33,7 @@ const desc = `${d.name} travel guide: best time to visit, how many days, top sig
   title={`${d.short ?? d.name} Travel Guide: Best Time, Sights, Taxi`}
   description={desc}
   crumbs={[{ name: 'Destinations', path: '/destinations/' }, { name: d.name, path }]}
-  schema={[touristDestination(d, path), article({ headline: `${d.name} travel guide`, description: desc, path, modified: `${SITE.faresUpdated}-19` }), faqPage(faqs, path)]}
+  schema={[touristDestination(d, path), article({ headline: `${d.name} travel guide`, description: desc, path, modified: SITE.destinationsUpdated, image: `/img/${destinationPhoto(d.slug)}-1600.webp` }), faqPage(faqs, path)]}
   ogType="article"
   ogImage={`/img/${destinationPhoto(d.slug)}-1600.webp`}
 >

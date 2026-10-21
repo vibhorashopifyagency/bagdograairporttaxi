@@ -18,7 +18,7 @@ const itemList = {
 const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', innova: 'car-innova', traveller: 'car-traveller' };
 ---
 
-<BaseLayout title={title} description={description} crumbs={[{ name: 'Taxi fares', path: '/taxi/' }]} schema={[itemList]}>
+<BaseLayout title={title} description={description} crumbs={[{ name: 'Taxi fares', path: '/taxi/' }]} schema={[itemList]} modified={SITE.contentUpdated}>
   <PageHero slot="hero" image="airport" eyebrow={`${ROUTES.length} routes · updated ${SITE.faresUpdatedLabel}`} title="Taxi fares from Bagdogra Airport, NJP and Siliguri" compact />
   <div class="wrap section">
     <p class="answer max-w-3xl">

@@ -1,0 +1,23 @@
+{
+  "skill_name": "google-search-docs",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Our Astro site for a dental clinic in Pune builds to dist/. We embed our Google rating as AggregateRating on the Dentist schema and have FAQPage markup on every page. Check it against Google's current guidelines and fix anything that is actually a problem.",
+      "expected_output": "Runs the audit, removes the self-serving AggregateRating/Review markup (citing the review-snippet self-serving rule), explains FAQ rich results are retired (keep or drop, no harm), fixes any FAIL items, leaves a guard in the build.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Google Search Console says 'Alternate page with proper canonical tag' for 40 of our product pages and the sitemap has 300 URLs. Can you figure out what is wrong with our canonicals and sitemap in this Next.js export?",
+      "expected_output": "Checks canonical absolute/self-referencing/head placement, sitemap lists only canonicals, internal links, http/https and host consistency, explains which signals disagree, fixes the generator.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "We publish travel guides and want to show up in AI Overviews. Someone said to add llms.txt and HowTo schema. Is that right? Make the guide template follow what Google actually says.",
+      "expected_output": "States that llms.txt is not used by Google and HowTo is retired; applies Article markup with timezone dates, 16x9/4x3/1x1 images, author with url, clear self-contained passages, snippet controls left open; cites the AI features doc.",
+      "files": []
+    }
+  ]
+}

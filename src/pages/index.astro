@@ -46,7 +46,7 @@ import { GUIDES } from '../data/guides';
 import { GOOGLE } from '../data/reviews';
 import { BUSINESS, POLICY, SITE, waLink } from '../data/site';
 import { VEHICLES } from '../data/vehicles';
-import { faqPage, googleReviews } from '../lib/schema';
+import { faqPage } from '../lib/schema';
 
 const featured = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport').slice(0, 8);
 const darj = ROUTES[0];
@@ -84,7 +84,7 @@ const [leadGuide, ...moreGuides] = GUIDES;
   description={SITE.description}
   modified={SITE.contentUpdated}
   speakable={['#quick-answer', '#quick-answer-text', '#journey ol']}
-  schema={[faqPage(GENERAL_FAQS, '/'), ...googleReviews()]}
+  schema={[faqPage(GENERAL_FAQS, '/')]}
 >
   <!-- Hero: one photograph edge to edge, one promise, one form; the content keeps to the page column. -->
   <section class="relative isolate overflow-hidden bg-ink text-white">

@@ -17,7 +17,8 @@
     "check": "astro check",
     "og": "node scripts/make-og.mjs",
     "reviews": "node scripts/fetch-google-reviews.mjs",
-    "photos": "node scripts/fetch-photos.mjs"
+    "photos": "node scripts/fetch-photos.mjs",
+    "audit:google": "node .claude/skills/google-search-docs/scripts/audit-site.mjs dist"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",

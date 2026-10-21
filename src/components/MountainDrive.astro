@@ -1,16 +1,21 @@
 ---
 /**
  * A small animated scene: a lime taxi driving along a hill road in front of
- * the Himalaya. Pure inline SVG with SMIL motion, so it needs no script and
- * costs nothing to load. Two variants:
+ * the Himalaya. Inline SVG. Two variants:
  *   footer: the wide scene, hills in ink so it runs straight into the footer.
- *   mark:   a cropped, pale version used as a watermark inside the mega menu.
- * Under prefers-reduced-motion the moving car is swapped for a parked one.
+ *           It is fitted to its height and widens sideways, so a phone shows a
+ *           short stretch and a 4K screen a long one, never cropping the sky.
+ *           A small script drives the car over just the stretch on screen.
+ *   mark:   a cropped, pale version used as a watermark inside the mega menu,
+ *           with the car moved by SMIL, so it needs no script.
+ * Under prefers-reduced-motion (or with no script, in the footer) the moving
+ * car is swapped for a parked one.
  */
 interface Props { variant?: 'footer' | 'mark'; class?: string }
 const { variant = 'footer', class: cls = '' } = Astro.props;
 
 const W = 2000, H = 300;
+const mark = variant === 'mark';
 const r = (n: number) => Math.round(n * 10) / 10;
 /** Catmull-Rom through the points, emitted as cubic Béziers. */
 function smooth(pts: number[][]) {
@@ -21,29 +26,52 @@ function smooth(pts: number[][]) {
   }
   return d;
 }
-const closeDown = (d: string) => `${d} L${W + 20} ${H + 10} L-20 ${H + 10} Z`;
+
+// The hand-drawn scene spans 0–2000. The footer repeats it once on each side,
+// nudged by a seeded jitter so the copies do not read as copies and every
+// build draws the same hills; only screens wider than about 8:1 reach them.
+let seed = 11;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const nudge = (n: number, by: number) => r(n + (rand() * 2 - 1) * by);
+// The original stretch keeps its own end points, so a laptop sees exactly the drawn scene.
+function widen(pts: number[][], dy: number) {
+  if (mark) return pts;
+  const first = pts[0][0], last = pts[pts.length - 1][0];
+  const copy = (dx: number) => pts.slice(1, -1).map(([x, y]) => [nudge(x + dx, 12), nudge(y, dy)]);
+  return [...copy(-W).filter(([x]) => x < first - 50), ...pts, ...copy(W).filter(([x]) => x > last + 50)];
+}
+const [X0, X1] = mark ? [0, W] : [-W, 2 * W];
+const closeDown = (d: string) => `${d} L${X1 + 20} ${H + 10} L${X0 - 20} ${H + 10} Z`;
 
 // Far range: jagged, with snow on the tallest peaks.
-const farPts = [[-20, 215], [80, 165], [150, 190], [240, 112], [310, 155], [380, 135], [450, 175], [540, 96], [620, 145], [690, 125], [770, 180], [860, 108], [930, 140], [1010, 82], [1080, 135], [1150, 118], [1240, 165], [1320, 124], [1400, 155], [1480, 102], [1560, 145], [1630, 128], [1720, 175], [1800, 112], [1880, 150], [1950, 135], [2020, 165]];
-const far = 'M' + farPts.map((p) => p.join(' ')).join(' L') + ` L${W + 20} ${H + 10} L-20 ${H + 10} Z`;
-const caps = [[240, 112], [540, 96], [860, 108], [1010, 82], [1480, 102], [1800, 112]]
-  .map(([x, y]) => `M${x - 20} ${y + 20} L${x} ${y} L${x + 20} ${y + 20} L${x + 11} ${y + 15} L${x + 4} ${y + 23} L${x - 5} ${y + 14} L${x - 13} ${y + 19} Z`).join(' ');
+const farPts = widen([[-20, 215], [80, 165], [150, 190], [240, 112], [310, 155], [380, 135], [450, 175], [540, 96], [620, 145], [690, 125], [770, 180], [860, 108], [930, 140], [1010, 82], [1080, 135], [1150, 118], [1240, 165], [1320, 124], [1400, 155], [1480, 102], [1560, 145], [1630, 128], [1720, 175], [1800, 112], [1880, 150], [1950, 135], [2020, 165]], 10);
+const far = closeDown('M' + farPts.map((p) => p.join(' ')).join(' L'));
+const caps = farPts.filter(([, y]) => y <= 112)
+  .map(([x, y]) => `M${r(x - 20)} ${r(y + 20)} L${x} ${y} L${r(x + 20)} ${r(y + 20)} L${r(x + 11)} ${r(y + 15)} L${r(x + 4)} ${r(y + 23)} L${r(x - 5)} ${r(y + 14)} L${r(x - 13)} ${r(y + 19)} Z`).join(' ');
 // Mid hills: soft and rolling.
-const mid = closeDown(smooth([[-20, 238], [150, 218], [300, 228], [450, 203], [600, 218], [760, 198], [900, 225], [1050, 208], [1200, 231], [1350, 203], [1500, 218], [1650, 198], [1800, 223], [1950, 208], [2020, 213]]));
+const mid = closeDown(smooth(widen([[-20, 238], [150, 218], [300, 228], [450, 203], [600, 218], [760, 198], [900, 225], [1050, 208], [1200, 231], [1350, 203], [1500, 218], [1650, 198], [1800, 223], [1950, 208], [2020, 213]], 8)));
 // The near hill carries the road; the car follows this exact path.
-const road = smooth([[-30, 264], [200, 252], [400, 270], [600, 244], [800, 257], [1000, 240], [1200, 262], [1400, 247], [1600, 264], [1800, 242], [2030, 258]]);
+const road = smooth(widen([[-30, 264], [200, 252], [400, 270], [600, 244], [800, 257], [1000, 240], [1200, 262], [1400, 247], [1600, 264], [1800, 242], [2030, 258]], 5));
 const near = closeDown(road);
+// Two clouds over the hand-drawn stretch, two more for the widest screens.
+const clouds = [
+  { a: [330, 130, 60, 14], b: [360, 120, 36, 16], drift: '0 0; 40 0; 0 0', dur: '48s' },
+  { a: [1130, 104, 70, 13], b: [1165, 94, 40, 16], drift: '0 0; -50 0; 0 0', dur: '60s' },
+  ...(mark ? [] : [
+    { a: [-560, 118, 64, 13], b: [-528, 108, 38, 15], drift: '0 0; 45 0; 0 0', dur: '54s' },
+    { a: [2420, 112, 66, 14], b: [2452, 101, 38, 16], drift: '0 0; -40 0; 0 0', dur: '50s' },
+  ]),
+];
 
 const uid = 'drive-' + Math.random().toString(36).slice(2, 8);
-const mark = variant === 'mark';
 // The watermark shows the middle of the scene, and the car only drives that stretch.
-// The footer crop trims most of the sky; the watermark shows the middle of the scene.
-const viewBox = mark ? '640 70 720 230' : `0 60 ${W} ${H - 60}`;
+// The footer viewBox is a narrow slot around the centre with the sky trimmed;
+// "meet" then fits it to the height and the wider scene fills either side.
+const viewBox = mark ? '640 70 720 230' : `${W / 2 - 200} 60 400 ${H - 60}`;
 const carScale = mark ? 2.1 : 1.15;
-const dur = mark ? '11s' : '26s';
 ---
 
-<svg class:list={['drive', mark ? 'drive--mark' : 'drive--footer', cls]} viewBox={viewBox} preserveAspectRatio={mark ? 'xMidYMid meet' : 'xMidYMax slice'} aria-hidden="true" focusable="false">
+<svg class:list={['drive', mark ? 'drive--mark' : 'drive--footer', cls]} viewBox={viewBox} preserveAspectRatio={mark ? 'xMidYMid meet' : 'xMidYMax meet'} aria-hidden="true" focusable="false">
   <defs>
     <path id={`${uid}-road`} d={road} />
     <g id={`${uid}-car`}>
@@ -59,14 +87,12 @@ const dur = mark ? '11s' : '26s';
   </defs>
 
   <circle class="sun" cx="1250" cy="100" r="28" />
-  <g class="cloud">
-    <ellipse cx="330" cy="130" rx="60" ry="14" /><ellipse cx="360" cy="120" rx="36" ry="16" />
-    <animateTransform attributeName="transform" type="translate" values="0 0; 40 0; 0 0" dur="48s" repeatCount="indefinite" />
-  </g>
-  <g class="cloud">
-    <ellipse cx="1130" cy="104" rx="70" ry="13" /><ellipse cx="1165" cy="94" rx="40" ry="16" />
-    <animateTransform attributeName="transform" type="translate" values="0 0; -50 0; 0 0" dur="60s" repeatCount="indefinite" />
-  </g>
+  {clouds.map((c) => (
+    <g class="cloud">
+      <ellipse cx={c.a[0]} cy={c.a[1]} rx={c.a[2]} ry={c.a[3]} /><ellipse cx={c.b[0]} cy={c.b[1]} rx={c.b[2]} ry={c.b[3]} />
+      <animateTransform attributeName="transform" type="translate" values={c.drift} dur={c.dur} repeatCount="indefinite" />
+    </g>
+  ))}
   <path class="far" d={far} />
   <path class="cap" d={caps} />
   <path class="mid" d={mid} />
@@ -74,11 +100,14 @@ const dur = mark ? '11s' : '26s';
   <path class="road" d={road} />
   <path class="dash" d={road} />
 
-  <!-- Moving car: the group gets the motion, the inner group the size. -->
+  <!-- Moving car: the group gets the motion, the inner group the size. In the
+       footer the script below moves the group; in the watermark SMIL does. -->
   <g class="car-anim">
-    <animateMotion dur={dur} repeatCount="indefinite" rotate="auto" calcMode="linear" keyPoints={mark ? '0.3;0.7' : '0;1'} keyTimes="0;1">
-      <mpath href={`#${uid}-road`} />
-    </animateMotion>
+    {mark && (
+      <animateMotion dur="11s" repeatCount="indefinite" rotate="auto" calcMode="linear" keyPoints="0.3;0.7" keyTimes="0;1">
+        <mpath href={`#${uid}-road`} />
+      </animateMotion>
+    )}
     <use href={`#${uid}-car`} transform={`scale(${carScale})`} />
   </g>
   <!-- Parked car for reduced motion. -->
@@ -113,8 +142,80 @@ const dur = mark ? '11s' : '26s';
   .car-wheel circle { fill: var(--wheel); }
   .car-spokes path { stroke: #fff; stroke-width: 1.4; opacity: .6; }
   .car-still { display: none; }
+  /* The footer car stays parked until the script takes the wheel. */
+  .drive--footer:not(.is-driving) .car-anim { display: none; }
+  .drive--footer:not(.is-driving) .car-still { display: inline; }
   @media (prefers-reduced-motion: reduce) {
     .car-anim { display: none; }
     .car-still { display: inline; }
   }
 </style>
+
+<script>
+  /*
+   * Drives the footer taxi over the stretch of road that is on screen. The
+   * scene is fitted to its height, so that stretch is about 650 units on a
+   * phone, 2000 on a laptop and 3500 on a 4K screen; the car covers it at the
+   * same pace everywhere and comes straight back round, so it is never off
+   * screen for long. On first sight it is already on the road. Paused while
+   * the footer is out of view; under reduced motion it never starts.
+   */
+  const SPEED = 80; // scene units a second, the pace of the old 26s loop on a laptop
+  const MARGIN = 50; // start and finish just past each edge, so the car drives in and out
+
+  function drive(svg: SVGSVGElement) {
+    const road = svg.querySelector<SVGPathElement>('.road');
+    const car = svg.querySelector<SVGGElement>('.car-anim');
+    if (!road || !car) return;
+    const total = road.getTotalLength();
+    // The road runs left to right, so length grows with x: binary search.
+    const lengthAt = (x: number) => {
+      let lo = 0, hi = total;
+      for (let i = 0; i < 22; i++) {
+        const m = (lo + hi) / 2;
+        if (road.getPointAtLength(m).x < x) lo = m; else hi = m;
+      }
+      return lo;
+    };
+
+    let from = 0, to = total, at = -1, last = 0, frame = 0;
+    const measure = () => {
+      const box = svg.getBoundingClientRect();
+      const vb = svg.viewBox.baseVal;
+      const scale = Math.min(box.width / vb.width, box.height / vb.height);
+      if (!scale) return;
+      const half = box.width / scale / 2, centre = vb.x + vb.width / 2;
+      from = lengthAt(centre - half - MARGIN);
+      to = lengthAt(centre + half + MARGIN);
+      if (at < 0) at = from + (to - from) * 0.15;
+      else if (at < from || at > to) at = from;
+    };
+    const place = () => {
+      const p = road.getPointAtLength(at), q = road.getPointAtLength(Math.min(at + 2, total));
+      const deg = (Math.atan2(q.y - p.y, q.x - p.x) * 180) / Math.PI;
+      car.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${deg.toFixed(2)})`);
+    };
+    const tick = (t: number) => {
+      // Cap the step so a background tab does not make the car jump on return.
+      if (last) at += (Math.min(t - last, 100) / 1000) * SPEED;
+      if (at > to) at = from;
+      last = t;
+      place();
+      frame = requestAnimationFrame(tick);
+    };
+
+    measure();
+    place();
+    svg.classList.add('is-driving');
+    new ResizeObserver(() => { measure(); place(); }).observe(svg);
+    new IntersectionObserver(([entry]) => {
+      cancelAnimationFrame(frame);
+      last = 0;
+      if (entry.isIntersecting) frame = requestAnimationFrame(tick);
+    }).observe(svg);
+  }
+
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll<SVGSVGElement>('svg.drive--footer').forEach(drive);
+  }
+</script>

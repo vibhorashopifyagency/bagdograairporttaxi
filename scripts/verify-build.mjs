@@ -4,6 +4,11 @@
 //  2. Every internal link points at a page that exists.
 //  3. The 404 page is noindex.
 //  4. With PRE_LAUNCH off, no placeholder text may ship.
+//  5. Google Search rules that are easy to break by accident: no Review or
+//     AggregateRating markup about our own business (self-serving reviews are
+//     ineligible and a manual-action risk), every Article date carries a
+//     timezone, every <img> has alt text, and every sitemap <lastmod> is a
+//     valid date.
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -44,7 +49,16 @@ for (const f of files) {
   if (desc.length < 70 || desc.length > 170) warnings.push(`${url}: description ${desc.length} chars`);
   if (!isNoindex && !/<link rel="canonical"/.test(html)) problems.push(`${url}: no canonical`);
   for (const m of html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
-    try { JSON.parse(m[1]); } catch { problems.push(`${url}: invalid JSON-LD`); }
+    let graph;
+    try { graph = JSON.parse(m[1]); } catch { problems.push(`${url}: invalid JSON-LD`); continue; }
+    const nodes = JSON.stringify(graph);
+    if (/"@type":"(AggregateRating|Review)"/.test(nodes)) problems.push(`${url}: Review/AggregateRating markup (Google forbids it for a business's own reviews)`);
+    for (const d of nodes.matchAll(/"date(Published|Modified)":"([^"]+)"/g)) {
+      if (!/T\d\d:\d\d(:\d\d)?(Z|[+-]\d\d:\d\d)$/.test(d[2])) problems.push(`${url}: ${d[0]} has no timezone`);
+    }
+  }
+  for (const m of html.matchAll(/<img\b[^>]*>/g)) {
+    if (!/\salt(=|[\s>\/])/.test(m[0])) problems.push(`${url}: <img> without alt`);
   }
   for (const m of html.matchAll(/href="(\/[^"#?]*)/g)) {
     const href = m[1];
@@ -52,6 +66,14 @@ for (const f of files) {
     if (!pages.has(href)) problems.push(`${url}: broken link ${href}`);
   }
 }
+
+try {
+  const sm = await readFile(join(DIST, 'sitemap-0.xml'), 'utf8');
+  for (const m of sm.matchAll(/<lastmod>([^<]*)<\/lastmod>/g)) {
+    if (Number.isNaN(Date.parse(m[1]))) problems.push(`sitemap: invalid lastmod ${m[1]}`);
+  }
+  if (!/<lastmod>/.test(sm)) warnings.push('sitemap: no <lastmod> on any URL');
+} catch { problems.push('sitemap-0.xml missing'); }
 
 if (anyLive) {
   const all = (await Promise.all(files.map((f) => readFile(f, 'utf8')))).join('\n');

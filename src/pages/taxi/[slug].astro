@@ -13,7 +13,7 @@ import { ROUTES, inr, lowestFare, routeBySlug, type Route } from '../../data/rou
 import { destinationBySlug } from '../../data/destinations';
 import { PACKAGES } from '../../data/packages';
 import { VEHICLES } from '../../data/vehicles';
-import { BUSINESS, POLICY, waLink } from '../../data/site';
+import { BUSINESS, POLICY, SITE, waLink } from '../../data/site';
 import { routePhoto } from '../../lib/photos';
 import { faqPage, routeService } from '../../lib/schema';
 
@@ -57,6 +57,7 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
   crumbs={[{ name: 'Taxi fares', path: '/taxi/' }, { name: `${route.fromShort} to ${route.toShort}`, path }]}
   schema={[routeService(route, path), faqPage(faqs, path)]}
   ogImage={`/img/${routePhoto(route)}-1600.webp`}
+  modified={SITE.contentUpdated}
 >
   <PageHero slot="hero" image={routePhoto(route)} eyebrow="Fixed fare · one way · all inclusive" title={`${route.from} to ${route.to} taxi`}>
     <div class="mt-5 flex flex-wrap gap-2">

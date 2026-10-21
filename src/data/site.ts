@@ -38,6 +38,9 @@ export const SITE = {
   // whenever a fare, a policy or a key fact changes.
   contentUpdated: '2026-10-20',
   contentUpdatedLabel: '20 October 2026',
+  // The destination guides' dateModified and sitemap lastmod. Bump it when a
+  // destination's facts change.
+  destinationsUpdated: '2026-10-19',
 } as const;
 
 export const BUSINESS = {

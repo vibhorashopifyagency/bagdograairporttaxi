@@ -1,14 +1,18 @@
 /**
  * Google reviews, as saved by `scripts/fetch-google-reviews.mjs` before each
  * build. Nothing in google-reviews.json is typed in by hand: the rating,
- * count and review text are Google's own, so the badge, the slider and the
- * AggregateRating schema can never disagree with the listing.
+ * count and review text are Google's own, so the badge and the slider can
+ * never disagree with the listing.
+ *
+ * They are shown as plain HTML only. Google's review-snippet guidelines rule
+ * out Review/AggregateRating markup for a business's own reviews and for
+ * ratings copied from another site (see src/lib/schema.ts), so no schema is
+ * built from this data.
  *
  * Until the API key is set and that file is filled, the site falls back to
  * `reviews-sample.json`: the real rating from the listing with sample review
- * cards, labelled as samples on the page. No Review or AggregateRating schema
- * is emitted from samples, and `scripts/verify-build.mjs` refuses to build
- * with PRE_LAUNCH off while samples are still showing.
+ * cards, labelled as samples on the page. `scripts/verify-build.mjs` refuses
+ * to build with PRE_LAUNCH off while samples are still showing.
  */
 import data from './google-reviews.json';
 import sample from './reviews-sample.json';
@@ -46,6 +50,6 @@ export const GOOGLE = {
   writeReviewUrl: data.placeId ? `https://search.google.com/local/writereview?placeid=${data.placeId}` : BUSINESS.mapsUrl,
   fetchedAt: data.fetchedAt,
   hasRating: rating > 0,
-  /** Only real, counted reviews may be marked up as AggregateRating. */
-  hasSchema: live,
+  /** True once the file holds Google's own reviews rather than samples. */
+  isLive: live,
 };

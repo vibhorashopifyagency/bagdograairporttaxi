@@ -17,6 +17,7 @@ import sharp from 'sharp';
 
 const UA = 'bagdograairporttaxi.com site build (photo fetch; contact book@bagdograairporttaxi.com)';
 const WIDTHS = [1600, 800, 400];
+const CROPS = [['16x9', 1200, 675], ['4x3', 1024, 768], ['1x1', 900, 900]];
 const OUT = new URL('../public/img/', import.meta.url);
 const CACHE = new URL('../.photos-cache/', import.meta.url);
 const DATA = new URL('../src/data/photos.json', import.meta.url);
@@ -103,6 +104,14 @@ for (const [key, p] of all) {
     const target = new URL(`${key}-${w}.webp`, OUT);
     if (!force && (await exists(target))) continue;
     await img.clone().resize({ width: Math.min(w, width), withoutEnlargement: true }).webp({ quality: w >= 1600 ? 70 : 74 }).toFile(fileURLToPath(target));
+  }
+  // Google's Article and image markup want 16x9, 4x3 and 1x1 versions of a
+  // page's image (each over 50k pixels). Cropped from the original with
+  // sharp's attention strategy so the subject stays in frame.
+  for (const [ratio, w, h] of CROPS) {
+    const target = new URL(`${key}-${ratio}.webp`, OUT);
+    if (!force && (await exists(target))) continue;
+    await img.clone().resize({ width: w, height: h, fit: 'cover', position: 'attention' }).webp({ quality: 66 }).toFile(fileURLToPath(target));
   }
   const credit = p.own
     ? { artist: 'Jai Jawan Travels', license: 'Own photograph', licenseUrl: '', source: '', own: true }

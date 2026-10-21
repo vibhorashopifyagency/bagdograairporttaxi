@@ -27,7 +27,7 @@ Node 22.12 or newer.
 | Destination guides | `src/data/destinations.ts` |
 | Site-wide FAQs | `src/data/faqs.ts` |
 | Which photo goes with which place, package, route or guide | `src/lib/photos.ts` |
-| Photo list, licences and alt text (generated) | `scripts/fetch-photos.mjs`, `src/data/photos.json` |
+| Photo list, licences and alt text (generated), plus the 16x9 / 4x3 / 1x1 crops Google reads from Article and image markup | `scripts/fetch-photos.mjs`, `src/data/photos.json` |
 | Google rating, count and reviews (real, copied 20 Oct 2026; refreshed by the API once a key is set) | `src/data/google-reviews.json` |
 | Photo gallery entries and categories | `src/data/gallery.ts` |
 | Brand badge masters (ink/lime recolour of the Jai Jawan Travels logo) | `scripts/brand/` |
@@ -43,6 +43,15 @@ chart, the booking form, the JSON-LD offers and llms.txt together.
   WebSite, WebPage (with `dateModified` and `speakable` where the page opens
   with an answer), BreadcrumbList, TaxiService with per-car Offers,
   TouristTrip with day-wise itinerary, TouristDestination, Article and FAQPage.
+  Every page image is an `ImageObject` with the photographer, licence and
+  source (Google's image-licence feature), in three aspect ratios. All dates
+  carry the +05:30 timezone.
+- No Review or AggregateRating markup, deliberately: Google's review-snippet
+  rules make a business's own reviews, and ratings copied from Google,
+  ineligible and a manual-action risk. The rating and reviews are shown as
+  plain HTML. `scripts/verify-build.mjs` fails the build if the markup comes
+  back. (Google also retired the FAQ rich result in May 2026; the FAQPage
+  markup stays for Bing and answer engines.)
 - Answer-first opening paragraph on every route, package and guide page, so
   answer engines can quote it. The homepage tells the trip as a six-chapter
   story (`src/components/JourneyStory.astro`) with the policies woven in.
@@ -51,8 +60,9 @@ chart, the booking form, the JSON-LD offers and llms.txt together.
   generated from the same data as the pages.
 - `/feed.xml`: RSS of the travel guides, linked from every page's `<head>`,
   plus `article:modified_time` on every page that has a date.
-- Sitemap (`/sitemap-index.xml`), canonical tags, Open Graph and Twitter cards,
-  geo meta tags, web manifest.
+- Sitemap (`/sitemap-index.xml`) with `lastmod` only where the site records a
+  real change date (homepage, fares, packages, guides, destinations), canonical
+  tags, Open Graph and Twitter cards, geo meta tags, web manifest.
 
 ### Agent skills for content work
 
@@ -66,6 +76,7 @@ same playbook every time:
 | `ai-search-optimization` | Answer Engine Optimization: question headings, answer-first paragraphs, FAQ and schema patterns, llms.txt |
 | `improve-aeo-geo` | Code-level audit of the site for AI crawlers: robots, schema, headings, freshness, feeds |
 | `write-seo-geo-content` | New guide pages written to be quoted by ChatGPT, Perplexity and AI Overviews, with verified sources only |
+| `google-search-docs` | Google Search Central's documentation as an audit-and-fix playbook (Essentials, spam policies, structured data per type, crawling, titles, images, AI Overviews), with a changelog of 2025–26 rule changes. Written in this repo, not installed with `npx skills`. `npm run audit:google` runs its checker on `dist/` |
 
 Homepage section order and the reasoning behind it are in the comment at the
 top of `src/pages/index.astro`.

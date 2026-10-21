@@ -10,7 +10,7 @@ import GoogleRatingBadge from '../../components/GoogleRatingBadge.astro';
 import { PACKAGES, type TourPackage } from '../../data/packages';
 import { destinationBySlug } from '../../data/destinations';
 import { inr } from '../../data/routes';
-import { BUSINESS, POLICY, waLink } from '../../data/site';
+import { BUSINESS, POLICY, waLink, SITE } from '../../data/site';
 import { packagePhoto } from '../../lib/photos';
 import { faqPage, tourTrip } from '../../lib/schema';
 
@@ -41,6 +41,7 @@ const waText = `Hi, I am interested in the ${pkg.name} tour package (${pkg.night
   crumbs={[{ name: 'Tour packages', path: '/tour-packages/' }, { name: pkg.name, path }]}
   schema={[tourTrip(pkg, path), faqPage(faqs, path)]}
   ogImage={`/img/${packagePhoto(pkg)}-1600.webp`}
+  modified={SITE.contentUpdated}
 >
   <PageHero slot="hero" image={packagePhoto(pkg)} eyebrow={`${pkg.nights} nights / ${pkg.days} days · from Bagdogra or NJP`} title={`${pkg.name} tour package`}>
     <div class="mt-5 flex flex-wrap gap-2">
