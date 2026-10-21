@@ -1,0 +1,229 @@
+---
+/**
+ * A calendar date field for the site's forms, in place of the browser's own
+ * date picker, which looks different on every phone and cannot be styled.
+ * The form still receives a plain YYYY-MM-DD value in a hidden input named
+ * `name`, so the server and the booking script see exactly what they did
+ * before. Dates are Indian dates: "today" is today in IST, wherever the
+ * customer is, and days before it cannot be picked.
+ */
+import Icon from './Icon.astro';
+import '../styles/picker.css';
+
+interface Props {
+  name: string;
+  label: string;
+  placeholder?: string;
+  class?: string;
+}
+const { name, label, placeholder = 'Choose a date', class: cls } = Astro.props;
+const id = `dp-${name}`;
+const WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+---
+
+<div class:list={['pk', cls]} data-picker data-datepicker data-placeholder={placeholder}>
+  <span class="pk-label" id={`${id}-label`}>{label}</span>
+  <input type="hidden" name={name} />
+  <button
+    type="button"
+    class="pk-trigger"
+    id={`${id}-btn`}
+    aria-haspopup="dialog"
+    aria-expanded="false"
+    aria-controls={`${id}-pop`}
+    aria-labelledby={`${id}-label ${id}-btn`}
+  >
+    <Icon name="calendar" class="pk-icon" />
+    <span class="pk-value is-empty">{placeholder}</span>
+    <Icon name="down" class="pk-chev" />
+  </button>
+
+  <div class="pk-pop" id={`${id}-pop`} role="dialog" aria-labelledby={`${id}-title`} hidden>
+    <div class="dp-head">
+      <button type="button" class="dp-nav" data-dp-step="-1" aria-label="Previous month"><Icon name="left" /></button>
+      <p class="dp-title" id={`${id}-title`} aria-live="polite"></p>
+      <button type="button" class="dp-nav" data-dp-step="1" aria-label="Next month"><Icon name="right" /></button>
+    </div>
+    <table class="dp-cal" role="grid" aria-labelledby={`${id}-title`}>
+      <thead>
+        <tr>{WEEK.map((d) => <th scope="col" abbr={d}>{d.slice(0, 2)}</th>)}</tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="pk-foot">
+      <button type="button" class="pk-chip" data-dp-quick="0">Today</button>
+      <button type="button" class="pk-chip" data-dp-quick="1">Tomorrow</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { picker } from '../lib/picker';
+
+  // Days are YYYY-MM-DD strings and all arithmetic runs in UTC, so no local
+  // clock or daylight-saving change can shift a date by one.
+  type Day = string;
+  const DAY_MS = 864e5;
+  const ms = (d: Day) => Date.parse(`${d}T00:00:00Z`);
+  const iso = (t: number): Day => new Date(t).toISOString().slice(0, 10);
+  const addDays = (d: Day, n: number) => iso(ms(d) + n * DAY_MS);
+  const monthStart = (d: Day): Day => `${d.slice(0, 7)}-01`;
+  function addMonths(d: Day, n: number): Day {
+    const x = new Date(ms(d));
+    const day = x.getUTCDate();
+    x.setUTCDate(1);
+    x.setUTCMonth(x.getUTCMonth() + n);
+    const last = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + 1, 0)).getUTCDate();
+    x.setUTCDate(Math.min(day, last));
+    return iso(x.getTime());
+  }
+  /** 0 for Sunday through 6 for Saturday: weeks start on Sunday, as on Indian phone calendars. */
+  const weekday = (d: Day) => new Date(ms(d)).getUTCDay();
+  const daysInMonth = (d: Day) => Number(addDays(addMonths(monthStart(d), 1), -1).slice(8));
+
+  const ist = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
+  function today(): Day {
+    const p = Object.fromEntries(ist.formatToParts(new Date()).map((x) => [x.type, x.value]));
+    return `${p.year}-${p.month}-${p.day}`;
+  }
+  const fmt = (o: Intl.DateTimeFormatOptions) => {
+    const f = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...o });
+    return (d: Day) => f.format(new Date(ms(d)));
+  };
+  /** "Thu 22 Oct". With a year Intl adds a comma ("Thu, 22 Oct 2026"), so the year is appended by hand. */
+  const shortDay = fmt({ weekday: 'short', day: 'numeric', month: 'short' });
+  const fullDay = (d: Day) => `${shortDay(d)} ${d.slice(0, 4)}`;
+  const longDay = fmt({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const monthTitle = fmt({ month: 'long', year: 'numeric' });
+
+  const MOVES: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+
+  function init(root: HTMLElement) {
+    const title = root.querySelector<HTMLElement>('.dp-title')!;
+    const body = root.querySelector<HTMLElement>('tbody')!;
+    const [prev, next] = root.querySelectorAll<HTMLButtonElement>('[data-dp-step]');
+    const quick = root.querySelectorAll<HTMLButtonElement>('[data-dp-quick]');
+
+    let min = today();
+    let view = monthStart(min);
+    let cursor = min;
+
+    const p = picker(root, {
+      label(v) {
+        const t = today();
+        return v === t ? `Today, ${shortDay(v)}` : v === addDays(t, 1) ? `Tomorrow, ${shortDay(v)}` : fullDay(v);
+      },
+      sync(v) {
+        const t = today();
+        quick.forEach((q) => q.classList.toggle('is-on', !!v && v === addDays(t, Number(q.dataset.dpQuick))));
+      },
+      prepare() {
+        min = today();
+        if (p.input.value && p.input.value < min) p.set('');
+        cursor = p.input.value || min;
+        view = monthStart(cursor);
+        render();
+        return cell(cursor);
+      },
+    });
+
+    function render() {
+      const t = today();
+      const lead = weekday(view);
+      const count = daysInMonth(view);
+      title.textContent = monthTitle(view);
+      prev.disabled = view <= monthStart(min);
+      let html = '<tr>' + '<td></td>'.repeat(lead);
+      for (let i = 0; i < count; i++) {
+        const d = addDays(view, i);
+        if (i && (lead + i) % 7 === 0) html += '</tr><tr>';
+        const sel = d === p.input.value;
+        const cls = ['dp-day', sel && 'is-sel', d === t && 'is-today'].filter(Boolean).join(' ');
+        html += `<td${sel ? ' aria-selected="true"' : ''}><button type="button" class="${cls}" data-day="${d}"`
+          + ` tabindex="${d === cursor ? 0 : -1}" aria-label="${longDay(d)}${d === t ? ', today' : ''}"`
+          + `${d === t ? ' aria-current="date"' : ''}${d < min ? ' disabled' : ''}>${i + 1}</button></td>`;
+      }
+      html += '<td></td>'.repeat((7 - ((lead + count) % 7)) % 7) + '</tr>';
+      body.innerHTML = html;
+    }
+
+    function cell(d: Day) {
+      return body.querySelector<HTMLButtonElement>(`[data-day="${d}"]`);
+    }
+
+    /** Moves the keyboard cursor to a day, turning the month if needed. */
+    function moveTo(d: Day) {
+      cursor = d < min ? min : d;
+      if (monthStart(cursor) !== view) {
+        view = monthStart(cursor);
+        render();
+      } else {
+        body.querySelectorAll('[tabindex="0"]').forEach((b) => b.setAttribute('tabindex', '-1'));
+        cell(cursor)?.setAttribute('tabindex', '0');
+      }
+      cell(cursor)?.focus();
+    }
+
+    [prev, next].forEach((b) => b.addEventListener('click', () => {
+      view = addMonths(view, Number(b.dataset.dpStep));
+      const d = addMonths(cursor, Number(b.dataset.dpStep));
+      cursor = d < min ? min : d;
+      render();
+      // Back at this month the arrow disables itself; keep the keyboard in the calendar.
+      if (b.disabled) cell(cursor)?.focus();
+    }));
+    quick.forEach((q) => q.addEventListener('click', () => p.set(addDays(today(), Number(q.dataset.dpQuick)), true)));
+    body.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-day]');
+      if (b && !b.disabled) p.set(b.dataset.day!, true);
+    });
+    body.addEventListener('keydown', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-day]');
+      if (!b) return;
+      const d = b.dataset.day!;
+      let to: Day | null = null;
+      if (e.key in MOVES) to = addDays(d, MOVES[e.key]);
+      else if (e.key === 'Home') to = addDays(d, -weekday(d));
+      else if (e.key === 'End') to = addDays(d, 6 - weekday(d));
+      else if (e.key === 'PageUp') to = addMonths(d, e.shiftKey ? -12 : -1);
+      else if (e.key === 'PageDown') to = addMonths(d, e.shiftKey ? 12 : 1);
+      if (!to) return;
+      e.preventDefault();
+      moveTo(to);
+    });
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-datepicker]').forEach(init);
+</script>
+
+<style is:global>
+  .dp-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .dp-title { font-family: var(--font-display); font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; color: var(--color-ink); }
+  .dp-nav {
+    display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex: none;
+    border: 1px solid var(--color-line); border-radius: 999px; background: #fff; color: var(--color-ink);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .dp-nav svg { width: 1.125rem; height: 1.125rem; }
+  .dp-nav:hover:not(:disabled) { border-color: var(--color-ink); background: var(--color-mist); }
+  .dp-nav:disabled { opacity: 0.35; }
+
+  .dp-cal { width: 100%; table-layout: fixed; border-collapse: collapse; }
+  .dp-cal th { padding: 0.25rem 0 0.375rem; font-size: 0.75rem; font-weight: 600; color: var(--color-muted); text-align: center; }
+  .dp-cal td { padding: 1px; text-align: center; }
+  .dp-day {
+    position: relative; display: grid; place-items: center; width: min(100%, 3rem); aspect-ratio: 1; margin-inline: auto;
+    border-radius: 0.75rem; font-size: 0.9375rem; font-weight: 500; color: var(--color-ink);
+    font-variant-numeric: tabular-nums; transition: background-color 0.12s ease, color 0.12s ease;
+  }
+  .dp-day:hover:not(:disabled):not(.is-sel) { background: var(--color-mist); }
+  .dp-day:focus-visible { z-index: 1; outline-offset: 0; }
+  .dp-day:disabled { color: color-mix(in srgb, var(--color-muted) 45%, #fff); }
+  .dp-day.is-today { font-weight: 700; }
+  .dp-day.is-today::after {
+    content: ''; position: absolute; bottom: 16%; left: 50%; width: 4px; height: 4px; margin-left: -2px;
+    border-radius: 999px; background: var(--color-lime-text);
+  }
+  .dp-day.is-sel { background: var(--color-ink); color: #fff; font-weight: 700; }
+  .dp-day.is-sel::after { background: var(--color-lime); }
+</style>

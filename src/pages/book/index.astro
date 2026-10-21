@@ -2,6 +2,8 @@
 import GoogleRatingBadge from '../../components/GoogleRatingBadge.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Icon from '../../components/Icon.astro';
+import DatePicker from '../../components/DatePicker.astro';
+import TimePicker from '../../components/TimePicker.astro';
 import { ROUTES, ROUTE_GROUPS } from '../../data/routes';
 import { PACKAGES } from '../../data/packages';
 import { VEHICLES } from '../../data/vehicles';
@@ -16,6 +18,8 @@ const data = {
   whatsapp: BUSINESS.whatsapp,
   paymentUrl: PAYMENT.advanceUrl,
 };
+const clock = (t: string) => { const h = Number(t.slice(0, 2)); return `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`; };
+const nightHint = `Taxi pickups from ${clock(POLICY.nightChargeFrom)} to ${clock(POLICY.nightChargeTo)} add a ₹${POLICY.nightCharge.toLocaleString('en-IN')} night charge.`;
 ---
 
 <BaseLayout
@@ -72,8 +76,8 @@ const data = {
 
         <fieldset class="grid gap-4 sm:grid-cols-2">
           <legend class="mb-3 text-lg font-bold text-ink sm:col-span-2">3. When and where</legend>
-          <label class="field"><span>Pickup date</span><input type="date" name="date" required /></label>
-          <label class="field"><span>Pickup time (or landing time)</span><input type="time" name="time" required /></label>
+          <DatePicker name="date" label="Pickup date" />
+          <TimePicker name="time" label="Pickup time (or landing time)" hint={nightHint} />
           <label class="field"><span>Flight or train number <em class="font-normal text-muted">(optional)</em></span><input name="flight" placeholder="e.g. 6E 6521" autocomplete="off" /></label>
           <label class="field"><span>Passengers</span><input type="number" name="pax" min="1" max="12" value="2" inputmode="numeric" /></label>
           <label class="field sm:col-span-2"><span>Hotel or drop address</span><input name="drop" placeholder="Hotel name and area" /></label>
@@ -188,9 +192,6 @@ const data = {
       const v = f.querySelector(`input[name=vehicle][value="${CSS.escape(q.get('vehicle')!)}"]`) as HTMLInputElement | null;
       if (v) v.checked = true;
     }
-    const dateEl = f.elements.namedItem('date') as HTMLInputElement;
-    dateEl.min = new Date().toISOString().slice(0, 10);
-
     const isNight = (t: string) => {
       if (!t) return false;
       const { nightChargeFrom: a, nightChargeTo: b } = d.policy;
@@ -246,7 +247,9 @@ const data = {
       if (missing.length) {
         err.textContent = 'Please add your ' + missing.map((m) => (m === 'phone' ? 'mobile number' : m === 'time' ? 'pickup time' : m === 'date' ? 'pickup date' : 'name')).join(', ') + '.';
         err.classList.remove('hidden');
-        (f.elements.namedItem(missing[0]) as HTMLElement).focus();
+        // Date and time live in hidden inputs; their picker buttons take the focus instead.
+        const first = f.elements.namedItem(missing[0]) as HTMLElement;
+        (first.closest('[data-picker]')?.querySelector<HTMLElement>('.pk-trigger') ?? first).focus();
         return false;
       }
       err.classList.add('hidden');
@@ -302,6 +305,8 @@ const data = {
 
 <style>
   .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+  /* A fieldset never shrinks below its widest content by default, so a long route name pushed the select off a phone screen. */
+  fieldset { min-width: 0; }
   .field[hidden] { display: none; }
   .field { display: flex; flex-direction: column; gap: 0.375rem; font-weight: 600; color: var(--color-ink); font-size: 0.95rem; }
   .field input, .field select {
