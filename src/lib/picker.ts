@@ -33,20 +33,37 @@ export function picker(root: HTMLElement, hooks: PickerHooks) {
     if (pop.getBoundingClientRect().right > document.documentElement.clientWidth - 8) pop.classList.add('pk-end');
   }
 
+  /**
+   * Brings the open panel into view. When the field and its panel are too
+   * tall for the screen together (a short phone), the field goes to the top,
+   * just under the header, so the value stays in sight while the panel runs
+   * on below, rather than being pushed up behind the header.
+   */
+  function reveal() {
+    const css = getComputedStyle(pop);
+    const room = innerHeight - parseFloat(css.scrollMarginTop) - parseFloat(css.scrollMarginBottom);
+    if (pop.getBoundingClientRect().bottom - root.getBoundingClientRect().top > room) root.scrollIntoView({ block: 'start' });
+    else pop.scrollIntoView({ block: 'nearest' });
+  }
+
   function open() {
     const target = hooks.prepare();
     pop.hidden = false;
     btn.setAttribute('aria-expanded', 'true');
     place();
     target?.focus({ preventScroll: true });
-    pop.scrollIntoView({ block: 'nearest' });
+    reveal();
   }
 
   function close(refocus: boolean) {
     if (pop.hidden) return;
     pop.hidden = true;
     btn.setAttribute('aria-expanded', 'false');
-    if (refocus) btn.focus();
+    if (refocus) {
+      btn.focus({ preventScroll: true });
+      // The panel may have scrolled the field up behind the sticky header; show the value just chosen.
+      root.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   /** Stores a value and tells the form; `done` also closes the panel. */

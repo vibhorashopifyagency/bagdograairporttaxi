@@ -2,7 +2,7 @@
  * Shared by DatePicker.astro and TimePicker.astro: the closed field and the
  * panel that floats below it. Each component adds the styles for its own panel.
  */
-.pk { position: relative; display: flex; flex-direction: column; gap: 0.375rem; }
+.pk { position: relative; display: flex; flex-direction: column; gap: 0.375rem; scroll-margin-top: 6rem; }
 .pk-label { font-weight: 600; font-size: 0.95rem; color: var(--color-ink); }
 
 /* The closed field: the same height, border and radius as the other inputs. */
