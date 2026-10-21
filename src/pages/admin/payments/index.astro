@@ -1,9 +1,10 @@
 ---
 /**
  * Money in: what was collected this month and this week, what is still to
- * collect on confirmed trips, every payment recorded, and the office QR code
- * picture with its UPI details (uploaded and changed by the admin only).
- * Payments themselves are recorded on each booking's page.
+ * collect on confirmed trips, what drivers hold from the balances they
+ * collected, every payment recorded, and the office QR code picture with its
+ * UPI details (uploaded and changed by the admin only). Payments themselves
+ * are recorded on each booking's page, handovers on each driver's page.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import ListFilters from '../../../components/admin/ListFilters.astro';
@@ -11,6 +12,7 @@ import Pager from '../../../components/admin/Pager.astro';
 import { audit, isAdmin } from '../../../server/admin';
 import { TONE, addDays, balancesToCollect, inr, inrShort, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
+import { accounts, listDrivers } from '../../../server/drivers';
 import { cursorField, dateFilter, listHref, pageFrom, pageQuery, pageResult, rowsFor, withParams, type SortKey } from '../../../server/paging';
 import { METHOD_LABEL, getUpi, qrSrc, readUpiText, removeUpi, setUpi } from '../../../server/payments';
 import { ipHash } from '../../../server/security';
@@ -58,11 +60,13 @@ const size = rowsFor(Astro.url, Astro.cookies);
 const key: SortKey = { cols: [sql`${p.createdAt}`, sql`${p.id}`], types: ['timestamptz', 'uuid'], order: 'desc' };
 const page = pageFrom(Astro.url, key);
 const pq = pageQuery(key, page, size);
-const [[month], [week], balances, upi, [rangeSum], fetched] = await Promise.all([
+const [[month], [week], balances, upi, driverAcc, drivers, [rangeSum], fetched] = await Promise.all([
   sumSince(monthStart),
   sumSince(weekStart),
   balancesToCollect(),
   getUpi(),
+  accounts(),
+  listDrivers(),
   // What the chosen days add up to: payments less refunds and reversals.
   range.from || range.to
     ? db.select({ sum: sql<string>`coalesce(sum(${p.amount}), 0)`, n: sql<number>`(count(*) filter (where ${p.kind} = 'payment'))::int` }).from(p).where(inRange)
@@ -74,6 +78,7 @@ const [[month], [week], balances, upi, [rangeSum], fetched] = await Promise.all(
       name: b.customerName,
       trip: b.tripName,
       by: schema.user.name,
+      driver: schema.drivers.name,
       // Asked of the database, so a reversal on another page still strikes its payment through.
       reversed: sql<boolean>`exists (select 1 from ${p} r where r.booking_id = ${p.bookingId} and r.reverses_payment_id = ${p.id})`,
       cursor: cursorField(key),
@@ -81,6 +86,7 @@ const [[month], [week], balances, upi, [rangeSum], fetched] = await Promise.all(
     .from(p)
     .innerJoin(b, eq(p.bookingId, b.id))
     .leftJoin(schema.user, eq(p.createdBy, schema.user.id))
+    .leftJoin(schema.drivers, eq(p.driverId, schema.drivers.id))
     .where(and(inRange, pq.where))
     .orderBy(...pq.orderBy)
     .limit(pq.limit),
@@ -95,10 +101,17 @@ if (upi && !upiError) upiDraft = upi;
 const dateFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 const monthName = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', month: 'long' }).format(new Date(`${today}T00:00:00Z`));
 const inQr = upi?.qr ? readUpiText(upi.qr.text) : null;
+/** Drivers holding balances they collected from guests, most first. */
+const holding = drivers
+  .map((d) => ({ d, held: driverAcc.get(d.id)?.holds ?? 0 }))
+  .filter((x) => x.held > 0)
+  .sort((a, z) => z.held - a.held);
+const held = holding.reduce((s, x) => s + x.held, 0);
 const stats = [
   { label: `Collected in ${monthName}`, value: inrShort(Number(month?.sum ?? 0)), sub: `${Number(month?.n ?? 0)} payments` },
   { label: 'Collected this week', value: inrShort(Number(week?.sum ?? 0)), sub: `${Number(week?.n ?? 0)} payments since Monday` },
-  { label: 'Still to collect', value: inrShort(balances.total), sub: 'on confirmed trips, 30 days back and 14 ahead' },
+  { label: 'Still to collect', value: inrShort(balances.total), sub: balances.byDriver ? `${inrShort(balances.byDriver)} of it by drivers after the trip` : 'on confirmed trips, 30 days back and 14 ahead' },
+  { label: 'With drivers', value: inrShort(held), sub: held ? 'collected from guests, to hand over' : 'nothing waiting to be handed over' },
 ];
 ---
 
@@ -107,12 +120,12 @@ const stats = [
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Payments</h1>
-        <p class="m-0 mt-1 text-sm text-muted">UPI and cash, recorded by hand on each booking. Nothing is ever deleted: mistakes are reversed by the admin.</p>
+        <p class="m-0 mt-1 text-sm text-muted">The office takes the advance by UPI or cash; the driver collects the balance after the trip and hands it over. All recorded by hand on each booking, and nothing is ever deleted: mistakes are reversed by the admin.</p>
       </div>
       {admin && <a href={csvHref} class="btn-ghost min-h-11 px-4 py-2 text-sm" download>{range.from || range.to ? 'Download these dates (CSV)' : 'Download for accounts (CSV)'}</a>}
     </div>
 
-    <section class="grid gap-3 sm:grid-cols-3" aria-label="Totals">
+    <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Totals">
       {stats.map((x, i) => (
         <div class:list={['flex flex-col gap-1 rounded-[20px] p-5', i === 0 ? 'bg-ink text-white' : 'a-card']}>
           <span class:list={['text-sm', i === 0 ? 'text-[#c9ced8]' : 'text-muted']}>{x.label}</span>
@@ -162,7 +175,14 @@ const stats = [
                         {(r.pay.upiRef || r.pay.note) && <span class="mt-1 block text-sm text-muted">{[r.pay.upiRef && `ref ${r.pay.upiRef}`, r.pay.note].filter(Boolean).join(' · ')}</span>}
                       </td>
                       <td class:list={['whitespace-nowrap font-bold', off && 'text-muted line-through', r.pay.amount < 0 && 'text-[#b42318]']} data-label="Amount">{r.pay.amount < 0 ? `−${inr(-r.pay.amount)}` : inr(r.pay.amount)}</td>
-                      <td class="text-sm text-body" data-label="Recorded by">{r.by ?? '—'}{r.pay.receivedBy && r.pay.receivedBy !== r.by ? <span class="block text-muted">received by {r.pay.receivedBy}</span> : null}</td>
+                      <td class="text-sm text-body" data-label="Recorded by">
+                        {r.by ?? '—'}
+                        {r.pay.driverId ? (
+                          <span class="block text-muted">collected by <a href={`/admin/drivers/${r.pay.driverId}/`} class="text-muted">{r.driver ?? r.pay.receivedBy ?? 'the driver'}</a> (driver)</span>
+                        ) : r.pay.receivedBy && r.pay.receivedBy !== r.by ? (
+                          <span class="block text-muted">received by {r.pay.receivedBy}</span>
+                        ) : null}
+                      </td>
                     </tr>
                   );
                 })}
@@ -227,6 +247,23 @@ const stats = [
           )}
         </section>
 
+        <section class="a-card flex flex-col p-5" aria-labelledby="held-h">
+          <div class="flex items-center justify-between gap-3 pb-1.5">
+            <h2 id="held-h" class="m-0 font-display text-xl font-bold">With drivers</h2>
+            <span class="font-bold">{inr(held)}</span>
+          </div>
+          {holding.length === 0 ? (
+            <p class="m-0 border-t border-[#f0f1f3] pt-3 text-sm text-body">Every balance drivers collected has been handed over. Nice and tidy.</p>
+          ) : (
+            holding.map(({ d, held }) => (
+              <a href={`/admin/drivers/${d.id}/`} class="flex items-center gap-3 border-t border-[#f0f1f3] py-2.5 text-ink no-underline hover:bg-mist">
+                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-bold text-lime">{d.name[0]!.toUpperCase()}</span>
+                <span class="flex min-w-0 flex-1 flex-col"><span class="font-semibold">{d.name}</span><span class="text-[13px] text-muted">collected from guests, to hand over</span></span>
+                <span class="font-bold">{inr(held)}</span>
+              </a>
+            ))
+          )}
+        </section>
         <section class="a-card flex flex-col p-5" aria-labelledby="due-h">
           <div class="flex items-center justify-between gap-3 pb-1.5">
             <h2 id="due-h" class="m-0 font-display text-xl font-bold">Balances to collect</h2>
@@ -236,7 +273,7 @@ const stats = [
             <p class="m-0 border-t border-[#f0f1f3] pt-3 text-sm text-body">Nothing to collect. Every confirmed trip is paid up.</p>
           ) : (
             balances.items.map((x) => (
-              <a href={`/admin/bookings/${x.ref}/?do=qr`} class="flex items-center gap-3 border-t border-[#f0f1f3] py-2.5 text-ink no-underline hover:bg-mist">
+              <a href={`/admin/bookings/${x.ref}/${x.record ? '?do=payment' : x.driver ? '' : '?do=qr'}`} class="flex items-center gap-3 border-t border-[#f0f1f3] py-2.5 text-ink no-underline hover:bg-mist">
                 <span class="flex min-w-0 flex-1 flex-col"><span class="font-semibold">{x.name}</span><span class="text-[13px] text-muted">{x.what}</span></span>
                 <span class="font-bold">{inr(x.amt)}</span>
               </a>

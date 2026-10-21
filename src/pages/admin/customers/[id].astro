@@ -74,7 +74,7 @@ const [[totals], bookings] = await Promise.all([
 const pays = await paymentsByBooking(bookings.map((x) => x.id));
 await audit({ actorId: user.id, action: 'view_customer', entity: 'customer', entityId: customer.id, detail: { bookings: totals?.bookings ?? 0 }, ipHash: ipHash(Astro.request) });
 
-const sums = bookings.map((x) => ({ x, pay: summarise(x.fareTotal, advanceOf(x.fareTotal), pays.get(x.id) ?? []) }));
+const sums = bookings.map((x) => ({ x, pay: summarise(x.fareTotal, advanceOf(x.fareTotal), pays.get(x.id) ?? [], x.kind) }));
 const count = totals?.bookings ?? 0;
 const pages = Math.max(1, Math.ceil(count / size));
 const pageHref = (n: number) => `/admin/customers/${customer.id}/${n > 1 ? `?page=${n}` : ''}`;

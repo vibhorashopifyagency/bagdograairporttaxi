@@ -164,14 +164,22 @@ A "Send itinerary" button on every booking, and in the quick actions, opens a po
 
 ## Phase 3d: drivers and what we pay them
 
-Asked for by the owner on 21 October 2026. The office pays its drivers for each trip: a share of the agreed fare or a fixed amount, set per driver. Drivers never collect money from customers; the admin or the team does.
+Asked for by the owner on 21 October 2026. The office pays its drivers for each trip: a share of the agreed fare or a fixed amount, set per driver.
+
+How customers pay (owner, 21 October 2026, evening): the office takes the advance; after the trip the driver collects the rest from the guest and hands it to the office. This replaced the earlier "drivers never collect money".
 
 - [x] A Drivers page to add, change and remove drivers: name, phone, car number, usual car, pay and notes. *(/admin/drivers/. A driver with trips or payouts is switched off rather than deleted, so the accounts stay complete, and can be put back.)*
 - [x] Pick the driver from the list on a booking (Edit trip and driver), with "Add a new driver" in the same list. *(Drivers typed on bookings before the list existed were turned into list entries by the migration, with their pay not set.)*
 - [x] Pick or take off the driver in the itinerary popup; it changes the booking too.
 - [x] What each trip earns its driver, worked out from their pay when they are put on the booking and shown on it. Only the admin sets a driver's pay or changes a trip's amount.
 - [x] A running account per driver: each completed trip adds what it earned, each payout (UPI, cash or bank transfer) takes it off, and the balance owed is always shown. Payouts are recorded by the admin, or by staff with "can record payments"; only the admin reverses one, and both entries stay.
-- [ ] Bring the public website in line with "drivers never collect money": the FAQ, the Terms, the booking page summary ("Pay driver after trip") and llms.txt still tell customers to pay the balance to the driver. *(Waiting for the owner to say when and how customers pay the balance.)*
+- [x] Record the balance as collected by the driver: "Who received it" on Record payment (the office, or the booking's driver), filled in with the driver, the balance and cash from the pickup day on, with a "Raju collected ₹2,800" button on the booking. *(Migration 0004 adds payments.driver_id. A reversal carries the driver too.)*
+- [x] Each driver's page shows the cash from guests they hold for the office, the pay owed to them, and the two netted ("We pay ₹3,440" or "They give ₹1,200"). "Received from Raju" records a handover; "Pay Raju" a payout. Kept apart because the driver hands over everything and is paid separately; netting is still possible by recording both.
+- [x] The Payments page shows "With drivers" (cash collected and not handed over, per driver), the drivers' share of "Still to collect", and who collected each payment; the CSV has a "Collected by driver" column. The drivers list shows what each holds and is owed.
+- [x] The today board and Payments page mark a balance "Raju collects after the trip", with no reminder to the guest, and once the pickup has passed ask "did Raju collect it?" with a Record button.
+- [x] The customer's trip page, the itinerary popup and its WhatsApp message say "pay your driver after the trip" once the advance is in, and the office QR code is left off (it still shows when staff send a QR link with an amount).
+- [x] The public website already says the taxi balance is paid to the driver after the trip (FAQ, Terms, booking page, llms.txt), so it stays as it is.
+- [ ] Tour packages: the package pages promise "the balance is due before the trip starts", so packages keep the balance with the office for now. If the owner says packages also pay the driver, change `driverCollectsBalance` in src/server/fares.ts and the package page wording.
 
 ## Phase 4: move content into the database
 

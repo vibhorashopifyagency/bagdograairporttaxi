@@ -1,7 +1,8 @@
 ---
 /**
- * One driver: details, pay, trips coming up, and their running account
- * (each completed trip's earnings, each payout, the balance owed). Payouts
+ * One driver: details, pay, trips coming up, and their running account: the
+ * cash from guests they hold for the office, the pay owed to them, and every
+ * trip, collection, handover and payout behind those. Payouts and handovers
  * are recorded by the admin, or by staff the admin has allowed to record
  * payments; only the admin reverses one.
  */
@@ -11,6 +12,7 @@ import Pager from '../../../components/admin/Pager.astro';
 import { isAdmin } from '../../../server/admin';
 import { STATUS_LABEL, TONE, addDays, inr, todayIST, waText } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
+import { driverCollectsBalance } from '../../../server/fares';
 import {
   accountOf,
   checkDriver,
@@ -56,7 +58,7 @@ let form: DriverForm = {
   payValue: driver.payValue === null ? '' : String(driver.payValue),
   notes: driver.notes ?? '',
 };
-let payout: PayoutForm = { amount: '', method: 'upi', paidOn: today, reference: '', note: '' };
+let payout: PayoutForm = { kind: '', amount: '', method: 'upi', paidOn: today, reference: '', note: '' };
 
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
@@ -79,13 +81,13 @@ if (Astro.request.method === 'POST') {
       return Astro.redirect(`${here}?done=saved`, 303);
     }
   } else if (intent === 'payout') {
-    payout = { amount: str('amount'), method: str('method'), paidOn: str('paidOn'), reference: str('reference'), note: str('note') };
-    if (!canPay) error = 'Only the admin, or staff the admin has allowed, can record payouts.';
+    payout = { kind: str('kind'), amount: str('amount'), method: str('method'), paidOn: str('paidOn'), reference: str('reference'), note: str('note') };
+    if (!canPay) error = 'Only the admin, or staff the admin has allowed, can record money in or out.';
     else error = (await recordPayout(driver.id, payout, ctx)) ?? '';
-    if (!error) return Astro.redirect(`${here}?done=paid`, 303);
+    if (!error) return Astro.redirect(`${here}?done=${payout.kind === 'handover' ? 'handed' : 'paid'}`, 303);
     open = canPay ? 'payout' : '';
   } else if (intent === 'reverse') {
-    error = admin ? ((await reversePayout(driver.id, str('payoutId'), str('reason'), ctx)) ?? '') : 'Only the admin can reverse a payout.';
+    error = admin ? ((await reversePayout(driver.id, str('payoutId'), str('reason'), ctx)) ?? '') : 'Only the admin can reverse an entry.';
     if (!error) return Astro.redirect(`${here}?done=reversed`, 303);
   } else if (intent === 'remove') {
     const result = await removeDriver(driver.id, ctx);
@@ -102,24 +104,31 @@ const [acc, st, upcoming] = await Promise.all([accountOf(driver.id), statement(d
 const lines = st.lines;
 const pages = Math.max(1, Math.ceil(st.total / size));
 const pageHref = (n: number) => `${here}${n > 1 ? `?page=${n}` : ''}`;
-if (!payout.amount && acc.balance > 0) payout.amount = String(acc.balance);
+// The popup opens on the cash they hold if any, otherwise on the pay owed.
+if (!payout.kind) payout.kind = acc.holds > 0 ? 'handover' : 'payout';
+const fillFor = (kind: string) => (kind === 'handover' ? Math.max(0, acc.holds) : Math.max(0, acc.owed));
+if (!payout.amount && fillFor(payout.kind)) payout.amount = String(fillFor(payout.kind));
+const first = driver.name.split(' ')[0]!;
+const owes = (n: number) => (n > 0 ? `net owed ${inr(n)}` : n < 0 ? `net held ${inr(-n)}` : 'square');
+const hasHistory = acc.trips + acc.upcoming > 0 || acc.paid > 0 || acc.collected !== 0 || acc.handedOver > 0;
 
 const done = Astro.url.searchParams.get('done') ?? '';
 const doneText: Record<string, string> = {
   added: `${driver.name} is on the list. Pick them on any booking or itinerary.`,
   saved: 'Saved.',
   paid: 'Payout recorded.',
-  reversed: 'Payout reversed. Both entries stay on the record.',
+  handed: 'Handover recorded. Thank them for bringing it in.',
+  reversed: 'Entry reversed. Both entries stay on the record.',
   off: `${driver.name} is switched off: no longer offered on bookings. Their trips and payouts stay on the accounts.`,
   restored: `${driver.name} is back on the list.`,
 };
 const dayFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
 const dateFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 const stats = [
-  { k: acc.balance < 0 ? 'Paid ahead' : 'Owed now', v: inr(Math.abs(acc.balance)) },
-  { k: `Earned from ${acc.trips} ${acc.trips === 1 ? 'trip' : 'trips'}`, v: inr(acc.earned) },
-  { k: 'Paid out so far', v: inr(acc.paid) },
-  { k: `${acc.upcoming} ${acc.upcoming === 1 ? 'trip' : 'trips'} coming up`, v: inr(acc.upcomingPay) },
+  { k: `${first} holds for the office`, v: inr(Math.max(0, acc.holds)), sub: `${inr(acc.collected)} collected from guests · ${inr(acc.handedOver)} handed over` },
+  { k: acc.owed < 0 ? `${first} was paid ahead` : `Owed to ${first}`, v: inr(Math.abs(acc.owed)), sub: `${inr(acc.earned)} earned from ${acc.trips} ${acc.trips === 1 ? 'trip' : 'trips'} · ${inr(acc.paid)} paid` },
+  { k: 'To settle both at once', v: acc.balance > 0 ? `We pay ${inr(acc.balance)}` : acc.balance < 0 ? `They give ${inr(-acc.balance)}` : 'All square', sub: 'pay owed, less cash they hold' },
+  { k: `${acc.upcoming} ${acc.upcoming === 1 ? 'trip' : 'trips'} coming up`, v: inr(acc.upcomingPay), sub: 'their pay for those trips' },
 ];
 const closeIcon = '<path d="M18 6 6 18M6 6l12 12"/>';
 const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${closeIcon}</svg>`;
@@ -146,7 +155,12 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
         {driver.phone && <a href={`tel:+${driver.phone}`} class="btn-ghost min-h-11 px-4 py-2 text-sm">Call</a>}
         {driver.phone && <a href={waText(driver.phone, `Namaste ${driver.name.split(' ')[0]}, `)} target="_blank" rel="noopener" class="btn-ghost min-h-11 px-4 py-2 text-sm">WhatsApp</a>}
         <button type="button" data-open="dlg-edit" class="btn-ghost min-h-11 px-4 py-2 text-sm">Edit</button>
-        {canPay && <button type="button" data-open="dlg-payout" class="btn-book min-h-11 px-4 py-2 text-sm">Record payout</button>}
+        {canPay && (
+          <>
+            <button type="button" data-open="dlg-payout" data-kind="handover" class:list={[acc.holds > 0 ? 'btn-book' : 'btn-ghost', 'min-h-11 px-4 py-2 text-sm']}>Received from {first}</button>
+            <button type="button" data-open="dlg-payout" data-kind="payout" class:list={[acc.holds > 0 ? 'btn-ghost' : 'btn-book', 'min-h-11 px-4 py-2 text-sm']}>Pay {first}</button>
+          </>
+        )}
       </div>
     </div>
 
@@ -159,8 +173,9 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
     <dl class="m-0 grid grid-cols-2 gap-3 lg:grid-cols-4">
       {stats.map((s, i) => (
         <div class:list={['flex flex-col-reverse gap-0.5 rounded-[20px] p-4 lg:p-5', i === 0 ? 'bg-ink text-white' : 'a-card']}>
+          {s.sub && <span class:list={['text-[13px]', i === 0 ? 'text-[#c9ced8]' : 'text-muted']}>{s.sub}</span>}
           <dt class:list={['text-sm', i === 0 ? 'text-[#c9ced8]' : 'text-muted']}>{s.k}</dt>
-          <dd class:list={['m-0 font-display text-[26px] leading-tight font-bold', i === 0 && 'text-lime']}>{s.v}</dd>
+          <dd class:list={['m-0 font-display text-[26px] leading-tight font-bold', i === 0 && (acc.holds > 0 ? 'text-amber' : 'text-lime')]}>{s.v}</dd>
         </div>
       ))}
     </dl>
@@ -169,29 +184,29 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
       <section class="a-card min-w-0 self-start overflow-hidden" aria-labelledby="acc-h">
         <div class="flex items-center justify-between gap-3 px-5 pt-5 pb-2">
           <h2 id="acc-h" class="m-0 font-display text-xl font-bold">Account</h2>
-          <span class="text-sm text-muted">Trips count when marked completed</span>
+          <span class="text-right text-sm text-muted">Running total: pay owed less cash held</span>
         </div>
         {lines.length === 0 ? (
           page > 1 ? (
             <p class="m-0 px-5 pb-5 text-body">Nothing on this page. <a href={here}>Back to the latest entries</a>.</p>
           ) : (
-            <p class="m-0 px-5 pb-5 text-body">Nothing yet. Each completed trip adds what it earned; each payout takes it off.</p>
+            <p class="m-0 px-5 pb-5 text-body">Nothing yet. Completed trips add what they earned and handovers add what they brought in; balances collected from guests and payouts take it off.</p>
           )
         ) : (
           <ul class="m-0 list-none p-0">
             {lines.map((l) => (
               <li class="flex items-start gap-3 border-t border-[#f0f1f3] px-5 py-3">
-                <span class="w-[74px] shrink-0 text-sm text-muted">{dateFmt.format(new Date(`${l.day}T00:00:00Z`)).replace(/ \d{4}$/, '')}</span>
+                <span class="w-[74px] shrink-0 text-sm text-muted">{l.day.startsWith(today.slice(0, 4)) ? dateFmt.format(new Date(`${l.day}T00:00:00Z`)).replace(/ \d{4}$/, '') : dateFmt.format(new Date(`${l.day}T00:00:00Z`))}</span>
                 <span class="flex min-w-0 flex-1 flex-col">
                   {l.ref ? <a href={`/admin/bookings/${l.ref}/`} class="font-semibold text-ink no-underline hover:underline">{l.text}</a> : <span class:list={['font-semibold', l.reversed && 'text-muted line-through']}>{l.text}</span>}
                   {l.sub && <span class="text-[13px] text-muted">{l.sub}</span>}
                 </span>
                 <span class="flex shrink-0 flex-col items-end">
                   <span class:list={['font-bold', l.amount > 0 ? 'text-[#3f6200]' : 'text-ink', l.reversed && 'text-muted line-through']}>{l.amount >= 0 ? `+${inr(l.amount)}` : `−${inr(-l.amount)}`}</span>
-                  <span class="text-[13px] text-muted">owed {inr(l.balance)}</span>
+                  <span class="text-[13px] text-muted">{owes(l.balance)}</span>
                 </span>
-                {admin && l.kind === 'payout' && !l.reversed && (
-                  <button type="button" data-open="dlg-reverse" data-payout={l.id} data-label={`payout of ${inr(-l.amount)}`} class="min-h-9 shrink-0 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-body hover:border-ink">Reverse</button>
+                {admin && (l.kind === 'payout' || l.kind === 'handover') && !l.reversed && (
+                  <button type="button" data-open="dlg-reverse" data-payout={l.id} data-label={`${l.kind} of ${inr(Math.abs(l.amount))}`} class="min-h-9 shrink-0 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-body hover:border-ink">Reverse</button>
                 )}
               </li>
             ))}
@@ -217,6 +232,7 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
                 <span class="flex min-w-0 flex-1 flex-col">
                   <span class="truncate font-semibold">{t.trip.split(' · ')[0]!.replace(' (IXB)', '')}</span>
                   <span class="text-[13px] text-muted">{dayFmt.format(new Date(`${t.day}T00:00:00Z`))}, {t.time} · {t.name ?? t.ref}{t.day < today ? ' · not marked completed' : ''}</span>
+                  {driverCollectsBalance(t.kind) && t.due > 0 && <span class="text-[13px] font-semibold text-[#8a5300]">Collects {inr(t.due)} from the guest</span>}
                 </span>
                 <span class="flex flex-col items-end">
                   <span class="font-bold">{t.pay === null ? '—' : inr(t.pay)}</span>
@@ -238,13 +254,13 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
           <h2 id="rm-h" class="m-0 font-display text-xl font-bold">{driver.active ? 'Remove driver' : 'Switched off'}</h2>
           {driver.active ? (
             <>
-              <p class="m-0 text-sm text-body">{acc.trips + acc.upcoming > 0 || acc.paid ? 'They have trips or payouts on record, so they are switched off rather than deleted: no longer offered on bookings, with their account kept.' : 'They have no trips or payouts yet, so they are deleted for good.'}</p>
+              <p class="m-0 text-sm text-body">{hasHistory ? 'They have trips or money on record, so they are switched off rather than deleted: no longer offered on bookings, with their account kept.' : 'They have no trips or money on record yet, so they are deleted for good.'}</p>
               <button type="button" data-open="dlg-remove" class="btn-ghost self-start text-[#b42318] hover:border-[#b42318] hover:text-[#b42318]">Remove {driver.name.split(' ')[0]}</button>
             </>
           ) : (
             <form method="post" class="flex flex-col gap-3">
               <input type="hidden" name="intent" value="restore" />
-              <p class="m-0 text-sm text-body">Not offered on bookings. Their account stays, and payouts can still be recorded.</p>
+              <p class="m-0 text-sm text-body">Not offered on bookings. Their account stays, and payouts and handovers can still be recorded.</p>
               <button type="submit" class="btn-book self-start">Put back on the list</button>
             </form>
           )}
@@ -279,20 +295,26 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
 
   {canPay && (
     <dialog id="dlg-payout" class="a-dialog a-dialog-sm" aria-labelledby="dlg-payout-h" data-autoopen={open === 'payout' ? '' : undefined}>
-      <form method="post" class="a-dialog-body">
+      <form method="post" class="a-dialog-body" data-settle data-owed={fillFor('payout') || ''} data-held={fillFor('handover') || ''}>
         <input type="hidden" name="intent" value="payout" />
         <header class="a-dialog-head">
           <div class="flex flex-col">
-            <h2 id="dlg-payout-h" class="m-0 font-display text-xl font-bold">Pay {driver.name.split(' ')[0]}</h2>
-            <span class="text-sm text-muted">{acc.balance > 0 ? `${inr(acc.balance)} owed for completed trips` : 'Nothing owed right now; this records an advance.'}</span>
+            <h2 id="dlg-payout-h" class="m-0 font-display text-xl font-bold">Money with {first}</h2>
+            <span class="text-sm text-muted">Holds {inr(Math.max(0, acc.holds))} for the office · owed {inr(Math.max(0, acc.owed))}</span>
           </div>
           <button type="button" data-close class="a-icon-btn" aria-label="Close" set:html={close} />
         </header>
         <div class="a-dialog-main flex flex-col gap-4">
           {error && open === 'payout' && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
-          <label class="a-field">Amount, ₹<input name="amount" inputmode="numeric" required value={payout.amount} autocomplete="off" /></label>
           <fieldset class="m-0 flex flex-wrap gap-2 border-0 p-0">
-            <legend class="mb-1.5 text-[0.9rem] font-semibold text-body">Paid by</legend>
+            <legend class="mb-1.5 text-[0.9rem] font-semibold text-body">Which way</legend>
+            <label class="a-pill"><input type="radio" name="kind" value="handover" checked={payout.kind === 'handover'} class="sr-only" /><span>{first} handed over</span></label>
+            <label class="a-pill"><input type="radio" name="kind" value="payout" checked={payout.kind === 'payout'} class="sr-only" /><span>We paid {first}</span></label>
+          </fieldset>
+          <p class="m-0 text-sm text-muted" data-kind-hint></p>
+          <label class="a-field">Amount, ₹<input name="amount" inputmode="numeric" required value={payout.amount} autocomplete="off" data-settle-amount /></label>
+          <fieldset class="m-0 flex flex-wrap gap-2 border-0 p-0">
+            <legend class="mb-1.5 text-[0.9rem] font-semibold text-body">How</legend>
             {[['upi', 'UPI'], ['cash', 'Cash'], ['bank', 'Bank transfer']].map(([v, l]) => (
               <label class="a-pill"><input type="radio" name="method" value={v} checked={payout.method === v} class="sr-only" /><span>{l}</span></label>
             ))}
@@ -302,11 +324,11 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
             <label class="a-field"><span>Reference <span class="font-normal text-muted">(optional)</span></span><input name="reference" maxlength="60" value={payout.reference} autocomplete="off" /></label>
           </div>
           <label class="a-field"><span>Note <span class="font-normal text-muted">(optional)</span></span><input name="note" maxlength="300" value={payout.note} placeholder="Trips up to 20 Oct" /></label>
-          <p class="m-0 text-sm text-muted">Payouts cannot be deleted. A mistake is reversed by the admin, and both entries stay on the record.</p>
+          <p class="m-0 text-sm text-muted">Entries cannot be deleted. A mistake is reversed by the admin, and both entries stay on the record.</p>
         </div>
         <footer class="a-dialog-foot">
           <button type="button" data-close class="btn-ghost">Cancel</button>
-          <button type="submit" class="btn-book">Record payout</button>
+          <button type="submit" class="btn-book" data-settle-submit>Record</button>
         </footer>
       </form>
     </dialog>
@@ -318,11 +340,11 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
         <input type="hidden" name="intent" value="reverse" />
         <input type="hidden" name="payoutId" value="" data-payout-id />
         <header class="a-dialog-head">
-          <h2 id="dlg-reverse-h" class="m-0 font-display text-xl font-bold">Reverse <span data-payout-label>this payout</span>?</h2>
+          <h2 id="dlg-reverse-h" class="m-0 font-display text-xl font-bold">Reverse <span data-payout-label>this entry</span>?</h2>
           <button type="button" data-close class="a-icon-btn" aria-label="Close" set:html={close} />
         </header>
         <div class="a-dialog-main flex flex-col gap-4">
-          <p class="m-0 text-body">For a payout entered by mistake. The original stays on the record, crossed out, with a matching reversal.</p>
+          <p class="m-0 text-body">For an entry made by mistake. The original stays on the record, crossed out, with a matching reversal.</p>
           <label class="a-field">Why<input name="reason" required maxlength="300" placeholder="Entered twice" /></label>
         </div>
         <footer class="a-dialog-foot">
@@ -341,14 +363,15 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
         <button type="button" data-close class="a-icon-btn" aria-label="Close" set:html={close} />
       </header>
       <div class="a-dialog-main flex flex-col gap-3 text-body">
-        {acc.trips + acc.upcoming > 0 || acc.paid ? (
+        {hasHistory ? (
           <>
-            <p class="m-0">{driver.name} will no longer be offered on bookings or itineraries. Their past trips, payouts and balance stay on the accounts, and you can put them back later.</p>
+            <p class="m-0">{driver.name} will no longer be offered on bookings or itineraries. Their past trips, money and balance stay on the accounts, and you can put them back later.</p>
             {acc.upcoming > 0 && <p class="m-0 font-semibold text-[#b42318]">They are still on {acc.upcoming} {acc.upcoming === 1 ? 'trip' : 'trips'} coming up. Give those trips another driver.</p>}
-            {acc.balance > 0 && <p class="m-0">They are still owed {inr(acc.balance)}.</p>}
+            {acc.owed > 0 && <p class="m-0">They are still owed {inr(acc.owed)}.</p>}
+            {acc.holds > 0 && <p class="m-0 font-semibold text-[#b42318]">They still hold {inr(acc.holds)} collected from guests. Get it handed over first.</p>}
           </>
         ) : (
-          <p class="m-0">{driver.name} has no trips or payouts, so they are deleted for good.</p>
+          <p class="m-0">{driver.name} has no trips or money on record, so they are deleted for good.</p>
         )}
       </div>
       <footer class="a-dialog-foot">
@@ -363,6 +386,34 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
   import { openDialogs, wirePayFields } from '../../../lib/admin-client';
   openDialogs();
   wirePayFields();
+  // Money with the driver: the button pressed sets which way, and the amount
+  // follows the account (what they hold, or what they are owed) until typed over.
+  const settle = document.querySelector<HTMLFormElement>('[data-settle]');
+  if (settle) {
+    const amount = settle.querySelector<HTMLInputElement>('[data-settle-amount]')!;
+    const hint = settle.querySelector<HTMLElement>('[data-kind-hint]')!;
+    const submit = settle.querySelector<HTMLButtonElement>('[data-settle-submit]')!;
+    let typed = false;
+    const sync = (fill: boolean) => {
+      const handover = settle.querySelector<HTMLInputElement>('input[name=kind]:checked')?.value === 'handover';
+      hint.textContent = handover
+        ? 'Cash or UPI the driver gave the office from the balances they collected.'
+        : 'Pay for their trips, or an advance on it.';
+      submit.textContent = handover ? 'Record handover' : 'Record payout';
+      if (fill && !typed) amount.value = (handover ? settle.dataset.held : settle.dataset.owed) ?? '';
+    };
+    amount.addEventListener('input', () => (typed = true));
+    settle.addEventListener('change', (e) => (e.target as HTMLInputElement).name === 'kind' && sync(true));
+    document.querySelectorAll<HTMLButtonElement>('[data-kind]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const radio = settle.querySelector<HTMLInputElement>(`input[name=kind][value=${b.dataset.kind}]`);
+        if (radio) radio.checked = true;
+        typed = false;
+        sync(true);
+      }),
+    );
+    sync(false);
+  }
   document.querySelectorAll<HTMLButtonElement>('[data-payout]').forEach((b) =>
     b.addEventListener('click', () => {
       const dlg = document.getElementById('dlg-reverse')!;

@@ -44,7 +44,7 @@ if (!gone) {
     data: itinerary?.published ?? itineraryFromBooking(booking),
     hasPlan: Boolean(itinerary?.published),
     place: tripPlace(booking),
-    pay: summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments),
+    pay: summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments, booking.kind),
     upi,
     amount: Number.isInteger(amount) && amount > 0 ? amount : undefined,
     photoAlt,

@@ -22,7 +22,8 @@ interface Props {
   saved: boolean;
   tripUrl: string;
   previewUrl: string;
-  pay: { total: number; paid: number; due: number; last: string };
+  /** `driverCollects`: the advance is in and the driver collects the rest after the trip. */
+  pay: { total: number; paid: number; due: number; driverCollects: boolean; last: string };
   upiReady: boolean;
   templates: Template[];
   library: LibraryPhoto[];
@@ -111,12 +112,19 @@ const field = 'a-field it-field';
             <div class="flex flex-col gap-2 rounded-2xl bg-[#f7f8fa] px-4 py-3.5 text-sm">
               <div class="flex justify-between gap-3"><span class="text-body">Total</span><span class="font-semibold">{inr(pay.total)}</span></div>
               <div class="flex justify-between gap-3"><span class="text-body">{pay.paid > 0 ? `Paid${pay.last ? ` (last: ${pay.last})` : ''}` : 'Paid so far'}</span><span class="font-semibold text-[#3f6200]">{inr(pay.paid)}</span></div>
-              <div class="flex justify-between gap-3 border-t border-[#e3e6ea] pt-2"><span class="font-bold">Balance before the trip</span><span class="font-bold">{inr(pay.due)}</span></div>
+              <div class="flex justify-between gap-3 border-t border-[#e3e6ea] pt-2"><span class="font-bold">{pay.driverCollects ? 'Balance, to the driver after the trip' : 'Balance before the trip'}</span><span class="font-bold">{inr(pay.due)}</span></div>
             </div>
             <label class="it-switch">
-              <input type="checkbox" data-k="showQr" checked={draft.showQr && upiReady} disabled={!upiReady} class="sr-only" />
+              <input type="checkbox" data-k="showQr" checked={draft.showQr && upiReady && !pay.driverCollects} disabled={!upiReady || pay.driverCollects} class="sr-only" />
               <span class="it-switch-track" aria-hidden="true"><span></span></span>
-              <span class="flex flex-col">Include our UPI QR code{!upiReady && <span class="text-xs font-normal text-muted">Upload the office QR code on the Payments page first.</span>}</span>
+              <span class="flex flex-col">
+                Include our UPI QR code
+                {!upiReady ? (
+                  <span class="text-xs font-normal text-muted">Upload the office QR code on the Payments page first.</span>
+                ) : (
+                  pay.driverCollects && <span class="text-xs font-normal text-muted">Not needed: the advance is in and the guest pays the driver the rest.</span>
+                )}
+              </span>
             </label>
           </fieldset>
           <fieldset class="it-set">
@@ -243,7 +251,7 @@ const field = 'a-field it-field';
     saved: boolean;
     tripUrl: string;
     previewUrl: string;
-    pay: { total: number; paid: number; due: number; last: string };
+    pay: { total: number; paid: number; due: number; driverCollects: boolean; last: string };
     upiReady: boolean;
     templates: Template[];
     library: { key: string; title: string; place: string; alt: string }[];
@@ -292,7 +300,7 @@ const field = 'a-field it-field';
       vehicleNumber: d.vehicleNumber,
       title: d.title,
     });
-    const fullText = () => whatsappText({ message: d.message, link: cfg.tripUrl, balance: cfg.pay.due, showQr: d.showQr, inr });
+    const fullText = () => whatsappText({ message: d.message, link: cfg.tripUrl, balance: cfg.pay.due, driverCollects: cfg.pay.driverCollects, showQr: d.showQr, inr });
     const messageBox = $<HTMLTextAreaElement>('[data-k=message]');
     if (!d.message.trim()) {
       d.message = fillTemplate(BUILT_IN_TEMPLATES[0]!.text, values());

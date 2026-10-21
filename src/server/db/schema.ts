@@ -176,9 +176,10 @@ export const customers = pgTable(
  * The office's drivers. We pay them for each completed trip: a share of the
  * agreed fare (`payType` 'percent', `payValue` 25 = 25%) or a fixed amount
  * ('fixed', `payValue` in rupees). `payValue` is null until the admin sets
- * it. Drivers never collect money from customers. A driver who has driven
- * trips is never deleted, only switched off (`active` false), so the
- * accounts stay complete.
+ * it. The office takes the advance; after the trip the driver collects the
+ * balance from the guest and hands it to the office (owner, 21 Oct 2026).
+ * A driver who has driven trips is never deleted, only switched off
+ * (`active` false), so the accounts stay complete.
  */
 export const drivers = pgTable('drivers', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -308,6 +309,9 @@ export const bookingEvents = pgTable(
  * Money received or refunded, recorded by hand (UPI QR code or cash).
  * Rows are never deleted: a mistake is undone by a 'reversal' row that
  * points at the original. A booking's paid total is the sum of `amount`.
+ * `driverId` is set when the driver collected the money from the guest
+ * (the balance, after the trip): the driver holds it until they hand it to
+ * the office, which is recorded on their account (`driver_payouts`).
  */
 export const payments = pgTable(
   'payments',
@@ -326,11 +330,15 @@ export const payments = pgTable(
     screenshotUrl: text('screenshot_url'),
     note: text('note'),
     reversesPaymentId: uuid('reverses_payment_id'),
+    /** The driver who collected it; a reversal carries the same driver, so their sum nets out. */
+    driverId: uuid('driver_id').references(() => drivers.id, { onDelete: 'restrict' }),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
   (t) => [
     index('payments_booking_idx').on(t.bookingId),
+    // A driver's account: what they collected from guests.
+    index('payments_driver_idx').on(t.driverId).where(sql`${t.driverId} is not null`),
     // The payments list pages newest first.
     index('payments_created_idx').on(t.createdAt, t.id),
     // The week and month totals, and the CSV export in date order.
@@ -391,10 +399,13 @@ export const itineraries = pgTable('itineraries', {
 });
 
 /**
- * Money paid to a driver. Like customer payments, rows are never edited or
- * deleted: a mistake is undone by a 'reversal' row (negative amount) that
- * points at the original. A driver's balance is what their completed trips
- * earned minus the sum of `amount`.
+ * Money between the office and a driver: a 'payout' is the office paying the
+ * driver (positive `amount`), a 'handover' is the driver giving the office
+ * the balances they collected from guests (negative `amount`). Like customer
+ * payments, rows are never edited or deleted: a mistake is undone by a
+ * 'reversal' row (the original's amount, negated) that points at it. A
+ * driver's balance is what their completed trips earned, less what they
+ * collected from guests, less the sum of `amount`.
  */
 export const driverPayouts = pgTable(
   'driver_payouts',
@@ -403,7 +414,7 @@ export const driverPayouts = pgTable(
     driverId: uuid('driver_id')
       .notNull()
       .references(() => drivers.id, { onDelete: 'restrict' }),
-    kind: text('kind').$type<'payout' | 'reversal'>().notNull(),
+    kind: text('kind').$type<'payout' | 'handover' | 'reversal'>().notNull(),
     amount: integer('amount').notNull(),
     method: text('method').$type<'upi' | 'cash' | 'bank'>().notNull(),
     paidOn: date('paid_on').notNull(),

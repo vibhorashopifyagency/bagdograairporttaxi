@@ -13,6 +13,12 @@
 // how --remove finds them, and every dummy mobile number starts +91 00000,
 // so a WhatsApp button on a dummy booking cannot reach a real person.
 //
+// The drivers are put on the drivers list (a driver of the same name already
+// there is reused), taxi balances are collected by the driver after the trip
+// as the owner decided, and each driver has handed over and been paid up to
+// a few days ago. Those handovers and payouts carry the note in DUMMY_NOTE,
+// and drivers the seed added carry it too, which is how --remove finds them.
+//
 // Needs Node 22.18 or later: it reads the fare tables straight from src/data.
 import { randomUUID } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -25,6 +31,7 @@ import { VEHICLES } from '../src/data/vehicles.ts';
 import * as schema from '../src/server/db/schema.ts';
 
 const MARK = 'dummy-data';
+const DUMMY_NOTE = 'Dummy entry (npm run db:seed)';
 const removeOnly = process.argv.includes('--remove');
 
 const url = process.env.DATABASE_URL;
@@ -284,7 +291,8 @@ function trip(o) {
   const paid = o.paid ?? (status === 'completed' ? (chance(0.08) ? 'balance-due' : chance(0.12) ? 'full' : 'advance+cash') : status === 'new' || status === 'contacted' ? 'none' : chance(0.75) ? 'advance' : 'none');
   if (paid === 'full') pay(fareTotal, Math.min(confirmedAt + between(5, 90) * MIN, NOW - MIN), 'upi');
   else if (paid !== 'none') pay(advance, Math.min(confirmedAt + between(5, 90) * MIN, NOW - MIN), 'upi');
-  if (paid === 'advance+cash') pay(fareTotal - advance, Math.min(stepAt.completed ?? pickup, NOW - MIN), 'cash');
+  // A taxi's balance is collected by the driver after the trip; a package's cash is the office's.
+  if (paid === 'advance+cash') pay(fareTotal - advance, Math.min(stepAt.completed ?? pickup, NOW - MIN), 'cash', kind === 'taxi' ? { byDriver: true } : {});
   if (status === 'cancelled' && payments.length) {
     const late = pickup - stepAt.cancelled < POLICY.freeCancelHours * HOUR;
     const refund = late ? Math.round((advance * POLICY.lateCancelRefundPercent) / 100) : advance;
@@ -350,7 +358,7 @@ for (let back = 42; back >= 1; back--) {
   const t = trip({ day: addDays(today, -6), time: '10:20', status: 'completed', route: 'bagdogra-airport-to-darjeeling-taxi', vehicle: 'innova', paid: 'advance', notes: null });
   const wrong = t.b.fareTotal - advanceOf(t.b.fareTotal) + 900;
   const recorded = Date.parse(`${t.b.pickupDate}T19:30:00+05:30`);
-  const base = { method: 'cash', receivedOn: t.b.pickupDate, receivedBy: t.b.driverName, upiRef: null };
+  const base = { method: 'cash', receivedOn: t.b.pickupDate, receivedBy: t.b.driverName, upiRef: null, byDriver: true };
   const first = { id: randomUUID(), kind: 'payment', amount: wrong, createdAt: recorded, note: null, ...base };
   t.payments.push(
     first,
@@ -457,6 +465,15 @@ try {
     const customerIds = [...new Set(old.map((r) => r.customerId).filter(Boolean))];
     await tx.delete(schema.payments).where(inArray(schema.payments.bookingId, ids));
     await tx.delete(schema.bookings).where(inArray(schema.bookings.id, ids)); // timelines go with them
+    // Dummy handovers and payouts, then drivers the seed added that nothing real uses.
+    await tx.delete(schema.driverPayouts).where(eq(schema.driverPayouts.note, DUMMY_NOTE));
+    const added = await tx.select({ id: schema.drivers.id }).from(schema.drivers).where(eq(schema.drivers.notes, DUMMY_NOTE));
+    for (const { id } of added) {
+      const [used] = await tx.select({ id: schema.bookings.id }).from(schema.bookings).where(eq(schema.bookings.driverId, id)).limit(1);
+      const [paidTo] = await tx.select({ id: schema.driverPayouts.id }).from(schema.driverPayouts).where(eq(schema.driverPayouts.driverId, id)).limit(1);
+      const [took] = await tx.select({ id: schema.payments.id }).from(schema.payments).where(eq(schema.payments.driverId, id)).limit(1);
+      if (!used && !paidTo && !took) await tx.delete(schema.drivers).where(eq(schema.drivers.id, id));
+    }
     // Only customers left with no bookings at all, so a real booking that
     // reused a dummy number keeps its customer.
     const stillUsed = (await tx.select({ id: schema.bookings.customerId }).from(schema.bookings).where(inArray(schema.bookings.customerId, customerIds))).map((r) => r.id);
@@ -481,6 +498,24 @@ async function insertAll(actorId) {
 
   const sortedTrips = trips.sort((a, z) => a.b.createdAt - z.b.createdAt);
   await db.transaction(async (tx) => {
+    // The drivers list: reuse a driver of the same name, add the rest with their pay set.
+    const known = await tx.select().from(schema.drivers);
+    const driverByName = new Map(known.map((d) => [d.name.trim().toLowerCase(), d]));
+    for (const [i, d] of DRIVERS.entries()) {
+      if (driverByName.has(d.name.toLowerCase())) continue;
+      const [row] = await tx
+        .insert(schema.drivers)
+        .values({ name: d.name, phone: d.phone, vehicleNumber: d.vehicleNumber, payType: i % 3 === 2 ? 'fixed' : 'percent', payValue: i % 3 === 2 ? 900 : 25, notes: DUMMY_NOTE })
+        .returning();
+      driverByName.set(d.name.toLowerCase(), row);
+    }
+    const payFor = (d, fare) => (d?.payValue == null ? null : d.payType === 'percent' ? Math.round((fare * d.payValue) / 100) : d.payValue);
+    for (const { b } of sortedTrips) {
+      const d = b.driverName ? driverByName.get(b.driverName.toLowerCase()) : null;
+      b.driverId = d?.id ?? null;
+      b.driverPay = d ? payFor(d, b.fareTotal) : null;
+    }
+
     for (const part of chunks(live)) {
       await tx.insert(schema.customers).values(
         part.map((c) => {
@@ -507,9 +542,35 @@ async function insertAll(actorId) {
     );
     for (const part of chunks(events.sort((a, z) => a.at - z.at))) await tx.insert(schema.bookingEvents).values(part);
     const payments = sortedTrips.flatMap(({ b, payments }) =>
-      payments.map((p) => ({ note: null, reversesPaymentId: null, ...p, bookingId: b.id, createdBy: actorId, createdAt: new Date(p.createdAt) })),
+      payments.map(({ byDriver, ...p }) => ({
+        note: null,
+        reversesPaymentId: null,
+        ...p,
+        driverId: byDriver ? b.driverId : null,
+        bookingId: b.id,
+        createdBy: actorId,
+        createdAt: new Date(p.createdAt),
+      })),
     );
     for (const part of chunks(payments)) await tx.insert(schema.payments).values(part);
+
+    // Each driver handed over what they collected, and was paid for their
+    // trips, up to a few days ago, so the latest trips still show on their account.
+    const cutoff = addDays(today, -4);
+    const settle = new Map();
+    for (const { b } of sortedTrips) {
+      if (!b.driverId || b.pickupDate >= cutoff) continue;
+      const s = settle.get(b.driverId) ?? { collected: 0, earned: 0 };
+      if (b.status === 'completed') s.earned += b.driverPay ?? 0;
+      settle.set(b.driverId, s);
+    }
+    for (const p of payments) if (p.driverId && p.receivedOn < cutoff && settle.has(p.driverId)) settle.get(p.driverId).collected += p.amount;
+    const settledAt = new Date(`${cutoff}T18:30:00+05:30`);
+    const moves = [...settle.entries()].flatMap(([driverId, s], i) => [
+      ...(s.collected > 0 ? [{ driverId, kind: 'handover', amount: -s.collected, method: i % 2 ? 'upi' : 'cash', paidOn: cutoff, note: DUMMY_NOTE, createdBy: actorId, createdAt: settledAt }] : []),
+      ...(s.earned > 0 ? [{ driverId, kind: 'payout', amount: s.earned, method: 'bank', paidOn: cutoff, note: DUMMY_NOTE, createdBy: actorId, createdAt: new Date(settledAt.getTime() + MIN) }] : []),
+    ]);
+    if (moves.length) await tx.insert(schema.driverPayouts).values(moves);
   });
 
   // A monthly goal the dummy month is on track for: trips so far are a

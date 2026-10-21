@@ -34,3 +34,12 @@ export function computeFare(input: FareInput): Fare | null {
 }
 
 export const advanceOf = (total: number) => Math.round((total * POLICY.advancePercent) / 100);
+
+/**
+ * Whether the driver collects the balance from the guest after the trip
+ * (the office takes the advance). True for taxi transfers, as the owner
+ * decided on 21 Oct 2026. Tour packages still promise the balance before the
+ * trip on the public package pages, so they stay with the office until the
+ * owner says otherwise; change it here and every screen follows.
+ */
+export const driverCollectsBalance = (kind: 'taxi' | 'package') => kind === 'taxi';

@@ -293,6 +293,7 @@ const actions = [
               </div>
               <span class="font-bold">{inr(x.amt)}</span>
               {x.waLink && <a href={x.waLink} target="_blank" rel="noopener" class="grid h-11 place-items-center rounded-[10px] border border-ink bg-white px-3 text-[13px] font-semibold text-ink no-underline hover:bg-ink hover:text-white" aria-label={`Remind ${x.name} on WhatsApp`}>Remind</a>}
+              {x.record && <a href={`/admin/bookings/${x.ref}/?do=payment`} class="grid h-11 place-items-center rounded-[10px] border border-ink bg-white px-3 text-[13px] font-semibold text-ink no-underline hover:bg-ink hover:text-white" aria-label={`Record what the driver collected from ${x.name}`}>Record</a>}
             </div>
           ))
         )}

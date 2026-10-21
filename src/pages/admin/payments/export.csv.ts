@@ -43,7 +43,7 @@ export const GET: APIRoute = async ({ locals, request, url }) => {
   const inRange = and(from ? gte(p.receivedOn, from) : undefined, to ? lte(p.receivedOn, to) : undefined);
   const b = schema.bookings;
   const db = getDb();
-  const head = ['Date', 'Booking', 'Customer', 'Trip', 'Pickup date', 'Agreed fare', 'Type', 'Method', 'Amount', 'Received by', 'UPI reference', 'Note', 'Recorded by', 'Recorded at', 'Entry id', 'Reverses entry'];
+  const head = ['Date', 'Booking', 'Customer', 'Trip', 'Pickup date', 'Agreed fare', 'Type', 'Method', 'Amount', 'Received by', 'Collected by driver', 'UPI reference', 'Note', 'Recorded by', 'Recorded at', 'Entry id', 'Reverses entry'];
   const encoder = new TextEncoder();
   // Where the last batch ended: received date, recorded time (as text, to keep its microseconds) and id.
   let after: [string, string, string] | null = null;
@@ -68,11 +68,13 @@ export const GET: APIRoute = async ({ locals, request, url }) => {
             pickup: b.pickupDate,
             fare: b.fareTotal,
             by: schema.user.name,
+            driver: schema.drivers.name,
             key: sql<[string, string, string]>`json_build_array(${p.receivedOn}::text, ${p.createdAt}::text, ${p.id}::text)`,
           })
           .from(p)
           .innerJoin(b, eq(p.bookingId, b.id))
           .leftJoin(schema.user, eq(p.createdBy, schema.user.id))
+          .leftJoin(schema.drivers, eq(p.driverId, schema.drivers.id))
           .where(and(inRange, after ? sql`(${p.receivedOn}, ${p.createdAt}, ${p.id}) > (${after[0]}::date, ${after[1]}::timestamptz, ${after[2]}::uuid)` : undefined))
           .orderBy(asc(p.receivedOn), asc(p.createdAt), asc(p.id))
           .limit(BATCH);
@@ -90,6 +92,7 @@ export const GET: APIRoute = async ({ locals, request, url }) => {
               r.pay.method,
               r.pay.amount,
               r.pay.receivedBy,
+              r.pay.driverId ? (r.driver ?? 'yes') : '',
               r.pay.upiRef,
               r.pay.note,
               r.by,

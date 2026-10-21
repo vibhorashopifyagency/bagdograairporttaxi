@@ -106,11 +106,17 @@ export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? '';
 /** "+91 98301 22745" from "919830122745". */
 export const phoneLabel = (d: string) => (d.length === 12 && d.startsWith('91') ? `+91 ${d.slice(2, 7)} ${d.slice(7)}` : d ? `+${d}` : '');
 
-/** The text that goes into WhatsApp: the message, the link, the money line. */
-export function whatsappText(input: { message: string; link: string; balance: number; showQr: boolean; inr: (n: number) => string }): string {
+/**
+ * The text that goes into WhatsApp: the message, the link, the money line.
+ * `driverCollects`: the advance is in and the guest pays the driver the rest
+ * after the trip, so no QR code is offered.
+ */
+export function whatsappText(input: { message: string; link: string; balance: number; driverCollects: boolean; showQr: boolean; inr: (n: number) => string }): string {
   const money =
-    input.balance > 0
-      ? `Balance before the trip: ${input.inr(input.balance)}.${input.showQr ? ' Our UPI QR code is on the page.' : ''}`
-      : '';
+    input.balance <= 0
+      ? ''
+      : input.driverCollects
+        ? `Balance of ${input.inr(input.balance)}: please pay your driver at the end of the trip, in cash or by UPI.`
+        : `Balance before the trip: ${input.inr(input.balance)}.${input.showQr ? ' Our UPI QR code is on the page.' : ''}`;
   return [input.message.trim(), input.link, [money, 'Team Bagdogra Airport Taxi'].filter(Boolean).join('\n')].filter(Boolean).join('\n\n');
 }

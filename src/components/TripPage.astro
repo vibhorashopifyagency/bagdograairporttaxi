@@ -44,7 +44,9 @@ const heading = cancelled
     : `${first ? `${first}, here` : 'Here'} are your trip details.`;
 const ask = Math.min(pay.due, amount && amount > 0 ? amount : pay.askNow);
 const qr = upi?.qr ?? null;
-const showQr = !cancelled && Boolean(qr) && pay.due > 0 && (hasPlan ? d.showQr : true);
+// Once the advance is in, the guest pays the driver the rest after the trip,
+// so the QR code only shows when staff sent a link asking for an amount.
+const showQr = !cancelled && Boolean(qr) && pay.due > 0 && (hasPlan ? d.showQr : true) && (!pay.driverCollects || Boolean(amount));
 const src = qr && showQr ? qrSrc(qr) : '';
 // On a phone the QR code cannot scan itself: the UPI ID opens their UPI app with the amount filled in.
 const link = showQr && upi?.id ? upiLink(upi, ask, ref) : '';
@@ -170,8 +172,9 @@ const tick = '<path d="M20 6 9 17l-5-5"/>';
             <div class="flex flex-col gap-1.5 text-sm">
               <div class="flex justify-between gap-3"><span class="text-[#c9ced8]">Total</span><span>{inr(pay.total)}</span></div>
               <div class="flex justify-between gap-3"><span class="text-[#c9ced8]">{pay.paid > 0 ? 'Received, thank you' : 'Received so far'}</span><span class="text-lime">{inr(Math.max(0, pay.paid))}</span></div>
-              <div class="flex justify-between gap-3 border-t border-ink-700 pt-2 font-bold"><span>{pay.due === 0 ? 'Fully paid' : 'Balance before the trip'}</span><span>{inr(pay.due)}</span></div>
+              <div class="flex justify-between gap-3 border-t border-ink-700 pt-2 font-bold"><span>{pay.due === 0 ? 'Fully paid' : pay.driverCollects ? 'Balance, pay your driver after the trip' : 'Balance before the trip'}</span><span>{inr(pay.due)}</span></div>
             </div>
+            {pay.driverCollects && !src && <p class="m-0 text-[13px] text-[#c9ced8]">Your advance is in, thank you. Pay the balance to your driver at the end of the trip, in cash or by UPI.</p>}
             {src && upi && qr && (
               <div class="flex flex-wrap items-center gap-3.5 rounded-[14px] bg-white p-3 text-ink">
                 <img src={src} width={qr.w} height={qr.h} alt={`UPI QR code of ${upi.payee}`} class="h-auto max-h-[300px] w-[180px] shrink-0 object-contain sm:max-h-[380px] sm:w-[220px]" />

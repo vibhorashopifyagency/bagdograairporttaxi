@@ -29,7 +29,7 @@ const [[itinerary], payments, upi] = await Promise.all([
   data={itinerary?.draft ?? itineraryFromBooking(booking)}
   hasPlan={true}
   place={tripPlace(booking)}
-  pay={summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments)}
+  pay={summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments, booking.kind)}
   upi={upi}
   photoAlt={photoAlt}
   preview

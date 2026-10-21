@@ -8,7 +8,7 @@ import reviewsFile from '../data/google-reviews.json';
 import { vehicleByKey } from '../data/vehicles';
 import { getDb, schema } from './db';
 import type { BookingStatus } from './db/schema';
-import { advanceOf } from './fares';
+import { advanceOf, driverCollectsBalance } from './fares';
 
 /* ---------------- Dates in India ---------------- */
 
@@ -102,10 +102,10 @@ async function paidFor(ids: string[]): Promise<Map<string, number>> {
   return new Map(rows.map((r) => [r.id, Number(r.paid)]));
 }
 
-export function payState(total: number, advance: number, paid: number): { label: string; tone: Tone } {
+export function payState(total: number, advance: number, paid: number, kind: 'taxi' | 'package'): { label: string; tone: Tone } {
   const due = total - paid;
   if (paid >= total) return { label: 'Fully paid', tone: 'lime' };
-  if (paid > 0 && paid >= advance) return { label: `Advance paid · ${inr(due)} to collect`, tone: 'lime' };
+  if (paid > 0 && paid >= advance) return { label: driverCollectsBalance(kind) ? `Advance paid · driver collects ${inr(due)}` : `Advance paid · ${inr(due)} to collect`, tone: 'lime' };
   if (paid > 0) return { label: `${inr(paid)} paid · ${inr(due)} due`, tone: 'amber' };
   return { label: 'No payment recorded', tone: 'amber' };
 }
@@ -159,7 +159,7 @@ export async function pickupsOn(day: string, now = Date.now()): Promise<Pickup[]
       travel: [r.flight, r.ref].filter(Boolean).join(' · '),
       car: hasDriver ? car : `${carName(r.vehicle)} · driver not assigned yet`,
       carMissing: !hasDriver,
-      pay: payState(r.fareTotal, advanceOf(r.fareTotal), paid.get(r.id) ?? 0),
+      pay: payState(r.fareTotal, advanceOf(r.fareTotal), paid.get(r.id) ?? 0, r.kind),
       phone: r.customerPhone,
       name: r.customerName ?? '',
     };
@@ -215,46 +215,74 @@ export async function countNew(): Promise<number> {
 
 /* ---------------- Balances to collect ---------------- */
 
-export type Balance = { id: string; ref: string; name: string; what: string; amt: number; waLink: string | null };
+/**
+ * What is still due on a booking, for a query on `bookings`. Drizzle writes
+ * column names without their table in the select list of a single-table
+ * query, so a subquery written with ${b.id} there compares each payment with
+ * itself and finds none; the tables are named in full instead.
+ */
+export const dueSql = sql<number>`(bookings.fare_total - coalesce((select sum(pp.amount) from payments pp where pp.booking_id = bookings.id), 0))::int`;
+
+/**
+ * `driver` is true when the advance is in and the rest is the driver's to
+ * collect after the trip; such a trip gets no reminder to the guest, and
+ * once the pickup has passed it is a nudge to record what the driver took.
+ */
+export type Balance = { id: string; ref: string; name: string; what: string; amt: number; waLink: string | null; driver: boolean; record: boolean };
 
 /**
  * Confirmed trips from the last 30 days and the next 14 that still have money
- * due: the first few, and the total over all of them. Both are worked out in
- * the database from each trip's own payments (an index lookup per trip), so
- * the work depends on how many trips fall in those 44 days, never on how many
- * payments were ever recorded.
+ * due: the first few, the total over all of them, and how much of that total
+ * is for drivers to collect. All are worked out in the database from each
+ * trip's own payments (an index lookup per trip), so the work depends on how
+ * many trips fall in those 44 days, never on how many payments were ever
+ * recorded.
  */
-export async function balancesToCollect(now = Date.now()): Promise<{ items: Balance[]; total: number }> {
+export async function balancesToCollect(now = Date.now()): Promise<{ items: Balance[]; total: number; byDriver: number }> {
   const b = schema.bookings;
-  const p = schema.payments;
   const today = todayIST(now);
-  const due = sql<number>`(${b.fareTotal} - coalesce((select sum(${p.amount}) from ${p} where ${p.bookingId} = ${b.id}), 0))::int`;
+  const due = dueSql;
   const inWindow = and(inArray(b.status, LIVE), gte(b.pickupDate, addDays(today, -30)), lte(b.pickupDate, addDays(today, 14)));
   const db = getDb();
-  const [rows, [sum]] = await Promise.all([
+  const [rows, [sum], forDrivers] = await Promise.all([
     db
-      .select({ id: b.id, ref: b.ref, customerName: b.customerName, customerPhone: b.customerPhone, tripName: b.tripName, pickupDate: b.pickupDate, amt: due })
+      .select({
+        id: b.id, ref: b.ref, kind: b.kind, customerName: b.customerName, customerPhone: b.customerPhone, tripName: b.tripName,
+        pickupDate: b.pickupDate, status: b.status, fare: b.fareTotal, driverName: b.driverName, amt: due,
+      })
       .from(b)
       .where(and(inWindow, sql`${due} > 0`))
       .orderBy(asc(b.pickupDate), asc(b.pickupTime))
       .limit(4),
     // greatest() leaves out trips paid in full, with one payments lookup per trip.
     db.select({ total: sql<string>`coalesce(sum(greatest(${due}, 0)), 0)` }).from(b).where(inWindow),
+    // The drivers' share needs each trip's advance, which is worked out here as it is everywhere else.
+    db.select({ fare: b.fareTotal, kind: b.kind, amt: due }).from(b).where(and(inWindow, sql`${due} > 0`, eq(b.kind, 'taxi'))),
   ]);
-  const items = rows.map(({ amt, ...r }) => ({
-    id: r.id,
-    ref: r.ref,
-    name: r.customerName ?? 'Name removed',
-    what: `${shortRoute(r.tripName)} · ${dayLabel(r.pickupDate, today)}`,
-    amt,
-    waLink: r.customerPhone
-      ? waText(
-          r.customerPhone,
-          `Namaste ${(r.customerName ?? '').split(' ')[0]}, a quick note about your trip ${r.ref} (${routeOf(r.tripName)}, ${dayLabel(r.pickupDate, today)}): the amount still to pay is ${inr(amt)}. `,
-        )
-      : null,
-  }));
-  return { items, total: Number(sum?.total ?? 0) };
+  const driverJob = (r: { fare: number; kind: 'taxi' | 'package'; amt: number }) => driverCollectsBalance(r.kind) && r.fare - r.amt >= advanceOf(r.fare);
+  const items = rows.map(({ amt, ...r }): Balance => {
+    const driver = driverJob({ ...r, amt });
+    const record = driver && (r.pickupDate < today || r.status === 'completed');
+    const day = dayLabel(r.pickupDate, today);
+    const who = r.driverName ? r.driverName.split(' ')[0] : 'the driver';
+    return {
+      id: r.id,
+      ref: r.ref,
+      name: r.customerName ?? 'Name removed',
+      what: `${shortRoute(r.tripName)} · ${day}${driver ? (record ? ` · did ${who} collect it?` : ` · ${who} collects after the trip`) : ''}`,
+      amt,
+      driver,
+      record,
+      waLink:
+        r.customerPhone && !driver
+          ? waText(
+              r.customerPhone,
+              `Namaste ${(r.customerName ?? '').split(' ')[0]}, a quick note about your trip ${r.ref} (${routeOf(r.tripName)}, ${day}): the amount still to pay is ${inr(amt)}. `,
+            )
+          : null,
+    };
+  });
+  return { items, total: Number(sum?.total ?? 0), byDriver: forDrivers.filter(driverJob).reduce((s, r) => s + r.amt, 0) };
 }
 
 /* ---------------- Wins this week ---------------- */
@@ -394,7 +422,7 @@ export function describeEvent(type: string, data: Record<string, unknown> | null
       return { text: fields.length ? `Changed the ${fields.join(', ')}` : 'Edited', tone: 'grey' };
     }
     case 'payment':
-      return { text: `${amount} received by ${method}`, tone: 'lime' };
+      return { text: data?.driver ? `${amount} collected by ${String(data.driver)} (driver), ${method === 'cash' ? 'in cash' : 'by UPI'}` : `${amount} received by ${method}`, tone: 'lime' };
     case 'refund':
       return { text: `${amount} refunded by ${method}`, tone: 'amber' };
     case 'payment_reversed':

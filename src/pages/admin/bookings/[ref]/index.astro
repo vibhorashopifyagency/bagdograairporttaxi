@@ -14,7 +14,7 @@ import { REF_RE } from '../../../../server/bookings';
 import { STATUS_LABEL, TONE, addDays, describeEvent, inr, isDay, todayIST, waText } from '../../../../server/dashboard';
 import { getDb, schema } from '../../../../server/db';
 import { BOOKING_STATUSES } from '../../../../server/db/schema';
-import { advanceOf } from '../../../../server/fares';
+import { advanceOf, driverCollectsBalance } from '../../../../server/fares';
 import {
   METHOD_LABEL,
   canRecordPayments,
@@ -51,9 +51,11 @@ const today = todayIST();
 
 let open = Astro.url.searchParams.get('do') ?? '';
 let error = '';
-const blankPayment = (): PaymentForm => ({ amount: '', method: 'upi', receivedOn: today, receivedBy: user.name, upiRef: '', note: '' });
+const blankPayment = (): PaymentForm => ({ amount: '', method: 'upi', collector: 'office', receivedOn: today, receivedBy: user.name, upiRef: '', note: '' });
 let payDraft = blankPayment();
 let refundDraft = blankPayment();
+/** Set when the payment form came back with an error, so its choices are kept. */
+let payPosted = false;
 const edit = {
   pickupDate: booking.pickupDate,
   pickupTime: booking.pickupTime,
@@ -74,18 +76,26 @@ if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
   const intent = String(f.get('intent') ?? '');
   const str = (k: string) => String(f.get(k) ?? '').trim();
-  const money = { id: booking.id, ref: booking.ref, fareTotal: booking.fareTotal, advanceShown: advanceOf(booking.fareTotal) };
+  const money = { id: booking.id, ref: booking.ref, kind: booking.kind, fareTotal: booking.fareTotal, advanceShown: advanceOf(booking.fareTotal), driverId: booking.driverId, driverName: booking.driverName };
 
   if (intent === 'payment' || intent === 'refund') {
-    const draft: PaymentForm = { amount: str('amount'), method: str('method'), receivedOn: str('receivedOn'), receivedBy: str('receivedBy'), upiRef: str('upiRef'), note: str('note') };
-    if (intent === 'payment') payDraft = draft;
+    const draft: PaymentForm = {
+      amount: str('amount'),
+      method: str('method'),
+      collector: intent === 'refund' ? 'office' : str('collector') || 'office',
+      receivedOn: str('receivedOn'),
+      receivedBy: str('receivedBy'),
+      upiRef: str('upiRef'),
+      note: str('note'),
+    };
+    if (intent === 'payment') [payDraft, payPosted] = [draft, true];
     else refundDraft = draft;
     if (intent === 'payment' && !canPay) error = 'Only the admin, or staff the admin has allowed, can record payments.';
     else if (intent === 'refund' && !admin) error = 'Only the admin can record a refund.';
     else {
       const res = intent === 'payment' ? await recordPayment(money, draft, ctx) : await recordRefund(money, draft, ctx);
       if ('error' in res) error = res.error;
-      else return Astro.redirect(`${here}?done=${intent === 'payment' ? (res.summary.state === 'full' ? 'paid-full' : 'paid') : 'refund'}`, 303);
+      else return Astro.redirect(`${here}?done=${intent === 'payment' ? (res.summary.state === 'full' ? 'paid-full' : draft.collector === 'driver' ? 'paid-driver' : 'paid') : 'refund'}`, 303);
     }
     open = intent;
   } else if (intent === 'itinerary-delete') {
@@ -181,7 +191,13 @@ const customerBookings = booking.customerId
   : 0;
 await audit({ actorId: user.id, action: 'view_booking', entity: 'booking', entityId: booking.id, detail: { ref: booking.ref }, ipHash: ctx.ipHash });
 
-const pay = summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments);
+const pay = summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments, booking.kind);
+// After the advance, the money still due is the driver's to collect after the
+// trip: from the pickup day on, the form starts there. Before it, a guest
+// paying early pays the office.
+const driverFirst = booking.driverName ? firstName(booking.driverName) : '';
+const driverToRecord = pay.driverCollects && Boolean(booking.driverId) && (booking.pickupDate <= today || booking.status === 'completed');
+if (!payPosted && driverToRecord) payDraft = { ...payDraft, collector: 'driver', method: 'cash', amount: String(pay.due), receivedOn: booking.pickupDate < today ? booking.pickupDate : today };
 const payRows = payments.slice().reverse();
 const paidPct = booking.fareTotal > 0 ? Math.min(100, Math.round((Math.max(0, pay.paid) / booking.fareTotal) * 100)) : 0;
 const car = vehicleByKey(booking.vehicle)?.name ?? booking.vehicle;
@@ -210,6 +226,7 @@ const lastPayment = payments.filter((p) => p.kind === 'payment' && !pay.reversed
 const done = Astro.url.searchParams.get('done') ?? '';
 const doneText: Record<string, string> = {
   paid: 'Payment recorded.',
+  'paid-driver': 'Recorded as collected by the driver. It is on their account until they hand it to the office.',
   refund: 'Refund recorded.',
   reversed: 'Payment reversed. Both entries stay on the record.',
   edited: 'Saved.',
@@ -262,7 +279,7 @@ const facts: [string, string][] = [
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg>
         <span class="flex flex-col">
           <strong class="font-display text-xl text-white">Fully paid. Nice work, {firstName(user.name)}.</strong>
-          <span class="text-sm text-[#e3e6ec]">{first ? `${first}'s` : 'This'} trip is settled: {inr(booking.fareTotal)} received.</span>
+          <span class="text-sm text-[#e3e6ec]">{first ? `${first}'s` : 'This'} trip is settled: {inr(booking.fareTotal)} received{pay.byDriver > 0 ? `, ${inr(pay.byDriver)} of it collected by the driver` : ''}.</span>
         </span>
       </div>
     )}
@@ -419,10 +436,18 @@ const facts: [string, string][] = [
           <div class="flex flex-col gap-2 rounded-2xl bg-[#f7f8fa] p-4 text-[15px]">
             <div class="flex justify-between gap-3"><span class="text-body">Agreed fare</span><span class="font-semibold">{inr(booking.fareTotal)}</span></div>
             <div class="flex justify-between gap-3"><span class="text-body">Received</span><span class="font-semibold text-[#3f6200]">{inr(Math.max(0, pay.paid))}</span></div>
+            {pay.byDriver > 0 && <div class="flex justify-between gap-3 text-sm"><span class="text-muted">of which the driver collected</span><span class="text-body">{inr(pay.byDriver)}</span></div>}
             {pay.refunded > 0 && <div class="flex justify-between gap-3"><span class="text-body">Refunded</span><span class="font-semibold">{inr(pay.refunded)}</span></div>}
             <div class="h-2 overflow-hidden rounded-full bg-[#e3e6ea]" aria-hidden="true"><div class="h-full rounded-full bg-lime" style={`width:${paidPct}%`}></div></div>
             <div class="flex justify-between gap-3 border-t border-[#e3e6ea] pt-2"><span class="font-bold">Balance</span><span class="font-bold">{inr(pay.due)}</span></div>
-            {pay.due > 0 && <span class="text-sm text-muted">{pay.askLabel} to ask for now: <strong class="text-ink">{inr(pay.askNow)}</strong></span>}
+            {pay.driverCollects ? (
+              <span class="text-sm text-muted">
+                The advance is in. {booking.driverName ? <strong class="text-ink">{booking.driverName}</strong> : 'The driver'} collects <strong class="text-ink">{inr(pay.due)}</strong> from the guest after the trip, then hands it to the office.
+                {!booking.driverId && ' Assign a driver from the list so it counts on their account.'}
+              </span>
+            ) : (
+              pay.due > 0 && <span class="text-sm text-muted">{pay.askLabel} to ask for now: <strong class="text-ink">{inr(pay.askNow)}</strong>{driverCollectsBalance(booking.kind) && ', by the office QR code. The driver collects the rest after the trip.'}</span>
+            )}
           </div>
 
           {payRows.length > 0 && (
@@ -437,7 +462,11 @@ const facts: [string, string][] = [
                       </span>
                       <span class="text-[13px] text-muted">
                         {dateFmt.format(new Date(`${p.receivedOn}T00:00:00Z`))}
-                        {p.receivedBy && ` · ${p.kind === 'refund' ? 'paid by' : 'received by'} ${p.receivedBy}`}
+                        {p.driverId ? (
+                          <> · collected by <a href={`/admin/drivers/${p.driverId}/`} class="text-muted">{p.receivedBy ?? 'the driver'}</a> (driver)</>
+                        ) : (
+                          p.receivedBy && ` · ${p.kind === 'refund' ? 'paid by' : 'received by'} ${p.receivedBy}`
+                        )}
                         {p.upiRef && ` · ref ${p.upiRef}`}
                       </span>
                       {p.note && <span class="text-[13px] text-body">{p.note}</span>}
@@ -456,7 +485,9 @@ const facts: [string, string][] = [
             {pay.due === 0 && booking.fareTotal > 0 ? (
               <p class="m-0 flex-1 self-center text-sm font-semibold text-[#3f6200]">Paid in full. Nothing more to collect.</p>
             ) : canPay ? (
-              <button type="button" data-open="dlg-payment" class="btn-book min-h-11 flex-1 px-4 py-2 text-sm">Record payment</button>
+              <button type="button" data-open="dlg-payment" class="btn-book min-h-11 flex-1 px-4 py-2 text-sm">
+                {driverToRecord ? `${driverFirst} collected ${inr(pay.due)}` : 'Record payment'}
+              </button>
             ) : (
               <p class="m-0 text-sm text-muted">Recording payments is switched off for your login. The admin can turn it on in Team.</p>
             )}
@@ -546,6 +577,17 @@ const facts: [string, string][] = [
             </div>
           )}
           {x.intent === 'refund' && <p class="m-0 text-sm text-muted">{inr(pay.paid)} received so far. The cancellation policy sets how much goes back.</p>}
+          {x.intent === 'payment' && (
+            <fieldset class="m-0 flex flex-wrap gap-2 border-0 p-0">
+              <legend class="mb-1.5 text-[0.9rem] font-semibold text-body">Who received it</legend>
+              <label class="a-pill"><input type="radio" name="collector" value="office" checked={x.d.collector !== 'driver'} class="sr-only" /><span>The office</span></label>
+              {booking.driverId ? (
+                <label class="a-pill"><input type="radio" name="collector" value="driver" checked={x.d.collector === 'driver'} class="sr-only" /><span>{booking.driverName} (driver)</span></label>
+              ) : (
+                <span class="self-center text-sm text-muted">Assign a driver from the list to record what they collect.</span>
+              )}
+            </fieldset>
+          )}
           <fieldset class="m-0 flex gap-2 border-0 p-0">
             <legend class="mb-1.5 text-[0.9rem] font-semibold text-body">Method</legend>
             {(['upi', 'cash'] as const).map((m) => (
@@ -557,8 +599,11 @@ const facts: [string, string][] = [
           </fieldset>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="a-field">Date<input name="receivedOn" type="date" required value={x.d.receivedOn} max={addDays(today, 1)} /></label>
-            <label class="a-field">{x.intent === 'refund' ? 'Paid back by' : 'Received by'}<input name="receivedBy" maxlength="80" value={x.d.receivedBy} /></label>
+            <label class="a-field" data-office-only>{x.intent === 'refund' ? 'Paid back by' : 'Received by'}<input name="receivedBy" maxlength="80" value={x.d.receivedBy} /></label>
           </div>
+          {x.intent === 'payment' && booking.driverId && (
+            <p class="m-0 rounded-xl bg-mist px-3.5 py-2.5 text-sm text-body" data-driver-only>It goes on {driverFirst}’s account as money they hold, until they hand it to the office (record that on <a href={`/admin/drivers/${booking.driverId}/`} target="_blank" rel="noopener">their page</a>).</p>
+          )}
           <label class="a-field" data-upi-only><span>UPI reference <span class="font-normal text-muted">(the 12-digit number on the screenshot, optional)</span></span><input name="upiRef" maxlength="60" value={x.d.upiRef} inputmode="numeric" autocomplete="off" /></label>
           <label class="a-field"><span>Note <span class="font-normal text-muted">(optional)</span></span><input name="note" maxlength="300" value={x.d.note} /></label>
           {x.intent === 'payment' && <p class="m-0 text-sm text-muted">Payments cannot be deleted. A mistake is reversed by the admin, and both entries stay on the record.</p>}
@@ -673,7 +718,7 @@ const facts: [string, string][] = [
       saved={Boolean(itinerary)}
       tripUrl={tripUrl}
       previewUrl={`${here}trip/`}
-      pay={{ total: booking.fareTotal, paid: Math.max(0, pay.paid), due: pay.due, last: lastPayment ? `${METHOD_LABEL[lastPayment.method]}, ${dateFmt.format(new Date(`${lastPayment.receivedOn}T00:00:00Z`)).replace(/ \d{4}$/, '')}` : '' }}
+      pay={{ total: booking.fareTotal, paid: Math.max(0, pay.paid), due: pay.due, driverCollects: pay.driverCollects, last: lastPayment ? `${METHOD_LABEL[lastPayment.method]}, ${dateFmt.format(new Date(`${lastPayment.receivedOn}T00:00:00Z`)).replace(/ \d{4}$/, '')}` : '' }}
       upiReady={Boolean(upi?.qr)}
       templates={templates}
       library={LIBRARY}
@@ -709,13 +754,19 @@ const facts: [string, string][] = [
     }
   });
 
-  // Payment popups: quick amounts, and the UPI reference only for UPI.
+  // Payment popups: quick amounts, the UPI reference only for UPI, and
+  // "Received by" only when the office took it (the driver's name is used otherwise).
   document.querySelectorAll<HTMLFormElement>('[data-pay-form]').forEach((form) => {
     const amount = form.querySelector<HTMLInputElement>('[data-amount]')!;
     const upiOnly = form.querySelector<HTMLElement>('[data-upi-only]');
+    const officeOnly = form.querySelector<HTMLElement>('[data-office-only]');
+    const driverOnly = form.querySelector<HTMLElement>('[data-driver-only]');
     const sync = () => {
       const method = form.querySelector<HTMLInputElement>('input[name=method]:checked')?.value;
+      const byDriver = form.querySelector<HTMLInputElement>('input[name=collector]:checked')?.value === 'driver';
       if (upiOnly) upiOnly.hidden = method !== 'upi';
+      if (officeOnly) officeOnly.hidden = byDriver;
+      if (driverOnly) driverOnly.hidden = !byDriver;
     };
     form.addEventListener('change', sync);
     sync();
@@ -887,7 +938,7 @@ const facts: [string, string][] = [
   .a-pill span { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1.1rem; border-radius: 999px; border: 1px solid var(--color-line); background: #fff; font-weight: 600; font-size: 0.9rem; color: var(--color-body); cursor: pointer; }
   .a-pill input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
   .a-pill input:focus-visible + span { outline: 3px solid var(--color-lime); outline-offset: 2px; }
-  [data-upi-only][hidden] { display: none; }
+  [data-upi-only][hidden], [data-office-only][hidden], [data-driver-only][hidden] { display: none; }
   .a-celebrate { position: relative; overflow: hidden; display: flex; align-items: center; gap: 0.9rem; padding: 1rem 1.25rem; border-radius: 20px; background: var(--color-ink); }
   .a-burst { position: absolute; left: 1.6rem; top: 50%; width: 0; height: 0; }
   .a-burst i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--color-lime); opacity: 0; animation: a-pop 900ms ease-out 150ms forwards; }

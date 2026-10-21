@@ -1,6 +1,11 @@
 /**
  * Money on a booking, recorded by hand: UPI to the office QR code, or cash.
  *
+ * The owner's rule (21 Oct 2026): the office takes the advance, and after
+ * the trip the driver collects the balance from the guest and hands it to
+ * the office. A payment the driver collected carries their id, and counts
+ * on their account until they hand it over (src/server/drivers.ts).
+ *
  * Rows in `payments` are never edited or deleted. A mistake is undone by a
  * 'reversal' row pointing at the original, and a refund is its own negative
  * row, so the history always adds up. Only the admin reverses or refunds;
@@ -12,6 +17,7 @@ import { readUpiText, type Upi, type UpiQr } from '../lib/upi';
 import { audit } from './admin';
 import { addDays, inr, isDay, todayIST, type Tone } from './dashboard';
 import { getDb, schema } from './db';
+import { driverCollectsBalance } from './fares';
 
 export type PaymentRow = typeof schema.payments.$inferSelect;
 export type Method = 'upi' | 'cash';
@@ -42,6 +48,10 @@ export type PaySummary = {
   /** What to ask for next: the rest of the advance first, then the balance. */
   askNow: number;
   askLabel: string;
+  /** The advance is in and the rest is for the driver to collect after the trip. */
+  driverCollects: boolean;
+  /** Of `paid`, what drivers collected from the guest. */
+  byDriver: number;
   state: 'unpaid' | 'part' | 'advance' | 'full' | 'refunded';
   label: string;
   tone: Tone;
@@ -49,24 +59,26 @@ export type PaySummary = {
   reversed: Set<string>;
 };
 
-export function summarise(total: number, advance: number, rows: PaymentRow[]): PaySummary {
+export function summarise(total: number, advance: number, rows: PaymentRow[], kind: 'taxi' | 'package'): PaySummary {
   const reversed = new Set(rows.filter((r) => r.kind === 'reversal' && r.reversesPaymentId).map((r) => r.reversesPaymentId!));
   const paid = rows.reduce((s, r) => s + r.amount, 0);
+  const byDriver = rows.reduce((s, r) => s + (r.driverId ? r.amount : 0), 0);
   const refunded = rows.filter((r) => r.kind === 'refund' && !reversed.has(r.id)).reduce((s, r) => s - r.amount, 0);
   const due = Math.max(0, total - paid);
   const advanceLeft = Math.max(0, advance - paid);
   const askNow = advanceLeft > 0 ? advanceLeft : due;
   const askLabel = advanceLeft > 0 ? (paid > 0 ? 'Rest of the advance' : 'Advance') : 'Balance';
+  const driverCollects = advanceLeft === 0 && due > 0 && driverCollectsBalance(kind);
 
   let state: PaySummary['state'];
   let label: string;
   let tone: Tone;
   if (refunded > 0 && paid <= 0) [state, label, tone] = ['refunded', `Refunded ${inr(refunded)}`, 'grey'];
   else if (paid >= total && total > 0) [state, label, tone] = ['full', 'Fully paid', 'lime'];
-  else if (paid > 0 && paid >= advance) [state, label, tone] = ['advance', `Advance paid · ${inr(due)} to collect`, 'lime'];
+  else if (paid > 0 && paid >= advance) [state, label, tone] = ['advance', driverCollects ? `Advance paid · driver collects ${inr(due)}` : `Advance paid · ${inr(due)} to collect`, 'lime'];
   else if (paid > 0) [state, label, tone] = ['part', `${inr(paid)} paid · ${inr(due)} due`, 'amber'];
   else [state, label, tone] = ['unpaid', 'No payment recorded', 'amber'];
-  return { total, advance, paid, refunded, due, askNow, askLabel, state, label, tone, reversed };
+  return { total, advance, paid, refunded, due, askNow, askLabel, driverCollects, byDriver, state, label, tone, reversed };
 }
 
 export async function paymentsFor(bookingId: string): Promise<PaymentRow[]> {
@@ -80,6 +92,8 @@ export const METHOD_LABEL: Record<Method, string> = { upi: 'UPI', cash: 'Cash' }
 export type PaymentForm = {
   amount: string;
   method: string;
+  /** 'office', or 'driver' when the booking's driver collected it from the guest. */
+  collector: string;
   receivedOn: string;
   receivedBy: string;
   upiRef: string;
@@ -100,19 +114,25 @@ function checkForm(f: PaymentForm): string | null {
 }
 
 type Ctx = { actorId: string; ipHash: string };
-type Booking = { id: string; ref: string; fareTotal: number; advanceShown: number };
+type Booking = { id: string; ref: string; kind: 'taxi' | 'package'; fareTotal: number; advanceShown: number; driverId: string | null; driverName: string | null };
 
-/** Records money received. Returns an error for the person, or the new summary. */
+/**
+ * Records money received, by the office or by the booking's driver. Returns
+ * an error for the person, or the new summary.
+ */
 export async function recordPayment(b: Booking, f: PaymentForm, ctx: Ctx): Promise<{ error: string } | { summary: PaySummary }> {
   const bad = checkForm(f);
   if (bad) return { error: bad };
+  if (f.collector !== 'office' && f.collector !== 'driver') return { error: 'Say who received it: the office or the driver.' };
+  const byDriver = f.collector === 'driver';
+  if (byDriver && !b.driverId) return { error: 'This booking has no driver from the drivers list. Assign one first (Edit trip and driver).' };
   const amount = money(f.amount);
   const db = getDb();
   const result = await db.transaction(async (tx) => {
     // Lock the booking so two people recording at once cannot overpay it.
     await tx.select({ id: schema.bookings.id }).from(schema.bookings).where(eq(schema.bookings.id, b.id)).for('update');
     const rows = await tx.select().from(schema.payments).where(eq(schema.payments.bookingId, b.id));
-    const before = summarise(b.fareTotal, b.advanceShown, rows);
+    const before = summarise(b.fareTotal, b.advanceShown, rows, b.kind);
     if (amount > before.due) {
       return {
         error:
@@ -129,16 +149,22 @@ export async function recordPayment(b: Booking, f: PaymentForm, ctx: Ctx): Promi
         amount,
         method: f.method as Method,
         receivedOn: f.receivedOn,
-        receivedBy: f.receivedBy || null,
+        receivedBy: byDriver ? b.driverName : f.receivedBy || null,
         upiRef: f.method === 'upi' ? f.upiRef || null : null,
         note: f.note || null,
+        driverId: byDriver ? b.driverId : null,
         createdBy: ctx.actorId,
       })
       .returning();
-    await tx.insert(schema.bookingEvents).values({ bookingId: b.id, actorId: ctx.actorId, type: 'payment', data: { amount, method: f.method, paymentId: row!.id } });
-    return { summary: summarise(b.fareTotal, b.advanceShown, [...rows, row!]) };
+    await tx.insert(schema.bookingEvents).values({
+      bookingId: b.id,
+      actorId: ctx.actorId,
+      type: 'payment',
+      data: { amount, method: f.method, paymentId: row!.id, ...(byDriver ? { driver: b.driverName } : {}) },
+    });
+    return { summary: summarise(b.fareTotal, b.advanceShown, [...rows, row!], b.kind) };
   });
-  if ('summary' in result) await audit({ actorId: ctx.actorId, action: 'payment_recorded', entity: 'booking', entityId: b.id, detail: { ref: b.ref, amount, method: f.method }, ipHash: ctx.ipHash });
+  if ('summary' in result) await audit({ actorId: ctx.actorId, action: 'payment_recorded', entity: 'booking', entityId: b.id, detail: { ref: b.ref, amount, method: f.method, ...(byDriver ? { driverId: b.driverId } : {}) }, ipHash: ctx.ipHash });
   return result;
 }
 
@@ -150,7 +176,7 @@ export async function recordRefund(b: Booking, f: PaymentForm, ctx: Ctx): Promis
   const result = await getDb().transaction(async (tx) => {
     await tx.select({ id: schema.bookings.id }).from(schema.bookings).where(eq(schema.bookings.id, b.id)).for('update');
     const rows = await tx.select().from(schema.payments).where(eq(schema.payments.bookingId, b.id));
-    const before = summarise(b.fareTotal, b.advanceShown, rows);
+    const before = summarise(b.fareTotal, b.advanceShown, rows, b.kind);
     if (amount > before.paid) return { error: `Only ${inr(before.paid)} has been received, so the refund cannot be more than that.` };
     const [row] = await tx
       .insert(schema.payments)
@@ -167,7 +193,7 @@ export async function recordRefund(b: Booking, f: PaymentForm, ctx: Ctx): Promis
       })
       .returning();
     await tx.insert(schema.bookingEvents).values({ bookingId: b.id, actorId: ctx.actorId, type: 'refund', data: { amount, method: f.method, paymentId: row!.id } });
-    return { summary: summarise(b.fareTotal, b.advanceShown, [...rows, row!]) };
+    return { summary: summarise(b.fareTotal, b.advanceShown, [...rows, row!], b.kind) };
   });
   if ('summary' in result) await audit({ actorId: ctx.actorId, action: 'refund_recorded', entity: 'booking', entityId: b.id, detail: { ref: b.ref, amount }, ipHash: ctx.ipHash });
   return result;
@@ -191,6 +217,8 @@ export async function reversePayment(b: Booking, paymentId: string, reason: stri
       receivedOn: todayIST(),
       note: reason.trim(),
       reversesPaymentId: target.id,
+      // Taken off the driver's account too, when the driver had collected it.
+      driverId: target.driverId,
       createdBy: ctx.actorId,
     });
     await tx.insert(schema.bookingEvents).values({ bookingId: b.id, actorId: ctx.actorId, type: 'payment_reversed', data: { amount: target.amount, kind: target.kind, paymentId, reason: reason.trim() } });
