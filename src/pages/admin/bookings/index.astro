@@ -1,0 +1,187 @@
+---
+/**
+ * Every booking, newest first, with search and a status filter. The status
+ * menu on each row moves a booking along (new, contacted, confirmed ...).
+ * Opening this page is logged, because it shows customer names and numbers.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { audit } from '../../../server/admin';
+import { REF_RE } from '../../../server/bookings';
+import { STATUS_LABEL, TONE, inr, longDate, waText } from '../../../server/dashboard';
+import { getDb, schema } from '../../../server/db';
+import { BOOKING_STATUSES, type BookingStatus } from '../../../server/db/schema';
+import { ipHash } from '../../../server/security';
+import { and, count, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const params = Astro.url.searchParams;
+const q = (params.get('q') ?? '').trim().slice(0, 60);
+const statusParam = params.get('status') ?? '';
+const status = (BOOKING_STATUSES as readonly string[]).includes(statusParam) ? (statusParam as BookingStatus) : null;
+const find = params.get('find') === '1';
+const createdRef = params.get('created') ?? '';
+
+const b = schema.bookings;
+const digits = q.replace(/\D/g, '');
+let search: SQL | undefined;
+if (q) {
+  const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
+  search = or(
+    ilike(b.ref, like),
+    ilike(b.customerName, like),
+    digits.length >= 4 ? ilike(b.customerPhone, `%${digits}%`) : undefined,
+  );
+}
+
+const db = getDb();
+const [rows, counts, [created]] = await Promise.all([
+  db.select().from(b).where(and(search, status ? eq(b.status, status) : undefined)).orderBy(desc(b.createdAt)).limit(200),
+  db.select({ status: b.status, n: count() }).from(b).where(search).groupBy(b.status),
+  REF_RE.test(createdRef) ? db.select().from(b).where(eq(b.ref, createdRef)) : Promise.resolve([]),
+]);
+await audit({ actorId: user.id, action: 'view_bookings', entity: 'bookings', detail: { count: rows.length, q: q || undefined, status: status ?? undefined }, ipHash: ipHash(Astro.request) });
+
+const countOf = new Map(counts.map((c) => [c.status, c.n]));
+const total = counts.reduce((s, c) => s + c.n, 0);
+const filterHref = (s: BookingStatus | null) => {
+  const p = new URLSearchParams();
+  if (q) p.set('q', q);
+  if (s) p.set('status', s);
+  const qs = p.toString();
+  return `/admin/bookings/${qs ? `?${qs}` : ''}`;
+};
+
+const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
+const phoneLabel = (d: string) => (d.length === 12 && d.startsWith('91') ? `+91 ${d.slice(2, 7)} ${d.slice(7)}` : `+${d}`);
+const route = (tripName: string) => tripName.split(' · ')[0];
+
+const confirmText = (x: typeof b.$inferSelect) =>
+  `Namaste ${(x.customerName ?? '').split(' ')[0]}, ${x.status === 'confirmed' ? 'your booking with Bagdogra Airport Taxi is confirmed' : 'thank you for your enquiry with Bagdogra Airport Taxi'}. Reference ${x.ref}: ${x.tripName}, ${longDate.format(new Date(`${x.pickupDate}T00:00:00Z`))} at ${x.pickupTime}. Fare ${inr(x.fareTotal)}. `;
+---
+
+<AdminLayout title="Bookings">
+  <div class="flex flex-col gap-5">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Bookings</h1>
+        <p class="m-0 mt-1 text-sm text-muted">Every request, newest first. Change a status from the menu on each booking.</p>
+      </div>
+      <form method="get" class="flex w-full gap-2 sm:w-auto lg:hidden" role="search">
+        {status && <input type="hidden" name="status" value={status} />}
+        <label class="a-field flex-1"><span class="sr-only">Search bookings</span><input name="q" type="search" value={q} autofocus={find} placeholder="Name, mobile or BAT- reference" class="w-full sm:w-72" /></label>
+        <button class="btn-book" type="submit">Search</button>
+      </form>
+    </div>
+
+    {created && (
+      <div class="a-msg a-msg-ok flex flex-wrap items-center gap-3" role="status">
+        <span class="flex-1"><strong>{created.ref}</strong> is saved: {route(created.tripName)}, {day.format(new Date(`${created.pickupDate}T00:00:00Z`))} at {created.pickupTime}.</span>
+        {created.customerPhone && <a class="btn-wa min-h-11 px-4 py-2 text-sm" href={waText(created.customerPhone, confirmText(created))} target="_blank" rel="noopener">Send it on WhatsApp</a>}
+      </div>
+    )}
+
+    <nav aria-label="Filter by status" class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+      <a href={filterHref(null)} aria-current={status ? undefined : 'page'} class:list={['shrink-0 rounded-full border px-3.5 py-2 text-sm no-underline', status ? 'border-line bg-white font-medium text-body' : 'border-ink bg-ink font-semibold text-white']}>All · {total}</a>
+      {BOOKING_STATUSES.map((s) => (
+        <a href={filterHref(s)} aria-current={status === s ? 'page' : undefined} class:list={['shrink-0 rounded-full border px-3.5 py-2 text-sm no-underline', status === s ? 'border-ink bg-ink font-semibold text-white' : 'border-line bg-white font-medium text-body']}>{STATUS_LABEL[s][0]} · {countOf.get(s) ?? 0}</a>
+      ))}
+    </nav>
+
+    {rows.length === 0 ? (
+      <div class="a-card p-8 text-center text-body">
+        {q || status ? 'No bookings match that.' : 'No bookings yet. They appear here the moment a customer presses Confirm on WhatsApp, or when you add one by hand.'}
+      </div>
+    ) : (
+      <div class="a-card overflow-x-auto">
+        <table class="a-table">
+          <thead>
+            <tr><th>Received</th><th>Pickup</th><th>Trip</th><th>Customer</th><th>Fare</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr>
+                <td class="whitespace-nowrap" data-label="Received">
+                  <strong class="block font-mono text-sm">{x.ref}</strong>
+                  <span class="text-sm text-muted">{when.format(x.createdAt)}{x.source === 'staff' ? ' · by hand' : ''}</span>
+                </td>
+                <td class="whitespace-nowrap" data-label="Pickup">
+                  <strong class="block">{day.format(new Date(`${x.pickupDate}T00:00:00Z`))}, {x.pickupTime}</strong>
+                  {x.flight && <span class="text-sm text-muted">{x.flight}</span>}
+                </td>
+                <td data-label="Trip">
+                  <span class="block font-semibold">{x.tripName}</span>
+                  <span class="text-sm text-muted">{x.pax} {x.pax === 1 ? 'person' : 'people'}{x.dropAddress ? ` · ${x.dropAddress}` : ''}</span>
+                  {x.notes && <span class="block text-sm text-body">{x.notes}</span>}
+                </td>
+                <td data-label="Customer">
+                  {x.customerPhone ? (
+                    <>
+                      <span class="block font-semibold">{x.customerName}</span>
+                      <span class="flex flex-wrap gap-3 text-sm">
+                        <a href={`tel:+${x.customerPhone}`}>{phoneLabel(x.customerPhone)}</a>
+                        <a href={waText(x.customerPhone, `Namaste ${x.customerName}, about your booking ${x.ref}: `)} target="_blank" rel="noopener">WhatsApp</a>
+                      </span>
+                    </>
+                  ) : (
+                    <span class="text-sm text-muted">Details removed after 24 months</span>
+                  )}
+                </td>
+                <td class="whitespace-nowrap" data-label="Fare">
+                  <strong class="block">{inr(x.fareTotal)}</strong>
+                  {x.fareMismatch && <span class="a-badge bg-[#fde8e7] text-[#b42318]" title={`The page showed ${inr(x.fareShown)}`}>Page showed {inr(x.fareShown)}</span>}
+                </td>
+                <td data-label="Status">
+                  <select data-status={x.id} data-was={x.status} aria-label={`Status of ${x.ref}`} class:list={['a-status', TONE[STATUS_LABEL[x.status][1]]]}>
+                    {BOOKING_STATUSES.map((s) => <option value={s} data-tone={TONE[STATUS_LABEL[s][1]]} selected={s === x.status}>{STATUS_LABEL[s][0]}</option>)}
+                  </select>
+                  <span data-status-note class="mt-1 block text-xs text-muted" aria-live="polite"></span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style is:global>
+  .a-status {
+    appearance: none; border: 0; border-radius: 999px; min-height: 2.25rem; padding: 0.25rem 2rem 0.25rem 0.75rem;
+    font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%233d4451' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.7rem center;
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLSelectElement>('select[data-status]').forEach((sel) => {
+    const note = sel.parentElement!.querySelector<HTMLElement>('[data-status-note]')!;
+    const paint = () => {
+      const tone = sel.selectedOptions[0]?.dataset.tone ?? '';
+      sel.className = `a-status ${tone}`;
+    };
+    sel.addEventListener('change', async () => {
+      paint();
+      note.textContent = 'Saving…';
+      try {
+        const res = await fetch('/admin/api/booking-status/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: sel.dataset.status, status: sel.value }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        sel.dataset.was = sel.value;
+        note.textContent = 'Saved';
+        setTimeout(() => (note.textContent = ''), 2000);
+      } catch {
+        sel.value = sel.dataset.was ?? sel.value;
+        paint();
+        note.textContent = 'Not saved. Try again.';
+      }
+    });
+  });
+</script>

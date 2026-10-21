@@ -1,0 +1,260 @@
+---
+/**
+ * New booking by hand, for phone calls and walk-ins. The fare comes from the
+ * same fare table as the website unless staff type an agreed price. Saved
+ * with source 'staff', so it is never mixed up with a website request.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { PACKAGES } from '../../../data/packages';
+import { ROUTES } from '../../../data/routes';
+import { POLICY } from '../../../data/site';
+import { VEHICLES, vehicleByKey } from '../../../data/vehicles';
+import { audit } from '../../../server/admin';
+import { normalizePhone } from '../../../server/bookings';
+import { addDays, todayIST } from '../../../server/dashboard';
+import { getDb, schema } from '../../../server/db';
+import { advanceOf, computeFare } from '../../../server/fares';
+import { ipHash, randomCode } from '../../../server/security';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const today = todayIST();
+const draft = {
+  kind: 'taxi',
+  route: '',
+  package: '',
+  trip: '',
+  vehicle: 'sedan',
+  date: today,
+  time: '',
+  flight: '',
+  pax: '2',
+  drop: '',
+  name: '',
+  phone: '',
+  fare: '',
+  status: 'confirmed',
+  notes: '',
+};
+let error = '';
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  for (const k of Object.keys(draft) as (keyof typeof draft)[]) draft[k] = String(f.get(k) ?? '').trim();
+
+  const phone = normalizePhone(draft.phone);
+  const car = vehicleByKey(draft.vehicle);
+  const pax = Number(draft.pax);
+  const fareTyped = draft.fare ? Number(draft.fare.replace(/[^\d]/g, '')) : null;
+  const dateOk =
+    /^\d{4}-\d{2}-\d{2}$/.test(draft.date) &&
+    new Date(`${draft.date}T00:00:00Z`).toISOString().slice(0, 10) === draft.date &&
+    draft.date >= addDays(today, -60) &&
+    draft.date <= addDays(today, 400);
+  const computed =
+    draft.kind === 'taxi'
+      ? computeFare({ kind: 'taxi', routeSlug: draft.route, vehicle: draft.vehicle, time: draft.time })
+      : draft.kind === 'package'
+        ? computeFare({ kind: 'package', packageSlug: draft.package, vehicle: draft.vehicle, pax })
+        : null;
+
+  if (!draft.name || draft.name.length > 80) error = 'Enter the customer’s name.';
+  else if (!phone) error = 'Check the mobile number. Ten digits, or with the country code.';
+  else if (!car) error = 'Choose a car.';
+  else if (draft.kind === 'taxi' && !computed) error = 'Choose a route.';
+  else if (draft.kind === 'package' && !computed) error = 'Choose a tour package.';
+  else if (draft.kind === 'other' && (draft.trip.length < 3 || draft.trip.length > 120)) error = 'Describe the trip, for example “Siliguri to Lava, 2 days”.';
+  else if (!dateOk) error = 'Check the pickup date.';
+  else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.time)) error = 'Enter the pickup time.';
+  else if (!Number.isInteger(pax) || pax < 1 || pax > 50) error = 'Travellers must be 1 to 50.';
+  else if (fareTyped !== null && (!Number.isFinite(fareTyped) || fareTyped > 10_000_000)) error = 'Check the fare.';
+  else if (draft.kind === 'other' && !fareTyped) error = 'Enter the agreed fare for this trip.';
+  else if (draft.flight.length > 40 || draft.drop.length > 200 || draft.notes.length > 1000) error = 'One of the fields is too long.';
+
+  if (!error && phone && car) {
+    const fareTotal = fareTyped ?? computed!.total;
+    const tripName = computed ? computed.tripName : `${draft.trip} · ${car.name}`;
+    const now = new Date();
+    const db = getDb();
+    let ref = '';
+    for (let attempt = 0; attempt < 4 && !ref; attempt++) {
+      const candidate = `BAT-${randomCode(6)}`;
+      const saved = await db.transaction(async (tx) => {
+        const [customer] = await tx
+          .insert(schema.customers)
+          .values({ name: draft.name, phone, lastBookingAt: now })
+          .onConflictDoUpdate({ target: schema.customers.phone, set: { name: draft.name, lastBookingAt: now, updatedAt: now } })
+          .returning({ id: schema.customers.id });
+        const [booking] = await tx
+          .insert(schema.bookings)
+          .values({
+            ref: candidate,
+            kind: draft.kind === 'package' ? 'package' : 'taxi',
+            routeSlug: draft.kind === 'taxi' ? draft.route : null,
+            packageSlug: draft.kind === 'package' ? draft.package : null,
+            vehicle: car.key,
+            tripName,
+            pickupDate: draft.date,
+            pickupTime: draft.time,
+            flight: draft.flight || null,
+            pax,
+            dropAddress: draft.drop || null,
+            customerId: customer?.id,
+            customerName: draft.name,
+            customerPhone: phone,
+            fareShown: fareTotal,
+            advanceShown: advanceOf(fareTotal),
+            fareServer: computed?.total ?? fareTotal,
+            fareTotal,
+            status: draft.status === 'contacted' ? 'contacted' : 'confirmed',
+            handledBy: user.id,
+            notes: draft.notes || null,
+            source: 'staff',
+            channel: 'manual',
+          })
+          .onConflictDoNothing({ target: schema.bookings.ref })
+          .returning({ id: schema.bookings.id });
+        if (!booking) return null;
+        await tx.insert(schema.bookingEvents).values({ bookingId: booking.id, actorId: user.id, type: 'created', data: { source: 'staff', fare: fareTotal } });
+        return booking.id;
+      });
+      if (saved) {
+        ref = candidate;
+        await audit({ actorId: user.id, action: 'booking_created', entity: 'booking', entityId: saved, detail: { ref }, ipHash: ipHash(Astro.request) });
+      }
+    }
+    if (ref) return Astro.redirect(`/admin/bookings/?created=${ref}`, 303);
+    error = 'Could not save. Try again.';
+  }
+}
+
+/** Fare table for the live estimate in the browser. */
+const fareData = {
+  routes: Object.fromEntries(ROUTES.map((r) => [r.slug, r.fares])),
+  packages: Object.fromEntries(PACKAGES.map((p) => [p.slug, p.fromPrice])),
+  night: { from: POLICY.nightChargeFrom, to: POLICY.nightChargeTo, charge: POLICY.nightCharge },
+};
+const kinds = [
+  ['taxi', 'Taxi route'],
+  ['package', 'Tour package'],
+  ['other', 'Other trip'],
+];
+---
+
+<AdminLayout title="New booking">
+  <form method="post" class="flex flex-col gap-5" data-new-booking data-fares={JSON.stringify(fareData)}>
+    <div>
+      <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">New booking</h1>
+      <p class="m-0 mt-1 text-sm text-muted">For a phone call or a walk-in. It is saved straight to the bookings list, with your name on it.</p>
+    </div>
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <section class="a-card flex flex-col gap-4 p-5" aria-labelledby="trip-h">
+        <h2 id="trip-h" class="m-0 font-display text-xl font-bold">Trip</h2>
+        <fieldset class="m-0 flex flex-wrap gap-2 border-0 p-0">
+          <legend class="sr-only">Kind of trip</legend>
+          {kinds.map(([v, label]) => (
+            <label class="a-pill">
+              <input type="radio" name="kind" value={v} checked={draft.kind === v} class="sr-only" />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+        <label class="a-field" data-for-kind="taxi" hidden={draft.kind !== 'taxi'}>Route
+          <select name="route">
+            <option value="">Choose a route</option>
+            {ROUTES.map((r) => <option value={r.slug} selected={draft.route === r.slug}>{r.from} to {r.to}</option>)}
+          </select>
+        </label>
+        <label class="a-field" data-for-kind="package" hidden={draft.kind !== 'package'}>Tour package
+          <select name="package">
+            <option value="">Choose a package</option>
+            {PACKAGES.map((p) => <option value={p.slug} selected={draft.package === p.slug}>{p.name} ({p.nights}N/{p.days}D)</option>)}
+          </select>
+        </label>
+        <label class="a-field" data-for-kind="other" hidden={draft.kind !== 'other'}>Trip
+          <input name="trip" value={draft.trip} maxlength="120" placeholder="Siliguri to Lava, 2 days" />
+        </label>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="a-field">Car
+            <select name="vehicle">
+              {VEHICLES.map((v) => <option value={v.key} selected={draft.vehicle === v.key}>{v.name} · {v.seats} seats</option>)}
+            </select>
+          </label>
+          <label class="a-field">Travellers<input name="pax" type="number" min="1" max="50" required value={draft.pax} /></label>
+          <label class="a-field">Pickup date<input name="date" type="date" required value={draft.date} /></label>
+          <label class="a-field">Pickup time<input name="time" type="time" required value={draft.time} /></label>
+        </div>
+        <label class="a-field"><span>Flight or train <span class="font-normal text-muted">(optional)</span></span><input name="flight" value={draft.flight} maxlength="40" placeholder="6E 5321" autocapitalize="characters" /></label>
+        <label class="a-field"><span>Pickup or drop address <span class="font-normal text-muted">(optional)</span></span><input name="drop" value={draft.drop} maxlength="200" /></label>
+      </section>
+
+      <div class="flex flex-col gap-5">
+        <section class="a-card flex flex-col gap-4 p-5" aria-labelledby="cust-h">
+          <h2 id="cust-h" class="m-0 font-display text-xl font-bold">Customer</h2>
+          <label class="a-field">Name<input name="name" required maxlength="80" value={draft.name} autocomplete="off" /></label>
+          <label class="a-field">Mobile number<input name="phone" type="tel" required inputmode="tel" value={draft.phone} placeholder="98300 12345" autocomplete="off" /></label>
+        </section>
+        <section class="a-card flex flex-col gap-4 p-5" aria-labelledby="fare-h">
+          <h2 id="fare-h" class="m-0 font-display text-xl font-bold">Fare and status</h2>
+          <label class="a-field"><span>Agreed fare, ₹ <span class="font-normal text-muted" data-fare-hint>(leave empty for the website fare)</span></span>
+            <input name="fare" inputmode="numeric" value={draft.fare} data-fare-input />
+          </label>
+          <label class="a-field">Status
+            <select name="status">
+              <option value="confirmed" selected={draft.status === 'confirmed'}>Confirmed</option>
+              <option value="contacted" selected={draft.status === 'contacted'}>Enquiry, not confirmed yet</option>
+            </select>
+          </label>
+          <label class="a-field"><span>Notes <span class="font-normal text-muted">(optional)</span></span><textarea name="notes" rows="3" maxlength="1000">{draft.notes}</textarea></label>
+        </section>
+        <div class="flex flex-wrap gap-3">
+          <button type="submit" class="btn-book flex-1">Save booking</button>
+          <a href="/admin/" class="btn-ghost">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</AdminLayout>
+
+<style is:global>
+  .a-pill span { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1rem; border-radius: 999px; border: 1px solid var(--color-line); background: #fff; font-weight: 600; font-size: 0.9rem; color: var(--color-body); cursor: pointer; }
+  .a-pill input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
+  .a-pill input:focus-visible + span { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  [data-new-booking] [hidden] { display: none; }
+</style>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-new-booking]');
+  if (form) {
+    const fares = JSON.parse(form.dataset.fares!) as {
+      routes: Record<string, Record<string, number>>;
+      packages: Record<string, number>;
+      night: { from: string; to: string; charge: number };
+    };
+    const field = (n: string) => form.elements.namedItem(n) as HTMLInputElement | HTMLSelectElement;
+    const hint = form.querySelector<HTMLElement>('[data-fare-hint]')!;
+    const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
+
+    const update = () => {
+      const kind = (form.querySelector<HTMLInputElement>('input[name=kind]:checked')?.value ?? 'taxi');
+      form.querySelectorAll<HTMLElement>('[data-for-kind]').forEach((el) => (el.hidden = el.dataset.forKind !== kind));
+      const vehicle = field('vehicle').value;
+      const time = field('time').value;
+      let fare = 0;
+      if (kind === 'taxi') {
+        const r = fares.routes[field('route').value];
+        if (r) fare = r[vehicle] + (time && (time >= fares.night.from || time < fares.night.to) ? fares.night.charge : 0);
+      } else if (kind === 'package') {
+        const p = fares.packages[field('package').value];
+        if (p) fare = p * Math.max(1, Number(field('pax').value) || 1);
+      }
+      hint.textContent = kind === 'other' ? '(required for this trip)' : fare ? `(website fare ${inr(fare)}; leave empty to use it)` : '(leave empty for the website fare)';
+    };
+    form.addEventListener('input', update);
+    form.addEventListener('change', update);
+    update();
+  }
+</script>

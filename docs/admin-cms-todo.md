@@ -1,6 +1,6 @@
 # Admin, live editing and bookings dashboard: plan and todo list
 
-Status: plan agreed and every open question settled on 21 October 2026. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, with a temporary bookings list at /admin/. Not yet deployed. Going-live steps are in docs/admin-setup.md.
+Status: plan agreed and every open question settled on 21 October 2026. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, then the dashboard shell and home screen to the mock (sidebar, phone tab bar, today board at /admin/, bookings list at /admin/bookings/, new booking by hand at /admin/bookings/new/). Not yet deployed. Going-live steps are in docs/admin-setup.md.
 
 ## Decisions taken by the owner
 
@@ -45,32 +45,32 @@ The site is static today, with all content in TypeScript files and no server. Bo
 The dashboard should feel like the business: mountains, roads, a veteran-run team that takes care of people. It should be a place staff enjoy opening, and every screen should help close a booking or run a trip.
 
 **Brand**
-- [ ] Use the site's own palette: ink, lime and white, with the Bricolage font for headings and Inter for text.
-- [ ] Put the Jai Jawan badge logo and the line "Your journey, our responsibility" in the sidebar.
-- [ ] Use the site's mountain and road photos in headers and empty screens, never stock icons on grey.
+- [x] Use the site's own palette: ink, lime and white, with the Bricolage font for headings and Inter for text.
+- [x] Put the Jai Jawan badge logo and the line "Your journey, our responsibility" in the sidebar.
+- [ ] Use the site's mountain and road photos in headers and empty screens, never stock icons on grey. *(Built for the home screen greeting; empty screens still plain cards.)*
 - [ ] Light mode by default, with a dark mode for night shifts.
 
 **Upbeat and motivating**
-- [ ] A greeting by name and time of day, such as "Good morning, Pinku", with today's weather in Bagdogra and Darjeeling.
-- [ ] A monthly goal set by the admin, for bookings and for money collected, shown as a progress ring that fills as the month goes on.
-- [ ] A small celebration when a booking is confirmed or fully paid, and a "wins this week" strip.
-- [ ] The newest five-star Google review on the home screen, as a reminder of why the work matters.
-- [ ] Friendly wording everywhere, for example "No pickups left today. Time for chai." when the list is empty.
+- [x] A greeting by name and time of day, such as "Good morning, Pinku", with today's weather in Bagdogra and Darjeeling. *(Built, with Bagdogra, Darjeeling and Gangtok from Open-Meteo, cached 30 minutes.)*
+- [x] A monthly goal set by the admin, for bookings and for money collected, shown as a progress ring that fills as the month goes on. *(Built: the admin sets trips and a fares target on the home screen. Until payments can be recorded it counts confirmed fares, not money collected.)*
+- [ ] A small celebration when a booking is confirmed or fully paid, and a "wins this week" strip. *(The wins this week strip is built; the celebration is not.)*
+- [x] The newest five-star Google review on the home screen, as a reminder of why the work matters. *(Built: a different five-star review each day from the ones already on the site. The site's review file has no exact dates, so it is not strictly the newest.)*
+- [x] Friendly wording everywhere, for example "No pickups left today. Time for chai." when the list is empty.
 
 **Useful first**
-- [ ] The home screen is a "today board": today's and tomorrow's pickups as cards with time, place, driver and payment state.
-- [ ] New bookings not yet answered show how long they have waited, and turn amber, then red.
-- [ ] Payments due and balances to collect, with one tap to send the QR code.
-- [ ] Quick actions always in reach: new booking, send itinerary, record payment, send QR code.
-- [ ] Search across bookings and customers from anywhere, with a keyboard shortcut on a laptop.
+- [x] The home screen is a "today board": today's and tomorrow's pickups as cards with time, place, driver and payment state.
+- [x] New bookings not yet answered show how long they have waited, and turn amber, then red.
+- [ ] Payments due and balances to collect, with one tap to send the QR code. *(Balances and a WhatsApp reminder are built; the QR code waits for Phase 3b.)*
+- [ ] Quick actions always in reach: new booking, send itinerary, record payment, send QR code. *(New booking works; the other three show as "Coming next" until their phases are built.)*
+- [ ] Search across bookings and customers from anywhere, with a keyboard shortcut on a laptop. *(Bookings search sits in the top bar on every page, with Ctrl K or ⌘K; customers come with the customer page.)*
 
 **Built for the phone**
-- [ ] On a phone, a bottom tab bar, large tap targets and screens that work one-handed.
+- [x] On a phone, a bottom tab bar, large tap targets and screens that work one-handed.
 - [ ] Popups open as full-screen sheets on a phone.
 - [ ] The dashboard installs to the home screen like an app.
 
 **Approval before building**
-- [ ] Mock the dashboard home screen and the itinerary popup, at phone and laptop size, and get the owner's yes before any dashboard code is written. *(Mock published on 21 October 2026: https://claude.ai/artifact/Cu63my3bhrhAk4apHDoFLS. Waiting for the owner's yes.)*
+- [x] Mock the dashboard home screen and the itinerary popup, at phone and laptop size, and get the owner's yes before any dashboard code is written. *(Mock published on 21 October 2026: https://claude.ai/artifact/Cu63my3bhrhAk4apHDoFLS.)* *(On 21 October 2026 the owner asked for the admin to match the mock, and the home screen, shell and bookings list were built to it the same day.)*
 
 ## Phase 0: foundation
 
@@ -111,16 +111,16 @@ This phase can go live before content editing is built.
 
 ## Phase 3: bookings and customers dashboard
 
-- [ ] Bookings list showing all bookings to both admin and staff, with filters by status, date, route, package and payment state, plus search by name, phone or reference.
-- [ ] Statuses: new, contacted, confirmed, driver assigned, completed, cancelled, no-show.
+- [ ] Bookings list showing all bookings to both admin and staff, with filters by status, date, route, package and payment state, plus search by name, phone or reference. *(Built at /admin/bookings/ with search and a status filter; date, route, package and payment filters still to do.)*
+- [x] Statuses: new, contacted, confirmed, driver assigned, completed, cancelled, no-show. *(Changed from the menu on each booking in the list, or by pressing Reply on the home screen.)*
 - [ ] Booking detail page: trip, fare, payment state, notes and a timeline of every change.
 - [ ] Optional "handled by" field on a booking, useful once there is more than one staff member.
 - [ ] Add a driver name, vehicle number and driver phone to a confirmed booking.
-- [ ] One-tap buttons to call the customer or open a WhatsApp chat from the booking.
+- [x] One-tap buttons to call the customer or open a WhatsApp chat from the booking. *(On the home screen cards and in the bookings list; the booking detail page is still to come.)*
 - [ ] Customer page: contact details, all past bookings and notes.
-- [ ] Staff can create a booking manually for phone and walk-in enquiries.
+- [x] Staff can create a booking manually for phone and walk-in enquiries. *(Built at /admin/bookings/new/.)*
 - [ ] Export bookings and payments to CSV for accounts.
-- [ ] Dashboard home: today's pickups, new bookings, payments due, this week's numbers, top routes and packages.
+- [x] Dashboard home: today's pickups, new bookings, payments due, this week's numbers, top routes and packages.
 
 ## Phase 3b: payments by UPI QR code and cash
 

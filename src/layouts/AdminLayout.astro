@@ -1,22 +1,90 @@
 ---
 /**
- * Shell for /admin/ pages. Deliberately plain for now: the full dashboard
- * look waits for the owner's approval of the mock. Never indexed, never cached.
+ * Shell for /admin/ pages, following the owner's dashboard mock
+ * (https://claude.ai/artifact/Cu63my3bhrhAk4apHDoFLS): a dark sidebar on a
+ * laptop; a dark top bar and a bottom tab bar on a phone. Sections not built
+ * yet are listed as "Soon" so the menu already shows the whole plan.
+ * Never indexed, never cached.
  */
 import '../styles/global.css';
+import { BUSINESS } from '../data/site';
+import { countNew } from '../server/dashboard';
 
 interface Props {
   title: string;
-  /** Hide the top navigation (login, setup, recovery). */
+  /** Hide the navigation (login, setup, recovery). */
   bare?: boolean;
 }
 const { title, bare = false } = Astro.props;
 const user = Astro.locals.user;
+const isAdmin = user?.role === 'admin';
 const path = Astro.url.pathname;
-const nav = [
-  { href: '/admin/', label: 'Bookings' },
-  ...(user?.role === 'admin' ? [{ href: '/admin/team/', label: 'Team' }] : []),
-  { href: '/admin/account/', label: 'My account' },
+const shell = !bare && Boolean(user);
+const newCount = shell ? await countNew().catch(() => 0) : 0;
+const initials = (user?.name ?? '')
+  .split(/\s+/)
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((w) => w[0]!.toUpperCase())
+  .join('');
+const [taglineA, taglineB] = BUSINESS.tagline.split(', ');
+
+/** Stroke icons on a 24px grid, the same set as the mock. */
+const ICON = {
+  today: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+  bookings: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  customers: '<circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7M16 4a4 4 0 0 1 0 8M22 21c0-3-1.8-5.6-4.5-6.6"/>',
+  payments: '<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h2"/>',
+  itineraries: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  pages: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  fares: '<path d="M5 17h14M6 17l1.5-6h9L18 17M8 21v-4M16 21v-4"/>',
+  photos: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+  business: '<path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6M9 10h.01M15 10h.01"/>',
+  team: '<path d="M12 3 4 6v6c0 5 3.4 8.4 8 9 4.6-.6 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  account: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>',
+  more: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  signOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
+};
+type IconName = keyof typeof ICON;
+type Item = { href?: string; label: string; icon: IconName; badge?: string };
+
+const groups: { label?: string; items: Item[] }[] = [
+  {
+    items: [
+      { href: '/admin/', label: 'Today', icon: 'today' },
+      { href: '/admin/bookings/', label: 'Bookings', icon: 'bookings', badge: newCount ? `${newCount} new` : undefined },
+      { label: 'Customers', icon: 'customers' },
+      { label: 'Payments', icon: 'payments' },
+      { label: 'Itineraries', icon: 'itineraries' },
+    ],
+  },
+  ...(isAdmin
+    ? [
+        {
+          label: 'Website',
+          items: [
+            { label: 'Edit pages', icon: 'pages' },
+            { label: 'Fares and packages', icon: 'fares' },
+            { label: 'Photos', icon: 'photos' },
+            { label: 'Business details', icon: 'business' },
+          ] as Item[],
+        },
+      ]
+    : []),
+  {
+    label: 'Office',
+    items: [
+      ...(isAdmin ? [{ href: '/admin/team/', label: 'Team', icon: 'team' } as Item] : []),
+      { href: '/admin/account/', label: 'My account', icon: 'account' },
+    ],
+  },
+];
+const current = (href?: string) => Boolean(href) && (href === '/admin/' ? path === '/admin/' : path.startsWith(href!));
+const tabs: Item[] = [
+  { href: '/admin/', label: 'Today', icon: 'today' },
+  { href: '/admin/bookings/', label: 'Bookings', icon: 'bookings', badge: newCount ? String(newCount) : undefined },
 ];
 ---
 
@@ -30,40 +98,183 @@ const nav = [
     <link rel="icon" href="/logo-192.png" sizes="192x192" type="image/png" />
   </head>
   <body class="min-h-screen bg-mist font-sans text-ink antialiased">
-    <header class="bg-ink text-white">
-      <div class="wrap flex flex-wrap items-center gap-x-6 gap-y-3 py-3">
-        <a href="/admin/" class="flex items-center gap-3 text-white no-underline">
-          <img src="/logo-dark.png" alt="" width="44" height="44" class="h-11 w-11" />
-          <span class="font-[family-name:var(--font-display)] text-lg font-bold leading-tight">
-            Bagdogra Airport Taxi
-            <span class="block font-sans text-xs font-medium text-white/60">Admin</span>
-          </span>
-        </a>
-        {!bare && user && (
-          <nav aria-label="Admin" class="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:flex-1">
-            {nav.map((n) => (
-              <a
-                href={n.href}
-                class:list={[
-                  'rounded-lg px-3 py-2 text-sm font-semibold no-underline',
-                  path === n.href ? 'bg-lime text-ink' : 'text-white/85 hover:bg-white/10',
-                ]}
-                aria-current={path === n.href ? 'page' : undefined}
-              >{n.label}</a>
+    {shell && user ? (
+      <div class="lg:flex">
+        {/* Laptop: the dark sidebar */}
+        <nav aria-label="Main" class="hidden w-[264px] shrink-0 flex-col gap-7 overflow-y-auto bg-ink px-4 py-6 text-[#c9ced8] lg:sticky lg:top-0 lg:flex lg:h-screen">
+          <a href="/admin/" class="flex items-center gap-3 px-2 no-underline">
+            <img src="/logo-dark.png" alt="" width="52" height="52" class="h-[52px] w-[52px]" />
+            <span class="flex flex-col">
+              <span class="font-display text-[17px] leading-tight font-bold text-white">Bagdogra Airport Taxi</span>
+              <span class="text-xs text-[#a3aab8]">{BUSINESS.legalName}</span>
+            </span>
+          </a>
+          <div class="flex flex-col gap-1">
+            {groups.map((g, i) => (
+              <>
+                {i > 0 && <div class="mx-2 my-3 h-px bg-ink-700" />}
+                {g.label && <span class="px-3 pb-1 text-xs tracking-[0.08em] text-[#a3aab8] uppercase">{g.label}</span>}
+                {g.items.map((n) =>
+                  n.href ? (
+                    <a
+                      href={n.href}
+                      class:list={[
+                        'flex items-center gap-3 rounded-xl px-3 py-[11px] no-underline transition-colors',
+                        current(n.href) ? 'bg-lime font-semibold text-ink' : 'font-medium text-[#e3e6ec] hover:bg-white/8 hover:text-white',
+                      ]}
+                      aria-current={current(n.href) ? 'page' : undefined}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON[n.icon]} />
+                      <span class="flex-1">{n.label}</span>
+                      {n.badge && <span class="rounded-full bg-amber px-2 py-px text-xs font-bold text-ink">{n.badge}</span>}
+                    </a>
+                  ) : (
+                    <span class="flex items-center gap-3 rounded-xl px-3 py-[11px] font-medium text-white/40" aria-disabled="true">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON[n.icon]} />
+                      <span class="flex-1">{n.label}</span>
+                      <span class="text-[11px] font-semibold tracking-wide text-[#a3aab8] uppercase">Soon</span>
+                    </span>
+                  ),
+                )}
+              </>
             ))}
-            <span class="ml-auto hidden text-sm text-white/70 md:inline">{user.name} · {user.role === 'admin' ? 'Admin' : 'Staff'}</span>
-            <button type="button" id="sign-out" class="ml-auto rounded-lg md:ml-0 border border-white/25 px-3 py-2 text-sm font-semibold text-white hover:bg-white/10">Sign out</button>
-          </nav>
-        )}
+          </div>
+          <div class="mt-auto flex flex-col gap-4 px-2">
+            <p class="m-0 font-display text-lg leading-snug text-white">{taglineA},<br />{taglineB}.</p>
+            <div class="flex items-center gap-2.5 border-t border-ink-700 pt-4">
+              <a href="/admin/account/" class="flex min-w-0 flex-1 items-center gap-2.5 no-underline">
+                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lime font-bold text-ink">{initials}</span>
+                <span class="flex min-w-0 flex-col">
+                  <span class="truncate text-sm font-semibold text-white">{user.name}</span>
+                  <span class="text-xs text-[#a3aab8]">{isAdmin ? 'Admin' : 'Staff'}</span>
+                </span>
+              </a>
+              <button type="button" data-sign-out aria-label="Sign out" title="Sign out" class="grid h-11 w-11 place-items-center rounded-xl text-[#c9ced8] hover:bg-white/8 hover:text-white">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON.signOut} />
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        <div class="min-w-0 flex-1">
+          {/* Phone: dark top bar */}
+          <header class="sticky top-0 z-30 flex items-center gap-2.5 bg-ink px-4 py-3 lg:hidden">
+            <a href="/admin/" class="shrink-0"><img src="/logo-dark.png" alt="Today" width="40" height="40" class="h-10 w-10" /></a>
+            <span class="min-w-0 flex-1 truncate font-display text-lg font-bold text-white">{title}</span>
+            <a href="/admin/bookings/?find=1" aria-label="Search bookings" class="grid h-11 w-11 place-items-center rounded-xl bg-[#1f2329] text-white">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={ICON.search} />
+            </a>
+          </header>
+
+          <div class="mx-auto w-full max-w-[1500px] px-4 pt-4 pb-28 sm:px-6 lg:px-8 lg:pt-6 lg:pb-12">
+            {/* Laptop: search and the main action */}
+            <div class="mb-6 hidden items-center gap-3 lg:flex">
+              <form action="/admin/bookings/" method="get" role="search" class="flex h-12 flex-1 items-center gap-2.5 rounded-[14px] border border-line bg-white px-3.5 focus-within:outline-3 focus-within:outline-lime">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5c6373" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={ICON.search} />
+                <label for="a-search" class="sr-only">Search bookings</label>
+                <input id="a-search" name="q" type="search" value={path.startsWith('/admin/bookings') ? (Astro.url.searchParams.get('q') ?? '') : ''} placeholder="Search name, mobile number or booking reference" class="min-w-0 flex-1 border-0 bg-transparent text-ink outline-none" />
+                <kbd data-kbd class="rounded-md border border-line px-1.5 py-0.5 font-sans text-xs text-[#5c6373]">Ctrl K</kbd>
+              </form>
+              <a href="/admin/bookings/new/" class="flex h-12 items-center gap-2 rounded-[14px] bg-ink px-5 font-semibold text-white no-underline hover:bg-ink-700">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                New booking
+              </a>
+            </div>
+            <main>
+              <slot />
+            </main>
+          </div>
+        </div>
+
+        {/* Phone: bottom tab bar */}
+        <nav aria-label="Main" class="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 items-center border-t border-line bg-white pt-1.5 pb-[max(env(safe-area-inset-bottom),10px)] lg:hidden">
+          {tabs.map((t) => (
+            <a href={t.href} aria-current={current(t.href) ? 'page' : undefined} class:list={['relative flex flex-col items-center gap-0.5 py-1 text-[11px] no-underline', current(t.href) ? 'font-bold text-ink' : 'font-medium text-[#5c6373]']}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill={current(t.href) ? '#a1e005' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON[t.icon]} />
+              {t.label}
+              {t.badge && <span class="absolute top-0 left-1/2 ml-2 min-w-[18px] rounded-full bg-amber px-1 text-center text-[11px] leading-[18px] font-bold text-ink">{t.badge}</span>}
+            </a>
+          ))}
+          <span class="flex justify-center">
+            <a href="/admin/bookings/new/" aria-label="New booking" class="-mt-5 grid h-14 w-14 place-items-center rounded-[18px] bg-ink shadow-[0_6px_16px_-6px_rgb(17_17_17/50%)]">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            </a>
+          </span>
+          <a href="/admin/account/" aria-current={current('/admin/account/') ? 'page' : undefined} class:list={['flex flex-col items-center gap-0.5 py-1 text-[11px] no-underline', current('/admin/account/') ? 'font-bold text-ink' : 'font-medium text-[#5c6373]']}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={current('/admin/account/') ? '#a1e005' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON.account} />
+            Account
+          </a>
+          <button type="button" data-open-more class="flex flex-col items-center gap-0.5 border-0 bg-transparent py-1 text-[11px] font-medium text-[#5c6373]">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={ICON.more} />
+            More
+          </button>
+        </nav>
+
+        {/* Phone: the "More" sheet */}
+        <dialog id="a-more" class="a-sheet" aria-labelledby="a-more-title">
+          <div class="flex flex-col gap-1 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),16px)]">
+            <div class="flex items-center justify-between pb-2">
+              <h2 id="a-more-title" class="m-0 font-display text-xl font-bold">More</h2>
+              <button type="button" data-close-more aria-label="Close" class="grid h-11 w-11 place-items-center rounded-xl border-0 bg-mist text-ink">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={ICON.close} />
+              </button>
+            </div>
+            {groups.flatMap((g) => g.items).filter((n) => n.href).map((n) => (
+              <a href={n.href} aria-current={current(n.href) ? 'page' : undefined} class:list={['flex min-h-12 items-center gap-3 rounded-xl px-3 no-underline', current(n.href) ? 'bg-lime-50 font-semibold text-ink' : 'font-medium text-ink']}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON[n.icon]} />
+                {n.label}
+              </a>
+            ))}
+            <button type="button" data-sign-out class="flex min-h-12 items-center gap-3 rounded-xl border-0 bg-transparent px-3 text-left font-medium text-ink">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON.signOut} />
+              Sign out
+            </button>
+            <p class="mt-2 border-t border-line px-3 pt-3 text-sm text-muted">Coming next: customers, payments, itineraries{isAdmin ? ' and website editing' : ''}.</p>
+          </div>
+        </dialog>
       </div>
-    </header>
-    <main class="wrap py-8">
-      <slot />
-    </main>
+    ) : (
+      <>
+        <header class="bg-ink text-white">
+          <div class="wrap flex items-center gap-3 py-3">
+            <img src="/logo-dark.png" alt="" width="44" height="44" class="h-11 w-11" />
+            <span class="font-display text-lg leading-tight font-bold">
+              Bagdogra Airport Taxi
+              <span class="block font-sans text-xs font-medium text-white/60">Admin</span>
+            </span>
+          </div>
+        </header>
+        <main class="wrap py-8">
+          <slot />
+        </main>
+      </>
+    )}
     <script>
-      document.getElementById('sign-out')?.addEventListener('click', async () => {
-        await fetch('/api/auth/sign-out/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        location.href = '/admin/login/';
+      document.querySelectorAll('[data-sign-out]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          await fetch('/api/auth/sign-out/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          location.href = '/admin/login/';
+        }),
+      );
+
+      // Phone "More" sheet.
+      const more = document.getElementById('a-more') as HTMLDialogElement | null;
+      document.querySelector('[data-open-more]')?.addEventListener('click', () => more?.showModal());
+      document.querySelector('[data-close-more]')?.addEventListener('click', () => more?.close());
+      more?.addEventListener('click', (e) => {
+        if (e.target === more) more.close();
+      });
+
+      // Ctrl K (⌘K on a Mac) jumps to the search box.
+      const kbd = document.querySelector('[data-kbd]');
+      if (kbd && /Mac|iPhone|iPad/.test(navigator.userAgent)) kbd.textContent = '⌘K';
+      document.addEventListener('keydown', (e) => {
+        if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k') return;
+        const search = document.getElementById('a-search');
+        if (search && search.offsetParent) {
+          e.preventDefault();
+          search.focus();
+        }
       });
 
       document.addEventListener('click', (e) => {
@@ -143,6 +354,17 @@ const nav = [
       .a-pw-toggle [data-eye-off], .a-pw-toggle[aria-pressed='true'] [data-eye] { display: none; }
       .a-pw-toggle[aria-pressed='true'] [data-eye-off] { display: block; }
       .a-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.05rem; }
+      /* Dashboard surfaces, as in the mock: white, hairline border, 20px corners, no shadow. */
+      .a-card { background: #fff; border: 1px solid var(--color-line); border-radius: 20px; }
+      .a-icon-btn {
+        display: grid; place-items: center; width: 2.75rem; height: 2.75rem; flex-shrink: 0;
+        border-radius: 0.75rem; border: 1px solid var(--color-line); background: #fff; color: var(--color-ink);
+      }
+      .a-icon-btn:hover { border-color: var(--color-ink); }
+      .a-icon-btn-wa { border: 0; background: #0f7a4e; color: #fff; }
+      .a-icon-btn-wa:hover { background: #0b5f3c; }
+      .a-sheet { margin: auto 0 0; width: 100%; max-width: 100%; max-height: 85vh; border: 0; border-radius: 24px 24px 0 0; padding: 0; background: #fff; color: var(--color-ink); }
+      .a-sheet::backdrop { background: rgb(17 17 17 / 55%); }
     </style>
   </body>
 </html>

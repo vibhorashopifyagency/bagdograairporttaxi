@@ -1,113 +1,411 @@
 ---
 /**
- * Temporary bookings list: every booking saved from the website, newest
- * first. The full "today board" dashboard replaces this page once the owner
- * approves the design mock.
+ * The "today board": the dashboard home from the owner's mock. A greeting
+ * with the weather and the month's goal, quick actions, today's and
+ * tomorrow's pickups, bookings waiting for a reply, balances to collect,
+ * this week's wins and a Google review. Every number comes from the database.
+ * The full bookings list lives at /admin/bookings/.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { audit } from '../../server/admin';
+import { audit, isAdmin } from '../../server/admin';
+import {
+  GOAL_KEY,
+  TONE,
+  addDays,
+  balancesToCollect,
+  inr,
+  inrShort,
+  istHour,
+  longDate,
+  monthGoal,
+  pickupsOn,
+  recentChanges,
+  reviewOfTheDay,
+  todayIST,
+  topRoutes,
+  waText,
+  waitingForReply,
+  weekWins,
+} from '../../server/dashboard';
 import { getDb, schema } from '../../server/db';
 import { ipHash } from '../../server/security';
-import { desc, ilike, or, type SQL } from 'drizzle-orm';
+import { currentWeather } from '../../server/weather';
 
 export const prerender = false;
 
 const user = Astro.locals.user!;
-const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, 60);
-const digits = q.replace(/\D/g, '');
-let where: SQL | undefined;
-if (q) {
-  const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
-  where = or(
-    ilike(schema.bookings.ref, like),
-    ilike(schema.bookings.customerName, like),
-    digits.length >= 4 ? ilike(schema.bookings.customerPhone, `%${digits}%`) : undefined,
-  );
+const admin = isAdmin(user);
+let goalError = '';
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  if (f.get('intent') === 'goal' && admin) {
+    const trips = Number(String(f.get('trips') ?? '').replace(/\D/g, ''));
+    const amount = Number(String(f.get('amount') ?? '').replace(/\D/g, '') || 0);
+    if (!Number.isInteger(trips) || trips < 1 || trips > 10_000) goalError = 'Enter a number of trips from 1 to 10,000.';
+    else if (amount > 1_000_000_000) goalError = 'That amount is too large.';
+    else {
+      const value = { trips, amount };
+      await getDb()
+        .insert(schema.settings)
+        .values({ key: GOAL_KEY, value, updatedBy: user.id })
+        .onConflictDoUpdate({ target: schema.settings.key, set: { value, updatedBy: user.id } });
+      await audit({ actorId: user.id, action: 'goal_set', entity: 'settings', entityId: GOAL_KEY, detail: value, ipHash: ipHash(Astro.request) });
+      return Astro.redirect('/admin/', 303);
+    }
+  }
 }
 
-const rows = await getDb()
-  .select()
-  .from(schema.bookings)
-  .where(where)
-  .orderBy(desc(schema.bookings.createdAt))
-  .limit(200);
-await audit({ actorId: user.id, action: 'view_bookings', entity: 'bookings', detail: { count: rows.length, q: q || undefined }, ipHash: ipHash(Astro.request) });
+const now = Date.now();
+const today = todayIST(now);
+const tomorrow = addDays(today, 1);
+const showTomorrow = Astro.url.searchParams.get('day') === 'tomorrow';
 
-const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
-const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
-const phoneLabel = (d: string) => (d.length === 12 && d.startsWith('91') ? `+91 ${d.slice(2, 7)} ${d.slice(7)}` : `+${d}`);
-const STATUS: Record<string, [string, string]> = {
-  new: ['New', 'bg-amber/20 text-[#8a5300]'],
-  contacted: ['Contacted', 'bg-[#eef0f3] text-body'],
-  confirmed: ['Confirmed', 'bg-lime-50 text-[#3f6200]'],
-  driver_assigned: ['Driver assigned', 'bg-lime-50 text-[#3f6200]'],
-  completed: ['Completed', 'bg-[#eef0f3] text-body'],
-  cancelled: ['Cancelled', 'bg-[#fde8e7] text-[#b42318]'],
-  no_show: ['No-show', 'bg-[#fde8e7] text-[#b42318]'],
-};
+const [todays, tomorrows, waiting, balances, wins, goal, routes, changes, weather] = await Promise.all([
+  pickupsOn(today, now),
+  pickupsOn(tomorrow, now),
+  waitingForReply(now),
+  balancesToCollect(now),
+  weekWins(now),
+  monthGoal(now),
+  topRoutes(now),
+  recentChanges(5, now),
+  currentWeather(),
+]);
+const review = reviewOfTheDay(now);
+await audit({ actorId: user.id, action: 'view_bookings', entity: 'dashboard', detail: { pickups: todays.length + tomorrows.length, waiting: waiting.items.length }, ipHash: ipHash(Astro.request) });
+
+const pickups = showTomorrow ? tomorrows : todays;
+const first = user.name.split(' ')[0];
+const hour = istHour(now);
+const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+const next = todays.find((p) => p.when.startsWith('in ') && p.status.label !== 'Completed');
+const n = todays.length;
+const w = waiting.total;
+const summary =
+  n === 0 && w === 0
+    ? 'No pickups today and nothing waiting for a reply. Time for chai.'
+    : `${n === 0 ? 'No pickups today' : `${n} ${n === 1 ? 'pickup' : 'pickups'} today`} and ${
+        w === 0 ? 'nothing waiting for a reply' : `${w} new ${w === 1 ? 'booking' : 'bookings'} waiting for a reply`
+      }.${next ? ` The next car leaves at ${next.time}.` : ''}`;
+
+const RING = 2 * Math.PI * 54;
+const waIcon = '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.5 8.5 0 1 1 21 11.5z"/>';
+const callIcon =
+  '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>';
+
+const actions = [
+  { href: '/admin/bookings/new/', label: 'New booking', sub: 'Phone or walk-in', bg: '#f4fbe4', fg: '#4f7a00', icon: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 13v5M9.5 15.5h5"/>' },
+  { label: 'Send itinerary', sub: 'Text and photos to WhatsApp', bg: '#e7f5ee', fg: '#0f7a4e', icon: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>' },
+  { label: 'Record payment', sub: 'UPI or cash', bg: '#fff4d6', fg: '#8a5300', icon: '<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h2"/>' },
+  { label: 'Send QR code', sub: 'Ask for the advance', bg: '#eef0f3', fg: '#111111', icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>' },
+];
 ---
 
-<AdminLayout title="Bookings">
-  <div class="flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Bookings</h1>
-      <p class="mt-1 text-sm text-muted">Every request from the website, newest first. The full dashboard arrives once its design is approved.</p>
-    </div>
-    <form method="get" class="flex w-full gap-2 sm:w-auto" role="search">
-      <label class="a-field flex-1"><span class="sr-only">Search</span><input name="q" value={q} placeholder="Name, mobile or BAT- reference" class="w-full sm:w-72" /></label>
-      <button class="btn-book" type="submit">Search</button>
-    </form>
-  </div>
+<AdminLayout title="Today">
+  <div class="flex flex-col gap-5 lg:gap-6">
+    {/* Greeting. On a phone the dark top bar runs on behind the photo, as in the mock. */}
+    <div class="-mx-4 -mt-4 bg-[linear-gradient(var(--color-ink)_0,var(--color-ink)_6rem,transparent_6rem)] px-4 pt-1 sm:-mx-6 sm:px-6 lg:m-0 lg:bg-none lg:p-0">
+      <section class="relative flex flex-wrap overflow-hidden rounded-[22px] text-white lg:min-h-[268px] lg:rounded-3xl">
+        <img src="/img/hero-1600.webp" alt="" width="1600" height="960" class="absolute inset-0 h-full w-full object-cover object-[70%_55%] lg:object-[center_42%]" />
+        <div class="absolute inset-0 bg-[rgb(17_17_17/0.58)] lg:bg-[linear-gradient(90deg,rgb(17_17_17/0.84)_0%,rgb(17_17_17/0.5)_55%,rgb(17_17_17/0.12)_100%)]"></div>
 
-  {rows.length === 0 ? (
-    <div class="card mt-6 p-8 text-center text-body">{q ? 'No bookings match that search.' : 'No bookings yet. They appear here the moment a customer presses Confirm on WhatsApp.'}</div>
-  ) : (
-    <div class="card mt-6 overflow-x-auto">
-      <table class="a-table">
-        <thead>
-          <tr><th>Received</th><th>Pickup</th><th>Trip</th><th>Customer</th><th>Fare</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((b) => {
-            const [label, cls] = STATUS[b.status] ?? [b.status, 'bg-mist'];
-            return (
-              <tr>
-                <td class="whitespace-nowrap" data-label="Received">
-                  <strong class="block font-mono text-sm">{b.ref}</strong>
-                  <span class="text-sm text-muted">{when.format(b.createdAt)}</span>
-                </td>
-                <td class="whitespace-nowrap" data-label="Pickup">
-                  <strong class="block">{day.format(new Date(`${b.pickupDate}T00:00:00Z`))}, {b.pickupTime}</strong>
-                  {b.flight && <span class="text-sm text-muted">{b.flight}</span>}
-                </td>
-                <td data-label="Trip">
-                  <span class="block font-semibold">{b.tripName}</span>
-                  <span class="text-sm text-muted">{b.pax} {b.pax === 1 ? 'person' : 'people'}{b.dropAddress ? ` · ${b.dropAddress}` : ''}</span>
-                </td>
-                <td data-label="Customer">
-                  {b.customerPhone ? (
-                    <>
-                      <span class="block font-semibold">{b.customerName}</span>
-                      <span class="flex flex-wrap gap-3 text-sm">
-                        <a href={`tel:+${b.customerPhone}`}>{phoneLabel(b.customerPhone)}</a>
-                        <a href={`https://wa.me/${b.customerPhone}?text=${encodeURIComponent(`Namaste ${b.customerName}, about your booking ${b.ref}: `)}`} target="_blank" rel="noopener">WhatsApp</a>
-                      </span>
-                    </>
-                  ) : (
-                    <span class="text-sm text-muted">Details removed after 24 months</span>
-                  )}
-                </td>
-                <td class="whitespace-nowrap" data-label="Fare">
-                  <strong class="block">{inr(b.fareTotal)}</strong>
-                  {b.fareMismatch && <span class="a-badge bg-[#fde8e7] text-[#b42318]" title={`The page showed ${inr(b.fareShown)}`}>Page showed {inr(b.fareShown)}</span>}
-                </td>
-                <td data-label="Status"><span class:list={['a-badge', cls]}>{label}</span></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+        <div class="relative flex flex-[999_1_420px] flex-col justify-center gap-2.5 px-5 py-6 lg:gap-3.5 lg:px-9 lg:py-8">
+          <span class="text-[13px] font-semibold text-[#d9f59a] lg:text-sm">{longDate.format(new Date(`${today}T00:00:00Z`))}</span>
+          <h1 class="m-0 font-display text-[32px] leading-[1.05] font-bold text-white lg:text-[44px]">{greeting}, {first}.</h1>
+          <p class="m-0 max-w-[520px] text-[15px] text-[#eef0f3] lg:text-lg">{summary}</p>
+          {weather.length > 0 && (
+            <ul class="m-0 mt-1 flex list-none flex-wrap gap-1.5 p-0 lg:gap-2">
+              {weather.map((x) => (
+                <li class="rounded-full border border-white/22 bg-white/14 px-2.5 py-1 text-xs lg:px-3 lg:py-1.5 lg:text-[13px]">{x.place} {x.temp}°, {x.sky}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* The month's goal */}
+        <div class="relative flex flex-[1_1_300px] items-center gap-5 lg:max-w-[440px] lg:basis-[440px] border-t border-white/12 bg-[rgb(17_17_17/0.5)] px-5 py-5 backdrop-blur-[2px] lg:border-t-0 lg:border-l lg:px-8 lg:py-7">
+          {goal.goal ? (
+            <>
+              <svg width="132" height="132" viewBox="0 0 132 132" role="img" aria-label={`${goal.monthName} goal ${goal.pct} percent reached`} class="hidden shrink-0 lg:block">
+                <circle cx="66" cy="66" r="54" fill="none" stroke="rgb(255 255 255 / 16%)" stroke-width="12" />
+                <circle cx="66" cy="66" r="54" fill="none" stroke="#a1e005" stroke-width="12" stroke-linecap="round" stroke-dasharray={`${(goal.pct / 100) * RING} ${RING}`} transform="rotate(-90 66 66)" />
+                <text x="66" y="64" text-anchor="middle" fill="#fff" font-family="Bricolage, Inter, sans-serif" font-size="30" font-weight="700">{goal.pct}%</text>
+                <text x="66" y="86" text-anchor="middle" fill="#d0d4dc" font-family="Inter, sans-serif" font-size="12">of {goal.monthName} goal</text>
+              </svg>
+              <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div class="flex items-baseline justify-between gap-3 lg:block">
+                  <span class="text-base font-bold lg:hidden">{goal.monthName} goal</span>
+                  <span class="font-display text-xl font-bold text-lime lg:text-[26px] lg:text-white">{goal.trips} of {goal.goal.trips} trips</span>
+                </div>
+                <div class="h-2.5 overflow-hidden rounded-full bg-white/16 lg:hidden"><div class="h-full rounded-full bg-lime" style={`width:${goal.pct}%`}></div></div>
+                <span class="text-[13px] text-[#e3e6ec] lg:text-sm">{inr(goal.value)} in confirmed fares{goal.goal.amount ? ` of ${inr(goal.goal.amount)}` : ''}</span>
+                <span class="text-[13px] font-semibold text-[#d9f59a] lg:text-sm">{goal.line}</span>
+                {admin && (
+                  <details class="text-sm">
+                    <summary class="cursor-pointer text-[#c9ced8] underline decoration-white/30 underline-offset-2">Change goal</summary>
+                    <form method="post" class="mt-3 flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="intent" value="goal" />
+                      <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">Trips a month<input name="trips" inputmode="numeric" required value={goal.goal.trips} class="h-11 w-24 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
+                      <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">Fares, ₹<input name="amount" inputmode="numeric" value={goal.goal.amount || ''} class="h-11 w-32 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
+                      <button type="submit" class="h-11 rounded-xl bg-lime px-4 font-semibold text-ink">Save</button>
+                    </form>
+                  </details>
+                )}
+              </div>
+            </>
+          ) : admin ? (
+            <form method="post" class="flex flex-1 flex-col gap-3">
+              <input type="hidden" name="intent" value="goal" />
+              <span class="font-display text-xl font-bold lg:text-2xl">Set a goal for {goal.monthName}</span>
+              <span class="text-sm text-[#e3e6ec]">{goal.trips} {goal.trips === 1 ? 'trip' : 'trips'} confirmed so far. A goal turns this into a progress ring the team can watch fill up.</span>
+              <div class="flex flex-wrap items-end gap-2">
+                <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">Trips a month<input name="trips" inputmode="numeric" required placeholder="50" class="h-11 w-24 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
+                <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">Fares, ₹ <span class="sr-only">(optional)</span><input name="amount" inputmode="numeric" placeholder="200000" class="h-11 w-32 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
+                <button type="submit" class="h-11 rounded-xl bg-lime px-4 font-semibold text-ink">Set goal</button>
+              </div>
+            </form>
+          ) : (
+            <div class="flex flex-col gap-1.5">
+              <span class="font-display text-xl font-bold lg:text-[26px]">{goal.trips} {goal.trips === 1 ? 'trip' : 'trips'} in {goal.monthName}</span>
+              <span class="text-sm text-[#e3e6ec]">{inr(goal.value)} in confirmed fares so far.</span>
+            </div>
+          )}
+          {goalError && <p class="a-msg a-msg-error absolute right-4 bottom-4 left-4 m-0" role="alert">{goalError}</p>}
+        </div>
+      </section>
     </div>
-  )}
+
+    {/* Quick actions */}
+    <section aria-label="Quick actions" class="grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
+      {actions.map((a) => {
+        const inner = (
+          <>
+            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl lg:h-11 lg:w-11" style={`background:${a.bg}`}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a.fg} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={a.icon} />
+            </span>
+            <span class="flex flex-col">
+              <span class="font-semibold">{a.label}</span>
+              <span class="text-[13px] text-[#5c6373]">{a.href ? a.sub : 'Coming next'}</span>
+            </span>
+          </>
+        );
+        return a.href ? (
+          <a href={a.href} class="a-card flex flex-col items-start gap-2.5 p-3.5 text-ink no-underline transition-colors hover:border-ink lg:flex-row lg:items-center lg:gap-3.5 lg:px-[18px] lg:py-4">{inner}</a>
+        ) : (
+          <div aria-disabled="true" title="Coming next" class="a-card flex flex-col items-start gap-2.5 p-3.5 opacity-60 lg:flex-row lg:items-center lg:gap-3.5 lg:px-[18px] lg:py-4">{inner}</div>
+        );
+      })}
+    </section>
+
+    {/* The board. Phone order: waiting, pickups, balances, wins, review (as in the mock). */}
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-rows-[auto_auto_auto_1fr] lg:gap-6">
+      <section class="a-card flex flex-col p-4 lg:col-start-2 lg:row-start-1 lg:self-start lg:p-5" aria-labelledby="waiting-h">
+        <div class="flex items-center justify-between gap-3 pb-1.5">
+          <h2 id="waiting-h" class="m-0 font-display text-[19px] font-bold lg:text-xl">Waiting for a reply</h2>
+          {w > 0 && <span class="rounded-full bg-amber px-2.5 py-0.5 text-xs font-bold text-ink">{w} new</span>}
+        </div>
+        {waiting.items.length === 0 ? (
+          <p class="m-0 border-t border-[#f0f1f3] pt-3 text-sm text-body">All caught up. Every new booking has had a reply.</p>
+        ) : (
+          waiting.items.map((x) => (
+            <div class="flex items-center gap-3 border-t border-[#f0f1f3] py-3" data-row={x.id}>
+              <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <a href={`/admin/bookings/?q=${x.ref}`} class="font-semibold text-ink no-underline hover:underline">{x.name}</a>
+                <span class="text-[13px] text-[#5c6373]">{x.what}</span>
+              </div>
+              <span class:list={['a-badge', TONE[x.tone]]} title="Waiting since the booking came in">{x.wait}</span>
+              {x.waLink && (
+                <a href={x.waLink} target="_blank" rel="noopener" data-reply={x.id} aria-label={`Reply to ${x.name} on WhatsApp`} title="Opens WhatsApp and marks the booking as contacted" class="a-icon-btn a-icon-btn-wa">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={waIcon} />
+                </a>
+              )}
+            </div>
+          ))
+        )}
+        {w > waiting.items.length && <a href="/admin/bookings/?status=new" class="border-t border-[#f0f1f3] pt-3 text-sm font-semibold text-ink">See all {w}</a>}
+      </section>
+
+      <section class="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-span-4 lg:row-start-1 lg:gap-3.5" aria-labelledby="pickups-h">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="pickups-h" class="m-0 font-display text-[19px] font-bold lg:text-2xl">{showTomorrow ? "Tomorrow's pickups" : "Today's pickups"}</h2>
+          <nav aria-label="Day" class="flex gap-1 rounded-xl border border-line bg-white p-1">
+            <a href="/admin/" aria-current={showTomorrow ? undefined : 'page'} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showTomorrow ? 'font-medium text-body' : 'bg-ink font-semibold text-white']}>Today · {todays.length}</a>
+            <a href="/admin/?day=tomorrow" aria-current={showTomorrow ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showTomorrow ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>Tomorrow · {tomorrows.length}</a>
+          </nav>
+        </div>
+        {pickups.length === 0 ? (
+          <div class="a-card relative overflow-hidden p-6 lg:p-8">
+            <p class="m-0 font-display text-xl font-bold">{showTomorrow ? 'Nothing booked for tomorrow yet.' : 'No pickups today. Time for chai.'}</p>
+            <p class="m-0 mt-1 text-body">Trips show up here the moment a customer confirms on WhatsApp, or when you add one by hand.</p>
+          </div>
+        ) : (
+          pickups.map((p) => (
+            <article class="a-card flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:gap-[18px] sm:px-5 sm:py-[18px]">
+              <div class="flex items-center gap-2.5 sm:min-w-[68px] sm:flex-col sm:gap-1 sm:pt-0.5">
+                <span class="font-display text-[22px] leading-none font-bold sm:text-2xl">{p.time}</span>
+                <span class="text-xs text-[#5c6373]">{p.when}</span>
+                <span class="ml-auto sm:hidden"><span class:list={['a-badge', TONE[p.status.tone]]}>{p.status.label}</span></span>
+              </div>
+              <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-base font-bold sm:text-[17px]">{p.route}</span>
+                  <span class="hidden sm:inline"><span class:list={['a-badge', TONE[p.status.tone]]}>{p.status.label}</span></span>
+                </div>
+                <span class="text-body">{p.who}</span>
+                <span class="text-sm text-[#5c6373]">{p.travel}</span>
+                <div class="mt-1 flex flex-wrap items-center gap-2.5">
+                  <span class:list={['flex items-center gap-1.5 rounded-[10px] px-2.5 py-1 text-sm', p.carMissing ? 'bg-[#fde8e7] text-[#b42318]' : 'bg-mist text-body']}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 17h14M6 17l1.5-6h9L18 17M8 21v-4M16 21v-4" /></svg>
+                    {p.car}
+                  </span>
+                  <span class:list={['a-badge', TONE[p.pay.tone]]}>{p.pay.label}</span>
+                </div>
+              </div>
+              {p.phone && (
+                <div class="flex justify-end gap-2">
+                  <a href={`tel:+${p.phone}`} aria-label={`Call ${p.name}`} class="a-icon-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={callIcon} />
+                  </a>
+                  <a href={waText(p.phone, `Namaste ${p.name.split(' ')[0]}, about your pickup ${showTomorrow ? 'tomorrow' : 'today'} at ${p.time} (${p.ref}): `)} target="_blank" rel="noopener" aria-label={`WhatsApp ${p.name}`} class="a-icon-btn a-icon-btn-wa">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={waIcon} />
+                  </a>
+                </div>
+              )}
+            </article>
+          ))
+        )}
+      </section>
+
+      <section class="a-card flex flex-col p-4 lg:col-start-2 lg:self-start lg:p-5" aria-labelledby="balances-h">
+        <div class="flex items-center justify-between gap-3 pb-1.5">
+          <h2 id="balances-h" class="m-0 font-display text-[19px] font-bold lg:text-xl">Balances to collect</h2>
+          <span class="text-[15px] font-bold">{inr(balances.total)}</span>
+        </div>
+        {balances.items.length === 0 ? (
+          <p class="m-0 border-t border-[#f0f1f3] pt-3 text-sm text-body">Nothing to collect. Every confirmed trip is paid up.</p>
+        ) : (
+          balances.items.map((x) => (
+            <div class="flex items-center gap-3 border-t border-[#f0f1f3] py-2.5">
+              <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="font-semibold">{x.name}</span>
+                <span class="text-[13px] text-[#5c6373]">{x.what}</span>
+              </div>
+              <span class="font-bold">{inr(x.amt)}</span>
+              {x.waLink && <a href={x.waLink} target="_blank" rel="noopener" class="grid h-11 place-items-center rounded-[10px] border border-ink bg-white px-3 text-[13px] font-semibold text-ink no-underline hover:bg-ink hover:text-white" aria-label={`Remind ${x.name} on WhatsApp`}>Remind</a>}
+            </div>
+          ))
+        )}
+      </section>
+
+      <section class="flex flex-col gap-3.5 rounded-[20px] bg-ink p-4 text-white lg:col-start-2 lg:self-start lg:p-5" aria-labelledby="wins-h">
+        <div class="flex items-center gap-2.5">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg>
+          <h2 id="wins-h" class="m-0 font-display text-[19px] font-bold text-white lg:text-xl">Wins this week</h2>
+        </div>
+        <dl class="m-0 grid grid-cols-3 gap-2.5">
+          <div class="flex flex-col-reverse gap-0.5"><dt class="text-[13px] text-[#c9ced8]">bookings in</dt><dd class="m-0 font-display text-[28px] leading-tight font-bold text-lime">{wins.received}</dd></div>
+          <div class="flex flex-col-reverse gap-0.5"><dt class="text-[13px] text-[#c9ced8]">trips confirmed</dt><dd class="m-0 font-display text-[28px] leading-tight font-bold text-lime">{wins.confirmed}</dd></div>
+          <div class="flex flex-col-reverse gap-0.5"><dt class="text-[13px] text-[#c9ced8]">collected</dt><dd class="m-0 font-display text-[28px] leading-tight font-bold text-lime">{inrShort(wins.collected)}</dd></div>
+        </dl>
+        <p class="m-0 border-t border-ink-700 pt-3 text-sm text-[#e3e6ec]">{wins.line}</p>
+      </section>
+
+      {review && (
+        <figure class="a-card m-0 flex flex-col gap-2.5 p-4 lg:col-start-2 lg:self-start lg:p-5">
+          <div class="flex items-center gap-2">
+            <span class="flex gap-0.5" role="img" aria-label="5 stars">
+              {[1, 2, 3, 4, 5].map(() => <svg width="16" height="16" viewBox="0 0 24 24" fill="#ffb300" aria-hidden="true"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z" /></svg>)}
+            </span>
+            <a href={review.url} target="_blank" rel="noopener" class="text-[13px] text-[#5c6373] no-underline hover:underline">Google reviews · {review.rating} from {review.count}</a>
+          </div>
+          <blockquote class="m-0 line-clamp-4 font-display text-lg leading-snug text-ink">“{review.text}”</blockquote>
+          <figcaption class="text-sm font-semibold text-body">{review.author}</figcaption>
+        </figure>
+      )}
+    </div>
+
+    {/* This month */}
+    <section class="a-card flex flex-wrap gap-8 p-5 lg:px-6 lg:py-[22px]">
+      <div class="flex min-w-0 flex-[1_1_320px] flex-col gap-3.5">
+        <h2 class="m-0 font-display text-xl font-bold">Most booked routes this month</h2>
+        {routes.length === 0 ? (
+          <p class="m-0 text-sm text-body">Routes show up here after the month's first bookings.</p>
+        ) : (
+          <ul class="m-0 flex list-none flex-col gap-3 p-0">
+            {routes.map((r) => (
+              <li class="flex items-center gap-3">
+                <span class="w-[42%] max-w-[220px] text-sm text-body">{r.name}</span>
+                <span class="h-3 flex-1 overflow-hidden rounded-md bg-mist" aria-hidden="true"><span class="block h-full rounded-md bg-lime" style={`width:${r.pct}%`}></span></span>
+                <span class="w-7 text-right text-sm font-bold">{r.count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div class="flex min-w-0 flex-[1_1_320px] flex-col gap-3.5">
+        <h2 class="m-0 font-display text-xl font-bold">Latest changes</h2>
+        {changes.length === 0 ? (
+          <p class="m-0 text-sm text-body">New bookings and status changes show up here.</p>
+        ) : (
+          <ul class="m-0 flex list-none flex-col gap-2.5 p-0 text-sm text-body">
+            {changes.map((c) => (
+              <li class="flex items-start gap-2.5">
+                <span class:list={['mt-1.5 h-2 w-2 shrink-0 rounded-full', c.tone === 'lime' ? 'bg-lime' : c.tone === 'amber' ? 'bg-amber' : c.tone === 'red' ? 'bg-[#e5484d]' : 'bg-[#a3aab8]']}></span>
+                <span class="flex min-w-0 flex-1 flex-col sm:flex-row sm:gap-2.5">
+                  <span class="min-w-0 flex-1">{c.text}</span>
+                  <span class="shrink-0 text-[13px] text-[#5c6373] sm:text-sm">{c.who} · {c.when}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  </div>
 </AdminLayout>
+
+<script>
+  // "Reply on WhatsApp" opens the chat and marks the booking as contacted,
+  // with a way to undo it from the same row.
+  async function setStatus(id: string, status: string): Promise<boolean> {
+    try {
+      const res = await fetch('/admin/api/booking-status/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+        keepalive: true,
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  document.addEventListener('click', async (e) => {
+    const reply = (e.target as Element).closest<HTMLAnchorElement>('[data-reply]');
+    if (reply) {
+      const id = reply.dataset.reply!;
+      const row = reply.closest<HTMLElement>('[data-row]');
+      if (!(await setStatus(id, 'contacted')) || !row) return;
+      const name = row.querySelector('a')?.textContent ?? 'Booking';
+      row.dataset.saved = row.innerHTML;
+      row.innerHTML = '';
+      const note = document.createElement('span');
+      note.className = 'flex-1 text-sm text-body';
+      note.textContent = `${name} moved to contacted.`;
+      const undo = document.createElement('button');
+      undo.type = 'button';
+      undo.className = 'btn-ghost min-h-11 px-4 py-2 text-sm';
+      undo.textContent = 'Undo';
+      undo.dataset.undo = id;
+      row.append(note, undo);
+      return;
+    }
+    const undo = (e.target as Element).closest<HTMLButtonElement>('[data-undo]');
+    if (undo) {
+      const row = undo.closest<HTMLElement>('[data-row]');
+      if (row && (await setStatus(undo.dataset.undo!, 'new'))) row.innerHTML = row.dataset.saved ?? '';
+    }
+  });
+</script>

@@ -22,7 +22,7 @@
     "check:live": "node scripts/check-live.mjs https://bagdograairporttaxi.com",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
-    "db:local": "pglite-server --db=.data/pglite --port=5433"
+    "db:local": "node scripts/db-local.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",
