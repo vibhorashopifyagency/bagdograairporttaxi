@@ -1,0 +1,31 @@
+---
+/**
+ * "Rows 10 · 25 · 50" for a list. Plain links: the choice is remembered in a
+ * cookie (see rowsFor in src/server/paging.ts), so it carries to other lists.
+ */
+import { ROW_CHOICES } from '../../server/paging';
+
+interface Props {
+  current: number;
+  /** The link that shows `n` rows a page. */
+  href: (n: number) => string;
+  class?: string;
+}
+const { current, href, class: extra } = Astro.props;
+---
+
+<nav aria-label="Rows per page" class:list={['flex items-center gap-2', extra]}>
+  <span class="text-sm text-muted">Rows</span>
+  <span class="flex gap-1 rounded-xl border border-line bg-white p-1">
+    {ROW_CHOICES.map((n) => (
+      <a
+        href={href(n)}
+        aria-current={n === current ? 'true' : undefined}
+        aria-label={`${n} rows a page`}
+        class:list={['inline-flex min-h-10 min-w-10 items-center justify-center rounded-[9px] px-3 text-sm no-underline', n === current ? 'bg-ink font-semibold text-white' : 'font-medium text-body hover:text-ink']}
+      >
+        {n}
+      </a>
+    ))}
+  </span>
+</nav>

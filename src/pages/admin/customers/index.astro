@@ -1,15 +1,17 @@
 ---
 /**
  * Everyone who has booked, most recent first, one row per mobile number,
- * 50 to a page. Opening this page is logged, because it lists names and
- * numbers.
+ * a page at a time (10, 25 or 50 rows), with search and a date range on
+ * when they last booked. Opening this page is logged, because it lists
+ * names and numbers.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import ListFilters from '../../../components/admin/ListFilters.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { audit } from '../../../server/admin';
-import { inr, todayIST } from '../../../server/dashboard';
+import { addDays, inr, istMidnight, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
-import { cursorField, listHref, pageFrom, pageQuery, pageResult, type SortKey } from '../../../server/paging';
+import { cursorField, dateFilter, listHref, pageFrom, pageQuery, pageResult, rowsFor, withParams, type SortKey } from '../../../server/paging';
 import { ipHash } from '../../../server/security';
 import { phoneLabel } from '../../../lib/itinerary-text';
 import { and, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
@@ -27,18 +29,22 @@ if (q) {
   search = or(ilike(c.name, like), digits.length >= 4 ? ilike(c.phone, `%${digits}%`) : undefined);
 }
 
-// Same expression as the customers_recent_idx index, so a page is read straight from it.
-const key: SortKey = { cols: [sql`coalesce(${c.lastBookingAt}, ${c.createdAt})`, sql`${c.id}`], types: ['timestamptz', 'uuid'], order: 'desc' };
+// Same expression as the customers_recent_idx index, so a page (and a date range) is read straight from it.
+const lastBooked = sql`coalesce(${c.lastBookingAt}, ${c.createdAt})`;
+const { from, to } = dateFilter(Astro.url);
+const inRange = and(from ? sql`${lastBooked} >= ${istMidnight(from)}` : undefined, to ? sql`${lastBooked} < ${istMidnight(addDays(to, 1))}` : undefined);
+const size = rowsFor(Astro.url, Astro.cookies);
+const key: SortKey = { cols: [lastBooked, sql`${c.id}`], types: ['timestamptz', 'uuid'], order: 'desc' };
 const page = pageFrom(Astro.url, key);
-const pq = pageQuery(key, page);
+const pq = pageQuery(key, page, size);
 const db = getDb();
 const fetched = await db
   .select({ id: c.id, name: c.name, phone: c.phone, last: c.lastBookingAt, notes: c.notes, cursor: cursorField(key) })
   .from(c)
-  .where(and(isNull(c.personalDataRemovedAt), search, pq.where))
+  .where(and(isNull(c.personalDataRemovedAt), search, inRange, pq.where))
   .orderBy(...pq.orderBy)
   .limit(pq.limit);
-const list = pageResult(fetched, page, listHref('/admin/customers/', { q }));
+const list = pageResult(fetched, page, listHref('/admin/customers/', { q, from, to }), size);
 
 // Totals for this page's customers only, so the work stays the same however many there are.
 const ids = list.rows.map((r) => r.id);
@@ -66,7 +72,7 @@ const [totals, paidRows] = ids.length
 const totalOf = new Map(totals.map((t) => [t.id, t]));
 const paidOf = new Map(paidRows.map((t) => [t.id, Number(t.paid)]));
 const rows = list.rows.map((r) => ({ ...r, bookings: totalOf.get(r.id)?.bookings ?? 0, trips: totalOf.get(r.id)?.trips ?? 0, nextTrip: totalOf.get(r.id)?.nextTrip ?? null, paid: paidOf.get(r.id) ?? 0 }));
-await audit({ actorId: user.id, action: 'view_customers', entity: 'customers', detail: { count: rows.length, q: q || undefined }, ipHash: ipHash(Astro.request) });
+await audit({ actorId: user.id, action: 'view_customers', entity: 'customers', detail: { count: rows.length, q: q || undefined, from: from ?? undefined, to: to ?? undefined }, ipHash: ipHash(Astro.request) });
 
 const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
@@ -80,13 +86,25 @@ const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '
         <p class="m-0 mt-1 text-sm text-muted">One entry per mobile number, so a returning customer is recognised however they type it.</p>
       </div>
       <form method="get" class="flex w-full gap-2 sm:w-auto" role="search">
+        {from && <input type="hidden" name="from" value={from} />}
+        {to && <input type="hidden" name="to" value={to} />}
         <label class="a-field flex-1"><span class="sr-only">Search customers</span><input name="q" type="search" value={q} placeholder="Name or mobile number" class="w-full sm:w-72" /></label>
         <button class="btn-book" type="submit">Search</button>
       </form>
     </div>
 
+    <ListFilters
+      dateLabel="Last booked"
+      from={from}
+      to={to}
+      keep={{ q }}
+      clearHref={listHref('/admin/customers/', { q })(null)}
+      rows={size}
+      rowsHref={(n) => withParams(Astro.url, { rows: String(n) })}
+    />
+
     {rows.length === 0 ? (
-      <div class="a-card p-8 text-body">{page.cursor ? 'Nothing more on this page.' : q ? 'No customers match that.' : 'No customers yet. Everyone who books appears here.'}</div>
+      <div class="a-card p-8 text-body">{page.cursor ? 'Nothing more on this page.' : q || from || to ? 'No customers match that.' : 'No customers yet. Everyone who books appears here.'}</div>
     ) : (
       <div class="a-card overflow-x-auto">
         <table class="a-table">

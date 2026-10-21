@@ -1,0 +1,47 @@
+---
+/**
+ * The bar above a long list: a date range (from, to, or both) and how many
+ * rows a page shows. Applying dates starts the list again from the top and
+ * keeps the list's other filters (search, status, tab).
+ */
+import RowsPicker from './RowsPicker.astro';
+
+interface Props {
+  /** Which date the range applies to, as people say it: "Last booked", "Received". */
+  dateLabel: string;
+  from: string | null;
+  to: string | null;
+  /** A choice of which date to filter by (bookings: pickup or booked on). */
+  by?: { name: string; value: string; options: [value: string, label: string][] };
+  /** The list's other filters, carried through when dates are applied. */
+  keep?: Record<string, string | null | undefined>;
+  /** The same list with the dates taken off. */
+  clearHref: string;
+  rows: number;
+  rowsHref: (n: number) => string;
+  class?: string;
+}
+const { dateLabel, from, to, by, keep = {}, clearHref, rows, rowsHref, class: extra } = Astro.props;
+---
+
+<div class:list={['flex flex-wrap items-end justify-between gap-3', extra]}>
+  <form method="get" class="flex flex-wrap items-end gap-2" aria-label={`Filter by ${dateLabel.toLowerCase()}`}>
+    {Object.entries(keep).map(([k, v]) => v && <input type="hidden" name={k} value={v} />)}
+    {by && (
+      <label class="a-field w-full sm:w-auto">
+        Date
+        <select name={by.name}>
+          {by.options.map(([value, label]) => <option value={value} selected={value === by.value}>{label}</option>)}
+        </select>
+      </label>
+    )}
+    {/* From and To stay side by side, even on a phone. */}
+    <span class="flex w-full gap-2 sm:w-auto">
+      <label class="a-field min-w-0 flex-1">{by ? 'From' : `${dateLabel} from`}<input type="date" name="from" value={from ?? ''} max={to ?? undefined} class="w-full sm:w-[10.5rem]" /></label>
+      <label class="a-field min-w-0 flex-1">To<input type="date" name="to" value={to ?? ''} min={from ?? undefined} class="w-full sm:w-[10.5rem]" /></label>
+    </span>
+    <button type="submit" class="btn-ghost px-4 text-sm">Apply</button>
+    {(from || to) && <a href={clearHref} class="inline-flex min-h-12 items-center px-2 text-sm font-semibold text-body hover:text-ink">Clear dates</a>}
+  </form>
+  <RowsPicker current={rows} href={rowsHref} />
+</div>

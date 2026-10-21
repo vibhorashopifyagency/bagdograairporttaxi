@@ -27,7 +27,7 @@ import {
   type DriverForm,
   type PayoutForm,
 } from '../../../server/drivers';
-import { PAGE_SIZE, pageNumber } from '../../../server/paging';
+import { pageNumber, rowsFor } from '../../../server/paging';
 import { canRecordPayments } from '../../../server/payments';
 import { ipHash } from '../../../server/security';
 import { phoneLabel } from '../../../lib/itinerary-text';
@@ -97,9 +97,10 @@ if (Astro.request.method === 'POST') {
 }
 
 const page = pageNumber(Astro.url);
-const [acc, st, upcoming] = await Promise.all([accountOf(driver.id), statement(driver.id, page), upcomingTrips(driver.id)]);
+const size = rowsFor(Astro.url, Astro.cookies);
+const [acc, st, upcoming] = await Promise.all([accountOf(driver.id), statement(driver.id, page, size), upcomingTrips(driver.id)]);
 const lines = st.lines;
-const pages = Math.max(1, Math.ceil(st.total / PAGE_SIZE));
+const pages = Math.max(1, Math.ceil(st.total / size));
 const pageHref = (n: number) => `${here}${n > 1 ? `?page=${n}` : ''}`;
 if (!payout.amount && acc.balance > 0) payout.amount = String(acc.balance);
 
@@ -201,6 +202,7 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
           prev={page > 1 && lines.length ? pageHref(page - 1) : null}
           next={page < pages ? pageHref(page + 1) : null}
           summary={`Page ${page} of ${pages}`}
+          rows={{ current: size, href: (n) => `${here}?rows=${n}` }}
         />
       </section>
 

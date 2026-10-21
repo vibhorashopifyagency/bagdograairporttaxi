@@ -6,14 +6,15 @@
  * Payments themselves are recorded on each booking's page.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import ListFilters from '../../../components/admin/ListFilters.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { audit, isAdmin } from '../../../server/admin';
 import { TONE, addDays, balancesToCollect, inr, inrShort, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
-import { cursorField, listHref, pageFrom, pageQuery, pageResult, type SortKey } from '../../../server/paging';
+import { cursorField, dateFilter, listHref, pageFrom, pageQuery, pageResult, rowsFor, withParams, type SortKey } from '../../../server/paging';
 import { METHOD_LABEL, getUpi, qrSrc, readUpiText, removeUpi, setUpi } from '../../../server/payments';
 import { ipHash } from '../../../server/security';
-import { and, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, lte, sql } from 'drizzle-orm';
 
 export const prerender = false;
 
@@ -49,15 +50,23 @@ const db = getDb();
 const sumSince = (from: string) =>
   db.select({ sum: sql<string>`coalesce(sum(${p.amount}), 0)`, n: sql<string>`count(*) filter (where ${p.kind} = 'payment')` }).from(p).where(and(gte(p.receivedOn, from), lt(p.receivedOn, addDays(today, 2))));
 
-// The entries list, newest first, 50 to a page (src/server/paging.ts).
+// The entries list, newest first, a page at a time (src/server/paging.ts),
+// optionally only the days the money was received in.
+const range = dateFilter(Astro.url);
+const inRange = and(range.from ? gte(p.receivedOn, range.from) : undefined, range.to ? lte(p.receivedOn, range.to) : undefined);
+const size = rowsFor(Astro.url, Astro.cookies);
 const key: SortKey = { cols: [sql`${p.createdAt}`, sql`${p.id}`], types: ['timestamptz', 'uuid'], order: 'desc' };
 const page = pageFrom(Astro.url, key);
-const pq = pageQuery(key, page);
-const [[month], [week], balances, upi, fetched] = await Promise.all([
+const pq = pageQuery(key, page, size);
+const [[month], [week], balances, upi, [rangeSum], fetched] = await Promise.all([
   sumSince(monthStart),
   sumSince(weekStart),
   balancesToCollect(),
   getUpi(),
+  // What the chosen days add up to: payments less refunds and reversals.
+  range.from || range.to
+    ? db.select({ sum: sql<string>`coalesce(sum(${p.amount}), 0)`, n: sql<number>`(count(*) filter (where ${p.kind} = 'payment'))::int` }).from(p).where(inRange)
+    : Promise.resolve([]),
   db
     .select({
       pay: p,
@@ -72,13 +81,15 @@ const [[month], [week], balances, upi, fetched] = await Promise.all([
     .from(p)
     .innerJoin(b, eq(p.bookingId, b.id))
     .leftJoin(schema.user, eq(p.createdBy, schema.user.id))
-    .where(pq.where)
+    .where(and(inRange, pq.where))
     .orderBy(...pq.orderBy)
     .limit(pq.limit),
 ]);
-const list = pageResult(fetched, page, listHref('/admin/payments/', {}));
+const list = pageResult(fetched, page, listHref('/admin/payments/', range), size);
 const rows = list.rows;
-await audit({ actorId: user.id, action: 'view_payments', entity: 'payments', detail: { count: rows.length }, ipHash: ctx.ipHash });
+await audit({ actorId: user.id, action: 'view_payments', entity: 'payments', detail: { count: rows.length, from: range.from ?? undefined, to: range.to ?? undefined }, ipHash: ctx.ipHash });
+/** The CSV follows the dates on screen. */
+const csvHref = listHref('/admin/payments/export.csv', range)(null);
 
 if (upi && !upiError) upiDraft = upi;
 const dateFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
@@ -98,7 +109,7 @@ const stats = [
         <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Payments</h1>
         <p class="m-0 mt-1 text-sm text-muted">UPI and cash, recorded by hand on each booking. Nothing is ever deleted: mistakes are reversed by the admin.</p>
       </div>
-      {admin && <a href="/admin/payments/export.csv" class="btn-ghost min-h-11 px-4 py-2 text-sm" download>Download for accounts (CSV)</a>}
+      {admin && <a href={csvHref} class="btn-ghost min-h-11 px-4 py-2 text-sm" download>{range.from || range.to ? 'Download these dates (CSV)' : 'Download for accounts (CSV)'}</a>}
     </div>
 
     <section class="grid gap-3 sm:grid-cols-3" aria-label="Totals">
@@ -114,8 +125,22 @@ const stats = [
     <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:gap-6">
       <section class="a-card min-w-0 overflow-hidden" aria-labelledby="list-h">
         <h2 id="list-h" class="m-0 px-5 pt-5 pb-2 font-display text-xl font-bold">Latest entries</h2>
+        <ListFilters
+          class="px-5 pb-4"
+          dateLabel="Received"
+          from={range.from}
+          to={range.to}
+          clearHref="/admin/payments/"
+          rows={size}
+          rowsHref={(n) => withParams(Astro.url, { rows: String(n) })}
+        />
+        {rangeSum && (
+          <p class="m-0 border-t border-[#f0f1f3] px-5 py-3 text-sm text-body" role="status">
+            In these dates: <strong class="text-ink">{Number(rangeSum.sum) < 0 ? `−${inr(-Number(rangeSum.sum))}` : inr(Number(rangeSum.sum))}</strong> after refunds and reversals, from {rangeSum.n} {rangeSum.n === 1 ? 'payment' : 'payments'}.
+          </p>
+        )}
         {rows.length === 0 ? (
-          <p class="m-0 px-5 pb-6 text-body">No payments yet. Record one from a booking's page, with the Record payment button.</p>
+          <p class="m-0 px-5 pb-6 text-body">{range.from || range.to ? 'Nothing was received in those dates.' : 'No payments yet. Record one from a booking’s page, with the Record payment button.'}</p>
         ) : (
           <div class="overflow-x-auto">
             <table class="a-table">

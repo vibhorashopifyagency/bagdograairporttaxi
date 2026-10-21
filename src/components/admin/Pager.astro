@@ -3,6 +3,8 @@
  * Previous and next links under a long list (see src/server/paging.ts).
  * Shows nothing when everything fits on one page.
  */
+import RowsPicker from './RowsPicker.astro';
+
 interface Props {
   /** Link to the page before (newer rows, or earlier trips), or null on the first page. */
   prev: string | null;
@@ -14,9 +16,11 @@ interface Props {
   nextLabel?: string;
   /** "Page 2 of 7", or how many there are in all. */
   summary?: string;
+  /** Rows a page, for lists with no filter bar above them to choose it in. */
+  rows?: { current: number; href: (n: number) => string };
   class?: string;
 }
-const { prev, next, start = null, prevLabel = 'Newer', nextLabel = 'Older', summary, class: extra } = Astro.props;
+const { prev, next, start = null, prevLabel = 'Newer', nextLabel = 'Older', summary, rows, class: extra } = Astro.props;
 const btn = 'btn-ghost min-h-11 px-4 py-2 text-sm';
 const off = 'inline-flex min-h-11 items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm font-semibold text-muted opacity-50';
 const left = '<path d="m15 18-6-6 6-6" />';
@@ -26,7 +30,10 @@ const icon = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fil
 
 {(prev || next || start) && (
   <nav aria-label="More pages" class:list={['flex flex-wrap items-center justify-between gap-3', extra]}>
-    <span class="text-sm text-muted">{summary}</span>
+    <span class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {rows && <RowsPicker current={rows.current} href={rows.href} />}
+      <span class="text-sm text-muted">{summary}</span>
+    </span>
     <span class="flex flex-wrap gap-2">
       {start && <a href={start} class={btn}>Back to the start</a>}
       {prev ? <a href={prev} rel="prev" class={btn}><Fragment set:html={icon(left)} />{prevLabel}</a> : <span class={off} aria-hidden="true"><Fragment set:html={icon(left)} />{prevLabel}</span>}

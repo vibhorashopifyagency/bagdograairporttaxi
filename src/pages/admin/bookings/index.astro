@@ -1,20 +1,22 @@
 ---
 /**
- * Every booking, newest first, 50 to a page, with search and a status
- * filter. The status menu on each row moves a booking along (new,
+ * Every booking, newest first, a page at a time (10, 25 or 50 rows), with
+ * search, a status filter and a date range on the pickup date or the day it
+ * was booked. The status menu on each row moves a booking along (new,
  * contacted, confirmed ...). Opening this page is logged, because it shows
  * customer names and numbers.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import ListFilters from '../../../components/admin/ListFilters.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { audit } from '../../../server/admin';
 import { REF_RE } from '../../../server/bookings';
-import { STATUS_LABEL, TONE, inr, longDate, waText } from '../../../server/dashboard';
+import { STATUS_LABEL, TONE, addDays, inr, istMidnight, longDate, waText } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { BOOKING_STATUSES, type BookingStatus } from '../../../server/db/schema';
-import { cursorField, listHref, pageFrom, pageQuery, pageResult, type SortKey } from '../../../server/paging';
+import { cursorField, dateFilter, listHref, pageFrom, pageQuery, pageResult, rowsFor, withParams, type SortKey } from '../../../server/paging';
 import { ipHash } from '../../../server/security';
-import { and, count, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, count, eq, gte, ilike, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 
 export const prerender = false;
 
@@ -46,35 +48,39 @@ if (q) {
   );
 }
 
+// Date range: on the pickup date (the trips in those days) or on the day the booking came in.
+const { from, to } = dateFilter(Astro.url);
+const by = params.get('by') === 'booked' ? 'booked' : 'pickup';
+const inRange =
+  by === 'booked'
+    ? and(from ? gte(b.createdAt, istMidnight(from)) : undefined, to ? lt(b.createdAt, istMidnight(addDays(to, 1))) : undefined)
+    : and(from ? gte(b.pickupDate, from) : undefined, to ? lte(b.pickupDate, to) : undefined);
+const size = rowsFor(Astro.url, Astro.cookies);
+const filters = { q, status, pick, from, to, by: by === 'booked' ? by : null };
+
 const key: SortKey = { cols: [sql`${b.createdAt}`, sql`${b.id}`], types: ['timestamptz', 'uuid'], order: 'desc' };
 const page = pageFrom(Astro.url, key);
-const pq = pageQuery(key, page);
+const pq = pageQuery(key, page, size);
 const db = getDb();
 const [fetched, counts, [created]] = await Promise.all([
   db
     .select({ row: b, cursor: cursorField(key) })
     .from(b)
-    .where(and(search, status ? eq(b.status, status) : undefined, pq.where))
+    .where(and(search, inRange, status ? eq(b.status, status) : undefined, pq.where))
     .orderBy(...pq.orderBy)
     .limit(pq.limit),
-  db.select({ status: b.status, n: count() }).from(b).where(search).groupBy(b.status),
+  db.select({ status: b.status, n: count() }).from(b).where(and(search, inRange)).groupBy(b.status),
   REF_RE.test(createdRef) ? db.select().from(b).where(eq(b.ref, createdRef)) : Promise.resolve([]),
 ]);
-const list = pageResult(fetched, page, listHref('/admin/bookings/', { q, status, pick }));
+const list = pageResult(fetched, page, listHref('/admin/bookings/', filters), size);
 const rows = list.rows.map((r) => r.row);
-await audit({ actorId: user.id, action: 'view_bookings', entity: 'bookings', detail: { count: rows.length, q: q || undefined, status: status ?? undefined }, ipHash: ipHash(Astro.request) });
+await audit({ actorId: user.id, action: 'view_bookings', entity: 'bookings', detail: { count: rows.length, q: q || undefined, status: status ?? undefined, from: from ?? undefined, to: to ?? undefined }, ipHash: ipHash(Astro.request) });
 
 const countOf = new Map(counts.map((c) => [c.status, c.n]));
 const total = counts.reduce((s, c) => s + c.n, 0);
 const matching = status ? (countOf.get(status) ?? 0) : total;
-const filterHref = (s: BookingStatus | null) => {
-  const p = new URLSearchParams();
-  if (q) p.set('q', q);
-  if (s) p.set('status', s);
-  if (pick) p.set('pick', pick);
-  const qs = p.toString();
-  return `/admin/bookings/${qs ? `?${qs}` : ''}`;
-};
+/** A status chip: the same search and dates, from the top of the list. */
+const filterHref = (s: BookingStatus | null) => listHref('/admin/bookings/', { ...filters, status: s })(null);
 
 const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
@@ -93,8 +99,7 @@ const confirmText = (x: typeof b.$inferSelect) =>
         <p class="m-0 mt-1 text-sm text-muted">Every request, newest first. Change a status from the menu on each booking.</p>
       </div>
       <form method="get" class="flex w-full gap-2 sm:w-auto lg:hidden" role="search">
-        {status && <input type="hidden" name="status" value={status} />}
-        {pick && <input type="hidden" name="pick" value={pick} />}
+        {Object.entries({ ...filters, q: null }).map(([k, v]) => v && <input type="hidden" name={k} value={v} />)}
         <label class="a-field flex-1"><span class="sr-only">Search bookings</span><input name="q" type="search" value={q} autofocus={find} placeholder="Name, mobile or BAT- reference" class="w-full sm:w-72" /></label>
         <button class="btn-book" type="submit">Search</button>
       </form>
@@ -125,9 +130,20 @@ const confirmText = (x: typeof b.$inferSelect) =>
       ))}
     </nav>
 
+    <ListFilters
+      dateLabel="Date"
+      by={{ name: 'by', value: by, options: [['pickup', 'Pickup date'], ['booked', 'Booked on']] }}
+      from={from}
+      to={to}
+      keep={{ q, status, pick }}
+      clearHref={listHref('/admin/bookings/', { ...filters, from: null, to: null, by: null })(null)}
+      rows={size}
+      rowsHref={(n) => withParams(Astro.url, { rows: String(n) })}
+    />
+
     {rows.length === 0 ? (
       <div class="a-card p-8 text-center text-body">
-        {page.cursor ? 'Nothing more on this page.' : q || status ? 'No bookings match that.' : 'No bookings yet. They appear here the moment a customer presses Confirm on WhatsApp, or when you add one by hand.'}
+        {page.cursor ? 'Nothing more on this page.' : q || status || from || to ? 'No bookings match that.' : 'No bookings yet. They appear here the moment a customer presses Confirm on WhatsApp, or when you add one by hand.'}
       </div>
     ) : (
       <div class="a-card overflow-x-auto">
@@ -182,7 +198,7 @@ const confirmText = (x: typeof b.$inferSelect) =>
       </div>
     )}
 
-    <Pager prev={list.newer} next={list.older} start={list.start} summary={`${matching.toLocaleString('en-IN')} ${matching === 1 ? 'booking' : 'bookings'}${q ? ' match' : ''}`} />
+    <Pager prev={list.newer} next={list.older} start={list.start} summary={`${matching.toLocaleString('en-IN')} ${matching === 1 ? 'booking' : 'bookings'}${q || from || to ? ' match' : ''}`} />
   </div>
 </AdminLayout>
 

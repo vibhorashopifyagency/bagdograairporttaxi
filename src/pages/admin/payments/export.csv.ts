@@ -1,7 +1,8 @@
 import type { APIRoute } from 'astro';
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 import { audit, isAdmin } from '../../../server/admin';
 import { getDb, schema } from '../../../server/db';
+import { dateFilter } from '../../../server/paging';
 import { LIMITS, rateLimit } from '../../../server/rate-limit';
 import { ipHash } from '../../../server/security';
 
@@ -18,13 +19,14 @@ const cell = (v: unknown) => {
 const BATCH = 1000;
 
 /**
- * Every payment, refund and reversal, oldest first, for the accounts. Admin
- * only, and logged, because it carries customer names. The file is read and
- * sent a thousand rows at a time, each batch picking up after the last one
- * (an index walk, not OFFSET), so years of payments never have to fit in
- * memory and the first rows arrive at once.
+ * Every payment, refund and reversal, oldest first, for the accounts, or
+ * only those received between ?from= and ?to= (the dates chosen on the
+ * Payments page). Admin only, and logged, because it carries customer names.
+ * The file is read and sent a thousand rows at a time, each batch picking up
+ * after the last one (an index walk, not OFFSET), so years of payments never
+ * have to fit in memory and the first rows arrive at once.
  */
-export const GET: APIRoute = async ({ locals, request }) => {
+export const GET: APIRoute = async ({ locals, request, url }) => {
   const user = locals.user;
   if (!user || !isAdmin(user)) return new Response('Only the admin can download payments.', { status: 403 });
   const limit = await rateLimit(LIMITS.export, user.id);
@@ -34,9 +36,11 @@ export const GET: APIRoute = async ({ locals, request }) => {
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': String(limit.retryAfter) },
     });
   }
-  await audit({ actorId: user.id, action: 'export_payments', entity: 'payments', ipHash: ipHash(request) });
+  const { from, to } = dateFilter(url);
+  await audit({ actorId: user.id, action: 'export_payments', entity: 'payments', detail: from || to ? { from, to } : undefined, ipHash: ipHash(request) });
 
   const p = schema.payments;
+  const inRange = and(from ? gte(p.receivedOn, from) : undefined, to ? lte(p.receivedOn, to) : undefined);
   const b = schema.bookings;
   const db = getDb();
   const head = ['Date', 'Booking', 'Customer', 'Trip', 'Pickup date', 'Agreed fare', 'Type', 'Method', 'Amount', 'Received by', 'UPI reference', 'Note', 'Recorded by', 'Recorded at', 'Entry id', 'Reverses entry'];
@@ -69,7 +73,7 @@ export const GET: APIRoute = async ({ locals, request }) => {
           .from(p)
           .innerJoin(b, eq(p.bookingId, b.id))
           .leftJoin(schema.user, eq(p.createdBy, schema.user.id))
-          .where(after ? sql`(${p.receivedOn}, ${p.createdAt}, ${p.id}) > (${after[0]}::date, ${after[1]}::timestamptz, ${after[2]}::uuid)` : undefined)
+          .where(and(inRange, after ? sql`(${p.receivedOn}, ${p.createdAt}, ${p.id}) > (${after[0]}::date, ${after[1]}::timestamptz, ${after[2]}::uuid)` : undefined))
           .orderBy(asc(p.receivedOn), asc(p.createdAt), asc(p.id))
           .limit(BATCH);
         if (cancelled) return;
@@ -109,10 +113,11 @@ export const GET: APIRoute = async ({ locals, request }) => {
   });
 
   const day = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+  const name = from || to ? `${from ?? 'start'}-to-${to ?? day}` : day;
   return new Response(body, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="bagdograairporttaxi-payments-${day}.csv"`,
+      'Content-Disposition': `attachment; filename="bagdograairporttaxi-payments-${name}.csv"`,
     },
   });
 };

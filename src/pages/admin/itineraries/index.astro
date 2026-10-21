@@ -1,19 +1,21 @@
 ---
 /**
- * Every itinerary, upcoming trips first, 50 to a page: drafts not sent yet,
- * and ones sent (with how many updates). Open takes you to the booking with
- * the popup open; Delete removes the itinerary after a confirmation.
+ * Every itinerary, upcoming trips first, a page at a time (10, 25 or 50),
+ * with a date range on the trip date: drafts not sent yet, and ones sent
+ * (with how many updates). Open takes you to the booking with the popup
+ * open; Delete removes the itinerary after a confirmation.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import ListFilters from '../../../components/admin/ListFilters.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { audit } from '../../../server/admin';
 import { TONE, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
-import { cursorField, listHref, pageFrom, pageQuery, pageResult, type SortKey } from '../../../server/paging';
+import { cursorField, dateFilter, listHref, pageFrom, pageQuery, pageResult, rowsFor, withParams, type SortKey } from '../../../server/paging';
 import { ipHash } from '../../../server/security';
 import { deleteItinerary, tripPath } from '../../../server/trip';
 import { dateRange } from '../../../lib/itinerary-text';
-import { and, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, lte, sql } from 'drizzle-orm';
 
 export const prerender = false;
 
@@ -32,20 +34,23 @@ const showPast = Astro.url.searchParams.get('show') === 'past';
 const today = todayIST();
 const t = schema.itineraries;
 const b = schema.bookings;
+const { from, to } = dateFilter(Astro.url);
+const size = rowsFor(Astro.url, Astro.cookies);
+const show = showPast ? 'past' : null;
 const key: SortKey = { cols: [sql`${b.pickupDate}`, sql`${b.id}`], types: ['date', 'uuid'], order: showPast ? 'desc' : 'asc' };
 const page = pageFrom(Astro.url, key);
-const pq = pageQuery(key, page);
+const pq = pageQuery(key, page, size);
 const fetched = await getDb()
   .select({ id: b.id, ref: b.ref, status: b.status, pickup: b.pickupDate, draft: t.draft, sentAt: t.sentAt, sentCount: t.sentCount, updatedAt: t.updatedAt, by: schema.user.name, cursor: cursorField(key) })
   .from(t)
   .innerJoin(b, eq(t.bookingId, b.id))
   .leftJoin(schema.user, eq(t.sentBy, schema.user.id))
-  .where(and(showPast ? lt(b.pickupDate, today) : gte(b.pickupDate, today), pq.where))
+  .where(and(showPast ? lt(b.pickupDate, today) : gte(b.pickupDate, today), from ? gte(b.pickupDate, from) : undefined, to ? lte(b.pickupDate, to) : undefined, pq.where))
   .orderBy(...pq.orderBy)
   .limit(pq.limit);
-const list = pageResult(fetched, page, listHref('/admin/itineraries/', { show: showPast ? 'past' : null }));
+const list = pageResult(fetched, page, listHref('/admin/itineraries/', { show, from, to }), size);
 const rows = list.rows;
-await audit({ actorId: user.id, action: 'view_itineraries', entity: 'itineraries', detail: { count: rows.length }, ipHash: ipHash(Astro.request) });
+await audit({ actorId: user.id, action: 'view_itineraries', entity: 'itineraries', detail: { count: rows.length, from: from ?? undefined, to: to ?? undefined }, ipHash: ipHash(Astro.request) });
 
 const atFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const origin = Astro.url.origin;
@@ -64,14 +69,24 @@ const origin = Astro.url.origin;
     {deleted && <p class="a-msg a-msg-ok m-0" role="status">{deleted}</p>}
 
     <nav aria-label="Which trips" class="flex gap-1 self-start rounded-xl border border-line bg-white p-1">
-      <a href="/admin/itineraries/" aria-current={showPast ? undefined : 'page'} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'font-medium text-body' : 'bg-ink font-semibold text-white']}>Upcoming</a>
-      <a href="/admin/itineraries/?show=past" aria-current={showPast ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>Past trips</a>
+      <a href={listHref('/admin/itineraries/', { from, to })(null)} aria-current={showPast ? undefined : 'page'} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'font-medium text-body' : 'bg-ink font-semibold text-white']}>Upcoming</a>
+      <a href={listHref('/admin/itineraries/', { show: 'past', from, to })(null)} aria-current={showPast ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>Past trips</a>
     </nav>
+
+    <ListFilters
+      dateLabel="Trip date"
+      from={from}
+      to={to}
+      keep={{ show }}
+      clearHref={listHref('/admin/itineraries/', { show })(null)}
+      rows={size}
+      rowsHref={(n) => withParams(Astro.url, { rows: String(n) })}
+    />
 
     {rows.length === 0 ? (
       <div class="a-card p-8 text-body">
-        <p class="m-0 font-display text-xl font-bold text-ink">{showPast ? 'No past itineraries yet.' : 'No itineraries for upcoming trips yet.'}</p>
-        <p class="m-0 mt-1">Open a booking and press Send itinerary. It fills in from the booking and the tour package, so most of it is ready before you start.</p>
+        <p class="m-0 font-display text-xl font-bold text-ink">{from || to ? `No ${showPast ? 'past' : 'upcoming'} itineraries in those dates.` : showPast ? 'No past itineraries yet.' : 'No itineraries for upcoming trips yet.'}</p>
+        <p class="m-0 mt-1">{from || to ? `${showPast ? 'Past trips' : 'Upcoming'} is open, so only ${showPast ? 'trips before today' : 'trips from today on'} are searched. Switch above, or clear the dates.` : 'Open a booking and press Send itinerary. It fills in from the booking and the tour package, so most of it is ready before you start.'}</p>
       </div>
     ) : (
       <ul class="m-0 grid list-none gap-3 p-0 md:grid-cols-2 2xl:grid-cols-3">

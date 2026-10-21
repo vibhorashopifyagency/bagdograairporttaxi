@@ -1,7 +1,7 @@
 ---
 /**
- * One customer: how to reach them, every booking they have made (50 to a
- * page), what they have paid, and the office's notes about them (shared by
+ * One customer: how to reach them, every booking they have made (10, 25 or
+ * 50 to a page), what they have paid, and the office's notes about them (shared by
  * the team). Opening this page is logged.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
@@ -10,7 +10,7 @@ import { audit } from '../../../server/admin';
 import { STATUS_LABEL, TONE, inr, waText } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { advanceOf } from '../../../server/fares';
-import { PAGE_SIZE, pageNumber } from '../../../server/paging';
+import { pageNumber, rowsFor } from '../../../server/paging';
 import { paymentsByBooking, summarise } from '../../../server/payments';
 import { ipHash } from '../../../server/security';
 import { firstName, phoneLabel } from '../../../lib/itinerary-text';
@@ -43,6 +43,7 @@ if (Astro.request.method === 'POST') {
 const b = schema.bookings;
 const p = schema.payments;
 const page = pageNumber(Astro.url);
+const size = rowsFor(Astro.url, Astro.cookies);
 // The totals cover every booking and are added up in the database; only one page of bookings is loaded.
 const paidPer = db
   .select({ bookingId: p.bookingId, paid: sql<number>`sum(${p.amount})`.as('paid') })
@@ -67,15 +68,15 @@ const [[totals], bookings] = await Promise.all([
     .from(b)
     .where(eq(b.customerId, customer.id))
     .orderBy(desc(b.pickupDate), desc(b.id))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE),
+    .limit(size)
+    .offset((page - 1) * size),
 ]);
 const pays = await paymentsByBooking(bookings.map((x) => x.id));
 await audit({ actorId: user.id, action: 'view_customer', entity: 'customer', entityId: customer.id, detail: { bookings: totals?.bookings ?? 0 }, ipHash: ipHash(Astro.request) });
 
 const sums = bookings.map((x) => ({ x, pay: summarise(x.fareTotal, advanceOf(x.fareTotal), pays.get(x.id) ?? []) }));
 const count = totals?.bookings ?? 0;
-const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+const pages = Math.max(1, Math.ceil(count / size));
 const pageHref = (n: number) => `/admin/customers/${customer.id}/${n > 1 ? `?page=${n}` : ''}`;
 const name = customer.name ?? 'No name';
 const first = firstName(customer.name ?? '');
@@ -147,6 +148,7 @@ const stats = [
           prevLabel="Later"
           nextLabel="Earlier"
           summary={`Page ${page} of ${pages}`}
+          rows={{ current: size, href: (n) => `/admin/customers/${customer.id}/?rows=${n}` }}
         />
       </section>
 

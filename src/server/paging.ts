@@ -12,9 +12,44 @@
  * the edge of the page, read back from the database as text so timestamps
  * keep their microseconds.
  */
+import type { AstroCookies } from 'astro';
 import { sql, type SQL } from 'drizzle-orm';
 
-export const PAGE_SIZE = 50;
+/** Rows a page shows until someone picks another number. */
+export const PAGE_SIZE = 25;
+export const ROW_CHOICES = [10, 25, 50] as const;
+const ROWS_COOKIE = 'admin_rows';
+
+/**
+ * Rows per page: ?rows=10, 25 or 50 picks it and remembers it in a cookie,
+ * so every list keeps the choice until it is changed again.
+ */
+export function rowsFor(url: URL, cookies: AstroCookies): number {
+  const ok = (n: number) => (ROW_CHOICES as readonly number[]).includes(n);
+  const asked = Number(url.searchParams.get('rows'));
+  if (ok(asked)) {
+    cookies.set(ROWS_COOKIE, String(asked), { path: '/admin/', httpOnly: true, sameSite: 'lax', secure: url.protocol === 'https:', maxAge: 365 * 86400 });
+    return asked;
+  }
+  const saved = Number(cookies.get(ROWS_COOKIE)?.value);
+  return ok(saved) ? saved : PAGE_SIZE;
+}
+
+const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+
+/**
+ * ?from= and ?to= as YYYY-MM-DD (Indian dates), either one optional. A date
+ * that is not real is ignored; a range given backwards is turned round.
+ */
+export function dateFilter(url: URL): { from: string | null; to: string | null } {
+  const read = (k: string) => {
+    const v = url.searchParams.get(k) ?? '';
+    return isDate(v) ? v : null;
+  };
+  const from = read('from');
+  const to = read('to');
+  return from && to && from > to ? { from: to, to: from } : { from, to };
+}
 
 /** The Postgres types a sort key can have, with what a valid value looks like. */
 const TYPES = {
@@ -108,6 +143,17 @@ export function listHref(path: string, keep: Record<string, string | null | unde
     const qs = p.toString();
     return `${path}${qs ? `?${qs}` : ''}`;
   };
+}
+
+/** The current address with some parameters changed (null removes one). */
+export function withParams(url: URL, change: Record<string, string | null>): string {
+  const p = new URLSearchParams(url.searchParams);
+  for (const [k, v] of Object.entries(change)) {
+    if (v === null) p.delete(k);
+    else p.set(k, v);
+  }
+  const qs = p.toString();
+  return `${url.pathname}${qs ? `?${qs}` : ''}`;
 }
 
 /* ---------------- Numbered pages, for lists that stay short ---------------- */
