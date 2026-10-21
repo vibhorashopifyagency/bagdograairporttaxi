@@ -96,9 +96,9 @@ const callIcon =
 
 const actions = [
   { href: '/admin/bookings/new/', label: 'New booking', sub: 'Phone or walk-in', bg: '#f4fbe4', fg: '#4f7a00', icon: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 13v5M9.5 15.5h5"/>' },
-  { label: 'Send itinerary', sub: 'Text and photos to WhatsApp', bg: '#e7f5ee', fg: '#0f7a4e', icon: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>' },
-  { label: 'Record payment', sub: 'UPI or cash', bg: '#fff4d6', fg: '#8a5300', icon: '<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h2"/>' },
-  { label: 'Send QR code', sub: 'Ask for the advance', bg: '#eef0f3', fg: '#111111', icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>' },
+  { href: '/admin/bookings/?pick=itinerary', label: 'Send itinerary', sub: 'Text and photos to WhatsApp', bg: '#e7f5ee', fg: '#0f7a4e', icon: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>' },
+  { href: '/admin/bookings/?pick=payment', label: 'Record payment', sub: 'UPI or cash', bg: '#fff4d6', fg: '#8a5300', icon: '<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h2"/>' },
+  { href: '/admin/bookings/?pick=qr', label: 'Send QR code', sub: 'Ask for the advance', bg: '#eef0f3', fg: '#111111', icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>' },
 ];
 ---
 
@@ -139,7 +139,7 @@ const actions = [
                   <span class="font-display text-xl font-bold text-lime lg:text-[26px] lg:text-white">{goal.trips} of {goal.goal.trips} trips</span>
                 </div>
                 <div class="h-2.5 overflow-hidden rounded-full bg-white/16 lg:hidden"><div class="h-full rounded-full bg-lime" style={`width:${goal.pct}%`}></div></div>
-                <span class="text-[13px] text-[#e3e6ec] lg:text-sm">{inr(goal.value)} in confirmed fares{goal.goal.amount ? ` of ${inr(goal.goal.amount)}` : ''}</span>
+                <span class="flex flex-col text-[13px] text-[#e3e6ec] lg:text-sm"><span>{inr(goal.collected)} collected{goal.goal.amount ? ` of ${inr(goal.goal.amount)}` : ''}</span><span class="text-[#c9ced8]">{inr(goal.value)} in confirmed fares</span></span>
                 <span class="text-[13px] font-semibold text-[#d9f59a] lg:text-sm">{goal.line}</span>
                 {admin && (
                   <details class="text-sm">
@@ -147,7 +147,7 @@ const actions = [
                     <form method="post" class="mt-3 flex flex-wrap items-end gap-2">
                       <input type="hidden" name="intent" value="goal" />
                       <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">Trips a month<input name="trips" inputmode="numeric" required value={goal.goal.trips} class="h-11 w-24 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
-                      <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">Fares, ₹<input name="amount" inputmode="numeric" value={goal.goal.amount || ''} class="h-11 w-32 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
+                      <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">To collect, ₹<input name="amount" inputmode="numeric" value={goal.goal.amount || ''} class="h-11 w-32 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
                       <button type="submit" class="h-11 rounded-xl bg-lime px-4 font-semibold text-ink">Save</button>
                     </form>
                   </details>
@@ -161,14 +161,14 @@ const actions = [
               <span class="text-sm text-[#e3e6ec]">{goal.trips} {goal.trips === 1 ? 'trip' : 'trips'} confirmed so far. A goal turns this into a progress ring the team can watch fill up.</span>
               <div class="flex flex-wrap items-end gap-2">
                 <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">Trips a month<input name="trips" inputmode="numeric" required placeholder="50" class="h-11 w-24 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
-                <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">Fares, ₹ <span class="sr-only">(optional)</span><input name="amount" inputmode="numeric" placeholder="200000" class="h-11 w-32 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
+                <label class="flex flex-col gap-1 text-xs text-[#c9ced8]">To collect, ₹ <span class="sr-only">(optional)</span><input name="amount" inputmode="numeric" placeholder="200000" class="h-11 w-32 rounded-xl border-0 bg-white px-3 text-base text-ink" /></label>
                 <button type="submit" class="h-11 rounded-xl bg-lime px-4 font-semibold text-ink">Set goal</button>
               </div>
             </form>
           ) : (
             <div class="flex flex-col gap-1.5">
               <span class="font-display text-xl font-bold lg:text-[26px]">{goal.trips} {goal.trips === 1 ? 'trip' : 'trips'} in {goal.monthName}</span>
-              <span class="text-sm text-[#e3e6ec]">{inr(goal.value)} in confirmed fares so far.</span>
+              <span class="text-sm text-[#e3e6ec]">{inr(goal.collected)} collected and {inr(goal.value)} in confirmed fares so far.</span>
             </div>
           )}
           {goalError && <p class="a-msg a-msg-error absolute right-4 bottom-4 left-4 m-0" role="alert">{goalError}</p>}
@@ -211,7 +211,7 @@ const actions = [
           waiting.items.map((x) => (
             <div class="flex items-center gap-3 border-t border-[#f0f1f3] py-3" data-row={x.id}>
               <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <a href={`/admin/bookings/?q=${x.ref}`} class="font-semibold text-ink no-underline hover:underline">{x.name}</a>
+                <a href={`/admin/bookings/${x.ref}/`} class="font-semibold text-ink no-underline hover:underline">{x.name}</a>
                 <span class="text-[13px] text-[#5c6373]">{x.what}</span>
               </div>
               <span class:list={['a-badge', TONE[x.tone]]} title="Waiting since the booking came in">{x.wait}</span>
@@ -249,7 +249,7 @@ const actions = [
               </div>
               <div class="flex min-w-0 flex-1 flex-col gap-1.5">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="text-base font-bold sm:text-[17px]">{p.route}</span>
+                  <a href={`/admin/bookings/${p.ref}/`} class="text-base font-bold text-ink no-underline hover:underline sm:text-[17px]">{p.route}</a>
                   <span class="hidden sm:inline"><span class:list={['a-badge', TONE[p.status.tone]]}>{p.status.label}</span></span>
                 </div>
                 <span class="text-body">{p.who}</span>
@@ -288,7 +288,7 @@ const actions = [
           balances.items.map((x) => (
             <div class="flex items-center gap-3 border-t border-[#f0f1f3] py-2.5">
               <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span class="font-semibold">{x.name}</span>
+                <a href={`/admin/bookings/${x.ref}/`} class="font-semibold text-ink no-underline hover:underline">{x.name}</a>
                 <span class="text-[13px] text-[#5c6373]">{x.what}</span>
               </div>
               <span class="font-bold">{inr(x.amt)}</span>

@@ -21,6 +21,14 @@ const q = (params.get('q') ?? '').trim().slice(0, 60);
 const statusParam = params.get('status') ?? '';
 const status = (BOOKING_STATUSES as readonly string[]).includes(statusParam) ? (statusParam as BookingStatus) : null;
 const find = params.get('find') === '1';
+/** The today board's quick actions arrive here to choose a booking first. */
+const PICK = {
+  itinerary: ['Send itinerary', 'Choose the booking to send an itinerary for.'],
+  payment: ['Record payment', 'Choose the booking the money is for.'],
+  qr: ['Send QR code', 'Choose the booking to ask payment for.'],
+} as const;
+const pickParam = params.get('pick') ?? '';
+const pick = pickParam in PICK ? (pickParam as keyof typeof PICK) : null;
 const createdRef = params.get('created') ?? '';
 
 const b = schema.bookings;
@@ -49,6 +57,7 @@ const filterHref = (s: BookingStatus | null) => {
   const p = new URLSearchParams();
   if (q) p.set('q', q);
   if (s) p.set('status', s);
+  if (pick) p.set('pick', pick);
   const qs = p.toString();
   return `/admin/bookings/${qs ? `?${qs}` : ''}`;
 };
@@ -71,14 +80,26 @@ const confirmText = (x: typeof b.$inferSelect) =>
       </div>
       <form method="get" class="flex w-full gap-2 sm:w-auto lg:hidden" role="search">
         {status && <input type="hidden" name="status" value={status} />}
+        {pick && <input type="hidden" name="pick" value={pick} />}
         <label class="a-field flex-1"><span class="sr-only">Search bookings</span><input name="q" type="search" value={q} autofocus={find} placeholder="Name, mobile or BAT- reference" class="w-full sm:w-72" /></label>
         <button class="btn-book" type="submit">Search</button>
       </form>
     </div>
 
+    {pick && (
+      <div class="flex flex-wrap items-center gap-3 rounded-[20px] bg-ink px-5 py-4 text-white" role="status">
+        <span class="flex flex-1 flex-col">
+          <strong class="font-display text-lg text-white">{PICK[pick][0]}</strong>
+          <span class="text-sm text-[#e3e6ec]">{PICK[pick][1]} Search above, or press Choose on a booking.</span>
+        </span>
+        <a href="/admin/bookings/" class="btn-light min-h-11 px-4 py-2 text-sm">Cancel</a>
+      </div>
+    )}
+
     {created && (
       <div class="a-msg a-msg-ok flex flex-wrap items-center gap-3" role="status">
         <span class="flex-1"><strong>{created.ref}</strong> is saved: {route(created.tripName)}, {day.format(new Date(`${created.pickupDate}T00:00:00Z`))} at {created.pickupTime}.</span>
+        <a class="btn-ghost min-h-11 px-4 py-2 text-sm" href={`/admin/bookings/${created.ref}/`}>Open it</a>
         {created.customerPhone && <a class="btn-wa min-h-11 px-4 py-2 text-sm" href={waText(created.customerPhone, confirmText(created))} target="_blank" rel="noopener">Send it on WhatsApp</a>}
       </div>
     )}
@@ -104,15 +125,16 @@ const confirmText = (x: typeof b.$inferSelect) =>
             {rows.map((x) => (
               <tr>
                 <td class="whitespace-nowrap" data-label="Received">
-                  <strong class="block font-mono text-sm">{x.ref}</strong>
-                  <span class="text-sm text-muted">{when.format(x.createdAt)}{x.source === 'staff' ? ' · by hand' : ''}</span>
+                  <a href={`/admin/bookings/${x.ref}/${pick ? `?do=${pick}` : ''}`} class="block font-mono text-sm font-bold text-ink hover:underline">{x.ref}</a>
+                  <span class="block text-sm text-muted">{when.format(x.createdAt)}{x.source === 'staff' ? ' · by hand' : ''}</span>
+                  {pick && <a href={`/admin/bookings/${x.ref}/?do=${pick}`} class="btn-book mt-2 min-h-10 px-4 py-1.5 text-sm" aria-label={`Choose ${x.ref}`}>Choose</a>}
                 </td>
                 <td class="whitespace-nowrap" data-label="Pickup">
                   <strong class="block">{day.format(new Date(`${x.pickupDate}T00:00:00Z`))}, {x.pickupTime}</strong>
                   {x.flight && <span class="text-sm text-muted">{x.flight}</span>}
                 </td>
                 <td data-label="Trip">
-                  <span class="block font-semibold">{x.tripName}</span>
+                  <a href={`/admin/bookings/${x.ref}/`} class="block font-semibold text-ink no-underline hover:underline">{x.tripName}</a>
                   <span class="text-sm text-muted">{x.pax} {x.pax === 1 ? 'person' : 'people'}{x.dropAddress ? ` · ${x.dropAddress}` : ''}</span>
                   {x.notes && <span class="block text-sm text-body">{x.notes}</span>}
                 </td>

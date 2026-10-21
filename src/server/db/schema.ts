@@ -279,6 +279,56 @@ export const payments = pgTable(
   (t) => [index('payments_booking_idx').on(t.bookingId)],
 );
 
+/** One day of an itinerary. `photo` is a key from src/data/photos.json, or ''. */
+export type ItineraryDay = { title: string; detail: string; stay: string; photo: string };
+
+/** Everything the "Send itinerary" popup collects. Dates are YYYY-MM-DD. */
+export type ItineraryData = {
+  name: string;
+  /** Digits only with the country code, like bookings.customer_phone. */
+  phone: string;
+  title: string;
+  start: string;
+  end: string;
+  time: string;
+  pax: number;
+  pickup: string;
+  flight: string;
+  car: string;
+  vehicleNumber: string;
+  driver: string;
+  driverPhone: string;
+  days: ItineraryDay[];
+  includes: string[];
+  excludes: string[];
+  /** Photo keys, in the order they are sent. */
+  photos: string[];
+  message: string;
+  showQr: boolean;
+};
+
+/**
+ * The itinerary for a booking, at most one. `draft` is what the popup saves
+ * as staff type; `published` is the copy the customer's trip page shows, and
+ * only changes when someone presses Send. Removed with the booking's
+ * personal data.
+ */
+export const itineraries = pgTable('itineraries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bookingId: uuid('booking_id')
+    .notNull()
+    .unique()
+    .references(() => bookings.id, { onDelete: 'cascade' }),
+  draft: jsonb('draft').$type<ItineraryData>().notNull(),
+  published: jsonb('published').$type<ItineraryData>(),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  sentBy: text('sent_by').references(() => user.id, { onDelete: 'set null' }),
+  sentCount: integer('sent_count').notNull().default(0),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 /**
  * Who signed in, and who looked at or changed customer data. Required by the
  * privacy plan; kept for the same 24 months as customer details.

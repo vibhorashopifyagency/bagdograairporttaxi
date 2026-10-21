@@ -1,0 +1,128 @@
+---
+/**
+ * One customer: how to reach them, every booking they have made, what they
+ * have paid, and the office's notes about them (shared by the team).
+ * Opening this page is logged.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { audit } from '../../../server/admin';
+import { STATUS_LABEL, TONE, inr, waText } from '../../../server/dashboard';
+import { getDb, schema } from '../../../server/db';
+import { advanceOf } from '../../../server/fares';
+import { paymentsByBooking, summarise } from '../../../server/payments';
+import { ipHash } from '../../../server/security';
+import { firstName, phoneLabel } from '../../../lib/itinerary-text';
+import { desc, eq } from 'drizzle-orm';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+const db = getDb();
+const c = schema.customers;
+const [customer] = /^[0-9a-f-]{36}$/.test(id) ? await db.select().from(c).where(eq(c.id, id)) : [];
+if (!customer || customer.personalDataRemovedAt) return Astro.redirect('/admin/customers/', 303);
+
+let error = '';
+let notes = customer.notes ?? '';
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  if (f.get('intent') === 'notes') {
+    notes = String(f.get('notes') ?? '').trim();
+    if (notes.length > 2000) error = 'Notes are limited to 2,000 characters.';
+    else {
+      await db.update(c).set({ notes: notes || null }).where(eq(c.id, customer.id));
+      await audit({ actorId: user.id, action: 'customer_notes', entity: 'customer', entityId: customer.id, ipHash: ipHash(Astro.request) });
+      return Astro.redirect(`/admin/customers/${customer.id}/?saved=1`, 303);
+    }
+  }
+}
+
+const b = schema.bookings;
+const bookings = await db.select().from(b).where(eq(b.customerId, customer.id)).orderBy(desc(b.pickupDate));
+const pays = await paymentsByBooking(bookings.map((x) => x.id));
+await audit({ actorId: user.id, action: 'view_customer', entity: 'customer', entityId: customer.id, detail: { bookings: bookings.length }, ipHash: ipHash(Astro.request) });
+
+const sums = bookings.map((x) => ({ x, pay: summarise(x.fareTotal, advanceOf(x.fareTotal), pays.get(x.id) ?? []) }));
+const live = sums.filter(({ x }) => x.status !== 'cancelled' && x.status !== 'no_show');
+const totalPaid = sums.reduce((s, { pay }) => s + pay.paid, 0);
+const totalDue = live.reduce((s, { pay }) => s + pay.due, 0);
+const trips = bookings.filter((x) => x.status === 'completed').length;
+const name = customer.name ?? 'No name';
+const first = firstName(customer.name ?? '');
+const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+const since = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', month: 'long', year: 'numeric' }).format(customer.createdAt);
+const stats = [
+  { k: 'Bookings', v: String(bookings.length) },
+  { k: 'Trips completed', v: String(trips) },
+  { k: 'Paid so far', v: inr(totalPaid) },
+  { k: 'Still to pay', v: inr(totalDue) },
+];
+---
+
+<AdminLayout title={name}>
+  <div class="flex flex-col gap-5 lg:gap-6">
+    <a href="/admin/customers/" class="inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-semibold text-body no-underline hover:text-ink">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+      All customers
+    </a>
+
+    <div class="flex flex-wrap items-center gap-4">
+      <span class="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-lime font-display text-2xl font-bold text-ink">{name[0]!.toUpperCase()}</span>
+      <div class="flex min-w-0 flex-1 flex-col">
+        <h1 class="m-0 font-display text-[28px] leading-tight font-bold lg:text-[34px]">{name}</h1>
+        <span class="text-body">{customer.phone ? phoneLabel(customer.phone) : ''} · customer since {since}</span>
+      </div>
+      {customer.phone && (
+        <div class="flex gap-2">
+          <a href={`tel:+${customer.phone}`} class="btn-ghost">Call</a>
+          <a href={waText(customer.phone, `Namaste ${first}, `)} target="_blank" rel="noopener" class="btn-wa">WhatsApp</a>
+        </div>
+      )}
+    </div>
+
+    <dl class="m-0 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {stats.map((s, i) => (
+        <div class:list={['flex flex-col-reverse gap-0.5 rounded-[20px] p-4 lg:p-5', i === 0 ? 'bg-ink text-white' : 'a-card']}>
+          <dt class:list={['text-sm', i === 0 ? 'text-[#c9ced8]' : 'text-muted']}>{s.k}</dt>
+          <dd class:list={['m-0 font-display text-[26px] leading-tight font-bold', i === 0 && 'text-lime']}>{s.v}</dd>
+        </div>
+      ))}
+    </dl>
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:gap-6">
+      <section class="a-card min-w-0 self-start overflow-hidden" aria-labelledby="bk-h">
+        <h2 id="bk-h" class="m-0 px-5 pt-5 pb-2 font-display text-xl font-bold">Bookings</h2>
+        <ul class="m-0 list-none p-0">
+          {sums.map(({ x, pay }) => (
+            <li class="border-t border-[#f0f1f3]">
+              <a href={`/admin/bookings/${x.ref}/`} class="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5 text-ink no-underline hover:bg-mist">
+                <span class="flex min-w-0 flex-[1_1_260px] flex-col">
+                  <span class="font-semibold">{x.tripName}</span>
+                  <span class="text-sm text-muted"><span class="font-mono">{x.ref}</span> · {day.format(new Date(`${x.pickupDate}T00:00:00Z`))}, {x.pickupTime}</span>
+                </span>
+                <span class:list={['a-badge', TONE[STATUS_LABEL[x.status][1]]]}>{STATUS_LABEL[x.status][0]}</span>
+                <span class="flex min-w-[120px] flex-col items-end">
+                  <span class="font-bold">{inr(x.fareTotal)}</span>
+                  <span class="text-[13px] text-muted">{pay.state === 'full' ? 'Fully paid' : pay.paid > 0 ? `${inr(pay.paid)} paid` : 'Nothing paid'}</span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section class="a-card flex flex-col gap-3 self-start p-5" aria-labelledby="notes-h">
+        <h2 id="notes-h" class="m-0 font-display text-xl font-bold">Notes</h2>
+        {Astro.url.searchParams.get('saved') && <p class="a-msg a-msg-ok m-0" role="status">Saved.</p>}
+        {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+        <form method="post" class="flex flex-col gap-3">
+          <input type="hidden" name="intent" value="notes" />
+          <label class="a-field"><span class="sr-only">Notes about {name}</span><textarea name="notes" rows="6" maxlength="2000" placeholder="Prefers an Innova. Travels with elderly parents. Pays by UPI.">{notes}</textarea></label>
+          <button type="submit" class="btn-book self-start">Save notes</button>
+        </form>
+        <p class="m-0 text-sm text-muted">Shared with the whole team. Keep to what helps the next trip; the customer can ask to see what we hold.</p>
+      </section>
+    </div>
+  </div>
+</AdminLayout>

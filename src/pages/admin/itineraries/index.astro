@@ -1,0 +1,82 @@
+---
+/**
+ * Every itinerary, upcoming trips first: drafts not sent yet, and ones sent
+ * (with how many updates). Each opens the booking, where the popup lives.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { audit } from '../../../server/admin';
+import { TONE, todayIST } from '../../../server/dashboard';
+import { getDb, schema } from '../../../server/db';
+import { ipHash } from '../../../server/security';
+import { tripPath } from '../../../server/trip';
+import { dateRange } from '../../../lib/itinerary-text';
+import { asc, desc, eq, gte, lt } from 'drizzle-orm';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const showPast = Astro.url.searchParams.get('show') === 'past';
+const today = todayIST();
+const t = schema.itineraries;
+const b = schema.bookings;
+const rows = await getDb()
+  .select({ id: b.id, ref: b.ref, status: b.status, pickup: b.pickupDate, draft: t.draft, sentAt: t.sentAt, sentCount: t.sentCount, updatedAt: t.updatedAt, by: schema.user.name })
+  .from(t)
+  .innerJoin(b, eq(t.bookingId, b.id))
+  .leftJoin(schema.user, eq(t.sentBy, schema.user.id))
+  .where(showPast ? lt(b.pickupDate, today) : gte(b.pickupDate, today))
+  .orderBy(showPast ? desc(b.pickupDate) : asc(b.pickupDate))
+  .limit(200);
+await audit({ actorId: user.id, action: 'view_itineraries', entity: 'itineraries', detail: { count: rows.length }, ipHash: ipHash(Astro.request) });
+
+const atFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const origin = Astro.url.origin;
+---
+
+<AdminLayout title="Itineraries">
+  <div class="flex flex-col gap-5">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Itineraries</h1>
+        <p class="m-0 mt-1 text-sm text-muted">Day-by-day plans sent to customers on WhatsApp, each with its own private trip page.</p>
+      </div>
+      <a href="/admin/bookings/?pick=itinerary" class="btn-book">Send a new one</a>
+    </div>
+
+    <nav aria-label="Which trips" class="flex gap-1 self-start rounded-xl border border-line bg-white p-1">
+      <a href="/admin/itineraries/" aria-current={showPast ? undefined : 'page'} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'font-medium text-body' : 'bg-ink font-semibold text-white']}>Upcoming</a>
+      <a href="/admin/itineraries/?show=past" aria-current={showPast ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>Past trips</a>
+    </nav>
+
+    {rows.length === 0 ? (
+      <div class="a-card p-8 text-body">
+        <p class="m-0 font-display text-xl font-bold text-ink">{showPast ? 'No past itineraries yet.' : 'No itineraries for upcoming trips yet.'}</p>
+        <p class="m-0 mt-1">Open a booking and press Send itinerary. It fills in from the booking and the tour package, so most of it is ready before you start.</p>
+      </div>
+    ) : (
+      <ul class="m-0 grid list-none gap-3 p-0 md:grid-cols-2 2xl:grid-cols-3">
+        {rows.map((r) => {
+          const cover = r.draft.photos[0] ?? r.draft.days.find((x) => x.photo)?.photo;
+          return (
+            <li class="a-card flex overflow-hidden">
+              {cover ? <img src={`/img/${cover}-400.webp`} alt="" width="400" height="267" loading="lazy" class="w-[104px] shrink-0 object-cover sm:w-[128px]" /> : <span class="w-[104px] shrink-0 bg-mist sm:w-[128px]"></span>}
+              <div class="flex min-w-0 flex-1 flex-col gap-1 p-4">
+                <span class="flex flex-wrap items-center gap-2">
+                  <a href={`/admin/bookings/${r.ref}/`} class="font-mono text-sm font-bold text-ink">{r.ref}</a>
+                  <span class:list={['a-badge', r.sentAt ? TONE.lime : TONE.amber]}>{r.sentAt ? (r.sentCount > 1 ? `Sent · ${r.sentCount - 1} ${r.sentCount === 2 ? 'update' : 'updates'}` : 'Sent') : 'Draft'}</span>
+                </span>
+                <a href={`/admin/bookings/${r.ref}/?do=itinerary`} class="truncate font-semibold text-ink no-underline hover:underline">{r.draft.name} · {r.draft.title}</a>
+                <span class="text-sm text-body">{dateRange(r.draft.start, r.draft.end)} · {r.draft.days.length} {r.draft.days.length === 1 ? 'day' : 'days'}</span>
+                <span class="text-[13px] text-muted">{r.sentAt ? `Last sent ${atFmt.format(r.sentAt)}${r.by ? ` by ${r.by}` : ''}` : `Saved ${atFmt.format(r.updatedAt)}`}</span>
+                <span class="mt-1 flex flex-wrap gap-3 text-sm font-semibold">
+                  <a href={`/admin/bookings/${r.ref}/?do=itinerary`} class="text-ink">{r.sentAt ? 'Edit and send update' : 'Finish and send'}</a>
+                  <a href={r.sentAt ? new URL(tripPath(r), origin).href : `/admin/bookings/${r.ref}/trip/`} target="_blank" rel="noopener" class="text-ink">{r.sentAt ? 'Customer’s page' : 'Preview'}</a>
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </div>
+</AdminLayout>

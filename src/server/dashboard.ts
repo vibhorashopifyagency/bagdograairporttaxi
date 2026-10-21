@@ -8,6 +8,7 @@ import reviewsFile from '../data/google-reviews.json';
 import { vehicleByKey } from '../data/vehicles';
 import { getDb, schema } from './db';
 import type { BookingStatus } from './db/schema';
+import { advanceOf } from './fares';
 
 /* ---------------- Dates in India ---------------- */
 
@@ -17,6 +18,12 @@ export const todayIST = (now = Date.now()) => istClock(now).toISOString().slice(
 export const istHour = (now = Date.now()) => istClock(now).getUTCHours();
 export const addDays = (day: string, n: number) =>
   new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400e3).toISOString().slice(0, 10);
+/** True for a real calendar date written YYYY-MM-DD (not 2026-02-30). */
+export function isDay(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
+}
 /** The instant an Indian date begins. */
 export const istMidnight = (day: string) => new Date(`${day}T00:00:00+05:30`);
 const pickupAt = (day: string, time: string) => new Date(`${day}T${time}:00+05:30`);
@@ -95,7 +102,7 @@ async function paidFor(ids: string[]): Promise<Map<string, number>> {
   return new Map(rows.map((r) => [r.id, Number(r.paid)]));
 }
 
-function payState(total: number, advance: number, paid: number): { label: string; tone: Tone } {
+export function payState(total: number, advance: number, paid: number): { label: string; tone: Tone } {
   const due = total - paid;
   if (paid >= total) return { label: 'Fully paid', tone: 'lime' };
   if (paid > 0 && paid >= advance) return { label: `Advance paid · ${inr(due)} to driver`, tone: 'lime' };
@@ -152,7 +159,7 @@ export async function pickupsOn(day: string, now = Date.now()): Promise<Pickup[]
       travel: [r.flight, r.ref].filter(Boolean).join(' · '),
       car: hasDriver ? car : `${carName(r.vehicle)} · driver not assigned yet`,
       carMissing: !hasDriver,
-      pay: payState(r.fareTotal, r.advanceShown, paid.get(r.id) ?? 0),
+      pay: payState(r.fareTotal, advanceOf(r.fareTotal), paid.get(r.id) ?? 0),
       phone: r.customerPhone,
       name: r.customerName ?? '',
     };
@@ -290,13 +297,18 @@ export async function monthGoal(now = Date.now()) {
 
   const b = schema.bookings;
   const db = getDb();
-  const [[setting], [done]] = await Promise.all([
+  const [[setting], [done], [money]] = await Promise.all([
     db.select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, GOAL_KEY)),
     db
       .select({ trips: count(), value: sql<string>`coalesce(sum(${b.fareTotal}), 0)` })
       .from(b)
       .where(and(inArray(b.status, LIVE), gte(b.pickupDate, monthStart), lt(b.pickupDate, nextStart))),
+    db
+      .select({ sum: sql<string>`coalesce(sum(${schema.payments.amount}), 0)` })
+      .from(schema.payments)
+      .where(and(gte(schema.payments.receivedOn, monthStart), lt(schema.payments.receivedOn, nextStart))),
   ]);
+  const collected = Number(money?.sum ?? 0);
   const goal = (setting?.value as Goal | undefined) ?? null;
   const trips = done?.trips ?? 0;
   const value = Number(done?.value ?? 0);
@@ -313,7 +325,7 @@ export async function monthGoal(now = Date.now()) {
     if (left === 0) line = 'Goal reached. Everything from here is a bonus.';
     else line = `${left} ${left === 1 ? 'trip' : 'trips'} to go, ${days}. ${onPace ? 'On track.' : 'A few quick replies will close the gap.'}`;
   }
-  return { goal, trips, value, pct, line, monthName, daysLeft };
+  return { goal, trips, value, collected, pct, line, monthName, daysLeft };
 }
 
 /* ---------------- Most booked routes this month ---------------- */
@@ -334,6 +346,50 @@ export async function topRoutes(now = Date.now()) {
 
 /* ---------------- Latest changes ---------------- */
 
+const FIELD_LABEL: Record<string, string> = {
+  pickupDate: 'pickup date',
+  pickupTime: 'pickup time',
+  flight: 'flight',
+  pax: 'travellers',
+  dropAddress: 'address',
+  driverName: 'driver',
+  driverPhone: 'driver’s phone',
+  vehicleNumber: 'car number',
+  fareTotal: 'agreed fare',
+  notes: 'notes',
+  handledBy: 'handled by',
+};
+
+/** One line for a booking timeline entry, and the colour of its dot. */
+export function describeEvent(type: string, data: Record<string, unknown> | null, byStaff: boolean): { text: string; tone: Tone } {
+  const amount = typeof data?.amount === 'number' ? inr(data.amount) : '';
+  const method = data?.method === 'cash' ? 'cash' : 'UPI';
+  switch (type) {
+    case 'created':
+      return { text: byStaff ? 'Added by hand' : `Booked on the website${data?.channel === 'payment' ? ' (payment button)' : ''}`, tone: 'lime' };
+    case 'status': {
+      const to = (data?.to as BookingStatus | undefined) ?? 'new';
+      return { text: `Moved to ${STATUS_LABEL[to]?.[0].toLowerCase() ?? to}`, tone: STATUS_LABEL[to]?.[1] ?? 'grey' };
+    }
+    case 'edited': {
+      const fields = Object.keys((data?.changes as Record<string, unknown>) ?? {}).map((k) => FIELD_LABEL[k] ?? k);
+      return { text: fields.length ? `Changed the ${fields.join(', ')}` : 'Edited', tone: 'grey' };
+    }
+    case 'payment':
+      return { text: `${amount} received by ${method}`, tone: 'lime' };
+    case 'refund':
+      return { text: `${amount} refunded by ${method}`, tone: 'amber' };
+    case 'payment_reversed':
+      return { text: `${data?.kind === 'refund' ? 'Refund' : 'Payment'} of ${amount.replace('-', '')} reversed: ${String(data?.reason ?? '')}`, tone: 'red' };
+    case 'itinerary_sent':
+      return { text: Number(data?.count ?? 1) > 1 ? 'Sent an updated itinerary' : 'Sent the itinerary on WhatsApp', tone: 'lime' };
+    case 'qr_sent':
+      return { text: `Sent the UPI QR code${amount ? ` for ${amount}` : ''}`, tone: 'grey' };
+    default:
+      return { text: 'Updated', tone: 'grey' };
+  }
+}
+
 export async function recentChanges(limit = 5, now = Date.now()) {
   const e = schema.bookingEvents;
   const b = schema.bookings;
@@ -345,17 +401,10 @@ export async function recentChanges(limit = 5, now = Date.now()) {
     .orderBy(desc(e.at))
     .limit(limit);
   return rows.map((r) => {
-    let text = `${r.ref} updated`;
-    let tone: Tone = 'grey';
-    if (r.type === 'created') {
-      text = r.actor ? `${r.ref} added by hand` : `New booking ${r.ref} from the website`;
-      tone = 'lime';
-    } else if (r.type === 'status') {
-      const to = (r.data?.to as BookingStatus | undefined) ?? 'new';
-      text = `${r.ref} moved to ${STATUS_LABEL[to]?.[0].toLowerCase() ?? to}`;
-      tone = STATUS_LABEL[to]?.[1] ?? 'grey';
-    }
-    return { text, tone, who: r.actor ?? 'Website', when: fromNow(r.at, now) };
+    let { text, tone } = describeEvent(r.type, r.data, Boolean(r.actor));
+    if (r.type === 'created') text = r.actor ? `${r.ref} added by hand` : `New booking ${r.ref} from the website`;
+    else text = `${r.ref}: ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+    return { text, tone, ref: r.ref, who: r.actor ?? 'Website', when: fromNow(r.at, now) };
   });
 }
 

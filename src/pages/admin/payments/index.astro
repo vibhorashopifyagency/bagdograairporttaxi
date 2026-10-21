@@ -1,0 +1,175 @@
+---
+/**
+ * Money in: what was collected this month and this week, what is still to
+ * collect on confirmed trips, every payment recorded, and the office UPI
+ * details the QR codes are made from (admin only). Payments themselves are
+ * recorded on each booking's page.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { audit, isAdmin } from '../../../server/admin';
+import { TONE, addDays, balancesToCollect, inr, inrShort, todayIST } from '../../../server/dashboard';
+import { getDb, schema } from '../../../server/db';
+import { METHOD_LABEL, getUpi, setUpi } from '../../../server/payments';
+import { ipHash } from '../../../server/security';
+import { upiLink } from '../../../lib/upi';
+import { renderSVG } from 'uqr';
+import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const admin = isAdmin(user);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+let upiError = '';
+let upiDraft = { id: '', payee: '' };
+
+if (Astro.request.method === 'POST' && admin) {
+  const f = await Astro.request.formData();
+  if (f.get('intent') === 'upi') {
+    upiDraft = { id: String(f.get('id') ?? ''), payee: String(f.get('payee') ?? '') };
+    upiError = (await setUpi(upiDraft, ctx)) ?? '';
+    if (!upiError) return Astro.redirect('/admin/payments/?saved=upi#upi', 303);
+  }
+}
+
+const today = todayIST();
+const monthStart = `${today.slice(0, 8)}01`;
+const dow = new Date(`${today}T00:00:00Z`).getUTCDay();
+const weekStart = addDays(today, -((dow + 6) % 7));
+const p = schema.payments;
+const b = schema.bookings;
+const db = getDb();
+const sumSince = (from: string) =>
+  db.select({ sum: sql<string>`coalesce(sum(${p.amount}), 0)`, n: sql<string>`count(*) filter (where ${p.kind} = 'payment')` }).from(p).where(and(gte(p.receivedOn, from), lt(p.receivedOn, addDays(today, 2))));
+
+const [[month], [week], balances, upi, rows] = await Promise.all([
+  sumSince(monthStart),
+  sumSince(weekStart),
+  balancesToCollect(),
+  getUpi(),
+  db
+    .select({ pay: p, ref: b.ref, name: b.customerName, trip: b.tripName, by: schema.user.name })
+    .from(p)
+    .innerJoin(b, eq(p.bookingId, b.id))
+    .leftJoin(schema.user, eq(p.createdBy, schema.user.id))
+    .orderBy(desc(p.createdAt))
+    .limit(150),
+]);
+await audit({ actorId: user.id, action: 'view_payments', entity: 'payments', detail: { count: rows.length }, ipHash: ctx.ipHash });
+
+if (upi && !upiError) upiDraft = upi;
+const reversed = new Set(rows.filter((r) => r.pay.kind === 'reversal').map((r) => r.pay.reversesPaymentId));
+const dateFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+const monthName = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', month: 'long' }).format(new Date(`${today}T00:00:00Z`));
+const qr = upi ? renderSVG(upiLink(upi, 0, ''), { border: 1 }) : '';
+const stats = [
+  { label: `Collected in ${monthName}`, value: inrShort(Number(month?.sum ?? 0)), sub: `${Number(month?.n ?? 0)} payments` },
+  { label: 'Collected this week', value: inrShort(Number(week?.sum ?? 0)), sub: `${Number(week?.n ?? 0)} payments since Monday` },
+  { label: 'Still to collect', value: inrShort(balances.total), sub: 'on confirmed trips, 30 days back and 14 ahead' },
+];
+---
+
+<AdminLayout title="Payments">
+  <div class="flex flex-col gap-5 lg:gap-6">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Payments</h1>
+        <p class="m-0 mt-1 text-sm text-muted">UPI and cash, recorded by hand on each booking. Nothing is ever deleted: mistakes are reversed by the admin.</p>
+      </div>
+      {admin && <a href="/admin/payments/export.csv" class="btn-ghost min-h-11 px-4 py-2 text-sm" download>Download for accounts (CSV)</a>}
+    </div>
+
+    <section class="grid gap-3 sm:grid-cols-3" aria-label="Totals">
+      {stats.map((x, i) => (
+        <div class:list={['flex flex-col gap-1 rounded-[20px] p-5', i === 0 ? 'bg-ink text-white' : 'a-card']}>
+          <span class:list={['text-sm', i === 0 ? 'text-[#c9ced8]' : 'text-muted']}>{x.label}</span>
+          <span class:list={['font-display text-[32px] leading-tight font-bold', i === 0 && 'text-lime']}>{x.value}</span>
+          <span class:list={['text-[13px]', i === 0 ? 'text-[#c9ced8]' : 'text-muted']}>{x.sub}</span>
+        </div>
+      ))}
+    </section>
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:gap-6">
+      <section class="a-card min-w-0 overflow-hidden" aria-labelledby="list-h">
+        <h2 id="list-h" class="m-0 px-5 pt-5 pb-2 font-display text-xl font-bold">Latest entries</h2>
+        {rows.length === 0 ? (
+          <p class="m-0 px-5 pb-6 text-body">No payments yet. Record one from a booking's page, with the Record payment button.</p>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="a-table">
+              <thead><tr><th>Date</th><th>Booking</th><th>What</th><th>Amount</th><th>Recorded by</th></tr></thead>
+              <tbody>
+                {rows.map((r) => {
+                  const off = reversed.has(r.pay.id);
+                  return (
+                    <tr>
+                      <td class="whitespace-nowrap" data-label="Date">{dateFmt.format(new Date(`${r.pay.receivedOn}T00:00:00Z`))}</td>
+                      <td data-label="Booking">
+                        <a href={`/admin/bookings/${r.ref}/`} class="font-mono text-sm font-bold text-ink">{r.ref}</a>
+                        <span class="block text-sm text-muted">{r.name ?? 'Name removed'}</span>
+                      </td>
+                      <td data-label="What">
+                        <span class:list={['a-badge', r.pay.kind === 'payment' ? TONE.lime : r.pay.kind === 'refund' ? TONE.amber : TONE.red]}>{r.pay.kind === 'payment' ? 'Payment' : r.pay.kind === 'refund' ? 'Refund' : 'Reversal'} · {METHOD_LABEL[r.pay.method]}</span>
+                        {(r.pay.upiRef || r.pay.note) && <span class="mt-1 block text-sm text-muted">{[r.pay.upiRef && `ref ${r.pay.upiRef}`, r.pay.note].filter(Boolean).join(' · ')}</span>}
+                      </td>
+                      <td class:list={['whitespace-nowrap font-bold', off && 'text-muted line-through', r.pay.amount < 0 && 'text-[#b42318]']} data-label="Amount">{r.pay.amount < 0 ? `−${inr(-r.pay.amount)}` : inr(r.pay.amount)}</td>
+                      <td class="text-sm text-body" data-label="Recorded by">{r.by ?? '—'}{r.pay.receivedBy && r.pay.receivedBy !== r.by ? <span class="block text-muted">received by {r.pay.receivedBy}</span> : null}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <div class="flex min-w-0 flex-col gap-5 lg:gap-6">
+        <section id="upi" class="a-card flex scroll-mt-6 flex-col gap-4 p-5" aria-labelledby="upi-h">
+          <h2 id="upi-h" class="m-0 font-display text-xl font-bold">Office UPI</h2>
+          {Astro.url.searchParams.get('saved') === 'upi' && <p class="a-msg a-msg-ok m-0" role="status">Saved. Every new QR code uses it.</p>}
+          {upi ? (
+            <div class="flex items-center gap-4">
+              <div class="h-[112px] w-[112px] shrink-0 rounded-xl border border-line p-1.5" role="img" aria-label="QR code for the office UPI ID" set:html={qr} />
+              <div class="flex min-w-0 flex-col gap-0.5 text-sm">
+                <span class="font-semibold">{upi.payee}</span>
+                <span class="break-all text-body">{upi.id}</span>
+                <span class="text-muted">Scan it with your own UPI app to check it reaches the right account before sending it to customers.</span>
+              </div>
+            </div>
+          ) : (
+            <p class="m-0 text-body">Not set up yet. Until it is, Send QR code has nothing to send.</p>
+          )}
+          {admin ? (
+            <form method="post" action="/admin/payments/#upi" class="flex flex-col gap-3">
+              <input type="hidden" name="intent" value="upi" />
+              {upiError && <p class="a-msg a-msg-error m-0" role="alert">{upiError}</p>}
+              <label class="a-field">UPI ID<input name="id" required value={upiDraft.id} placeholder="jaijawan@okhdfcbank" autocomplete="off" autocapitalize="none" spellcheck="false" /></label>
+              <label class="a-field">Name customers see<input name="payee" required maxlength="60" value={upiDraft.payee} placeholder="Jai Jawan Travels" /></label>
+              <p class="m-0 text-sm text-muted">It is on the office's printed QR code, or in the bank or PhonePe Business app. Each QR code the dashboard makes carries the amount and the booking reference.</p>
+              <button type="submit" class="btn-book self-start">{upi ? 'Save changes' : 'Save'}</button>
+            </form>
+          ) : (
+            <p class="m-0 text-sm text-muted">Only the admin can change it.</p>
+          )}
+        </section>
+
+        <section class="a-card flex flex-col p-5" aria-labelledby="due-h">
+          <div class="flex items-center justify-between gap-3 pb-1.5">
+            <h2 id="due-h" class="m-0 font-display text-xl font-bold">Balances to collect</h2>
+            <span class="font-bold">{inr(balances.total)}</span>
+          </div>
+          {balances.items.length === 0 ? (
+            <p class="m-0 border-t border-[#f0f1f3] pt-3 text-sm text-body">Nothing to collect. Every confirmed trip is paid up.</p>
+          ) : (
+            balances.items.map((x) => (
+              <a href={`/admin/bookings/${x.ref}/?do=qr`} class="flex items-center gap-3 border-t border-[#f0f1f3] py-2.5 text-ink no-underline hover:bg-mist">
+                <span class="flex min-w-0 flex-1 flex-col"><span class="font-semibold">{x.name}</span><span class="text-[13px] text-muted">{x.what}</span></span>
+                <span class="font-bold">{inr(x.amt)}</span>
+              </a>
+            ))
+          )}
+        </section>
+      </div>
+    </div>
+  </div>
+</AdminLayout>

@@ -1,8 +1,10 @@
 # Admin and bookings: setup guide
 
-What is built so far: staff logins, saved bookings and a temporary bookings
-list at `/admin/`. The full dashboard follows once its design mock is
-approved. The plan is in `docs/admin-cms-todo.md`.
+What is built so far: staff logins, saved bookings, the dashboard at
+`/admin/` (today board, bookings, a page per booking, customers, payments by
+UPI QR code and cash, itineraries sent to WhatsApp) and the customer's
+private trip page at `/trip/...`. Website editing comes next. The plan is in
+`docs/admin-cms-todo.md`.
 
 ## What runs where
 
@@ -11,6 +13,7 @@ approved. The plan is in `docs/admin-cms-todo.md`.
 - Data lives in Neon Postgres. The schema is `src/server/db/schema.ts`; migrations are in `drizzle/`.
 - Logins use Better Auth (`src/server/auth.ts`): username and password, roles `admin` and `staff`, optional two-factor.
 - Each booking gets a reference such as `BAT-7K2Q9M`. It goes in the WhatsApp message and is saved by `POST /api/bookings/`.
+- `/trip/<code>/` is the customer's own page for a booking (itinerary, driver, what is paid, the UPI QR code). It runs on the server too, needs no login, is never cached or indexed, and its link is signed with `BETTER_AUTH_SECRET`: changing that secret breaks every trip link already sent.
 
 ## Going live on Vercel (one time)
 
@@ -31,8 +34,9 @@ approved. The plan is in `docs/admin-cms-todo.md`.
 5. **Create the admin.** Open `https://bagdograairporttaxi.com/admin/setup/`, enter the `SETUP_TOKEN`, choose a username and password. Write down the 8 recovery codes it shows: they are the only way back in without the password. Then delete `SETUP_TOKEN` from Vercel. The page closes for good once an account exists.
 6. **Two-factor.** Sign in, open My account and set up two-factor login with Google Authenticator or a similar app. Keep its backup codes with the recovery codes.
 7. **Staff.** Open Team, add the staff member with a username and a password, and give them the password in person. Switch on "can record payments" only if they should.
-8. **Booking emails.** In Resend, add the domain `bagdograairporttaxi.com` and the DNS records it lists at the domain registrar. Until then bookings are still saved and WhatsApp still opens; only the backup email is skipped.
-9. **Test.** Make a booking on `/book/`, press Confirm on WhatsApp, and check it appears at `/admin/` with the same `BAT-` reference as the WhatsApp message.
+8. **UPI.** Open Payments and enter the office UPI ID (it is on the printed QR code, or in the bank or PhonePe Business app) and the name customers should see. Scan the QR code it shows with your own phone and check the payee before sending one to a customer.
+9. **Booking emails.** In Resend, add the domain `bagdograairporttaxi.com` and the DNS records it lists at the domain registrar. Until then bookings are still saved and WhatsApp still opens; only the backup email is skipped.
+10. **Test.** Make a booking on `/book/`, press Confirm on WhatsApp, and check it appears at `/admin/` with the same `BAT-` reference as the WhatsApp message.
 
 Check on the first deploy that the old `.php` redirects in `vercel.json` and the security headers still apply now that the site uses the Vercel adapter, for example that `/about.php` redirects to `/about/`.
 
@@ -51,6 +55,9 @@ npm run db:local              # local Postgres (PGlite) on port 5433; keep this 
 #          DATABASE_POOL_MAX=1
 npm run db:migrate
 npm run dev                   # then open http://localhost:4321/admin/setup/
+npm run db:seed               # optional: made-up bookings, customers and payments around today's date
 ```
+
+`npm run db:seed` only writes to a database on this computer. Run it again for a fresh set dated around the new day; `npm run db:seed -- --remove` takes the dummy data out again (it also sets the monthly goal, which stays).
 
 After changing `src/server/db/schema.ts`, run `npm run db:generate` to write a new migration, commit it, and run `npm run db:migrate`.

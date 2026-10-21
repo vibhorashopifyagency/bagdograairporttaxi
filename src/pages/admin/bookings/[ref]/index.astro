@@ -1,0 +1,739 @@
+---
+/**
+ * One booking: the trip, the driver, the customer, the money and every change.
+ * From here staff record a payment, send the UPI QR code and send the
+ * itinerary. `?do=itinerary`, `?do=payment` and `?do=qr` open those straight
+ * away, which is how the quick actions on the today board arrive here.
+ * Opening this page is logged, because it shows customer details.
+ */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import ItineraryDialog from '../../../../components/admin/ItineraryDialog.astro';
+import { vehicleByKey } from '../../../../data/vehicles';
+import { audit, isAdmin } from '../../../../server/admin';
+import { REF_RE, normalizePhone } from '../../../../server/bookings';
+import { STATUS_LABEL, TONE, addDays, describeEvent, inr, isDay, todayIST, waText } from '../../../../server/dashboard';
+import { getDb, schema } from '../../../../server/db';
+import { BOOKING_STATUSES } from '../../../../server/db/schema';
+import { advanceOf } from '../../../../server/fares';
+import {
+  METHOD_LABEL,
+  canRecordPayments,
+  getUpi,
+  paymentsFor,
+  recordPayment,
+  recordRefund,
+  reversePayment,
+  summarise,
+  type PaymentForm,
+} from '../../../../server/payments';
+import { ipHash } from '../../../../server/security';
+import { allTemplates, itineraryFromBooking, tripPath, tripPlace, LIBRARY } from '../../../../server/trip';
+import { firstName, phoneLabel } from '../../../../lib/itinerary-text';
+import { asc, count, eq, sql } from 'drizzle-orm';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const admin = isAdmin(user);
+const ref = (Astro.params.ref ?? '').toUpperCase();
+const db = getDb();
+const b = schema.bookings;
+const [booking] = REF_RE.test(ref) ? await db.select().from(b).where(eq(b.ref, ref)) : [];
+if (!booking) return Astro.redirect(`/admin/bookings/?q=${encodeURIComponent(ref)}`, 303);
+
+const canPay = await canRecordPayments(user);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+const here = `/admin/bookings/${booking.ref}/`;
+const today = todayIST();
+
+let open = Astro.url.searchParams.get('do') ?? '';
+let error = '';
+const blankPayment = (): PaymentForm => ({ amount: '', method: 'upi', receivedOn: today, receivedBy: user.name, upiRef: '', note: '' });
+let payDraft = blankPayment();
+let refundDraft = blankPayment();
+const edit = {
+  pickupDate: booking.pickupDate,
+  pickupTime: booking.pickupTime,
+  flight: booking.flight ?? '',
+  pax: String(booking.pax),
+  dropAddress: booking.dropAddress ?? '',
+  driverName: booking.driverName ?? '',
+  driverPhone: booking.driverPhone ?? '',
+  vehicleNumber: booking.vehicleNumber ?? '',
+  fareTotal: String(booking.fareTotal),
+  notes: booking.notes ?? '',
+  handledBy: booking.handledBy ?? '',
+};
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? '');
+  const str = (k: string) => String(f.get(k) ?? '').trim();
+  const money = { id: booking.id, ref: booking.ref, fareTotal: booking.fareTotal, advanceShown: advanceOf(booking.fareTotal) };
+
+  if (intent === 'payment' || intent === 'refund') {
+    const draft: PaymentForm = { amount: str('amount'), method: str('method'), receivedOn: str('receivedOn'), receivedBy: str('receivedBy'), upiRef: str('upiRef'), note: str('note') };
+    if (intent === 'payment') payDraft = draft;
+    else refundDraft = draft;
+    if (intent === 'payment' && !canPay) error = 'Only the admin, or staff the admin has allowed, can record payments.';
+    else if (intent === 'refund' && !admin) error = 'Only the admin can record a refund.';
+    else {
+      const res = intent === 'payment' ? await recordPayment(money, draft, ctx) : await recordRefund(money, draft, ctx);
+      if ('error' in res) error = res.error;
+      else return Astro.redirect(`${here}?done=${intent === 'payment' ? (res.summary.state === 'full' ? 'paid-full' : 'paid') : 'refund'}`, 303);
+    }
+    open = intent;
+  } else if (intent === 'reverse') {
+    if (!admin) error = 'Only the admin can reverse a payment.';
+    else {
+      const res = await reversePayment(money, str('paymentId'), str('reason'), ctx);
+      if (res) error = res;
+      else return Astro.redirect(`${here}?done=reversed`, 303);
+    }
+  } else if (intent === 'edit') {
+    for (const k of Object.keys(edit) as (keyof typeof edit)[]) edit[k] = str(k);
+    const pax = Number(edit.pax);
+    const fare = Number(edit.fareTotal.replace(/[^\d]/g, ''));
+    const driverPhone = edit.driverPhone ? normalizePhone(edit.driverPhone) : '';
+    if (!isDay(edit.pickupDate) || edit.pickupDate < addDays(today, -400) || edit.pickupDate > addDays(today, 400)) error = 'Check the pickup date.';
+    else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(edit.pickupTime)) error = 'Check the pickup time.';
+    else if (!Number.isInteger(pax) || pax < 1 || pax > 50) error = 'Travellers must be 1 to 50.';
+    else if (!edit.fareTotal || !Number.isInteger(fare) || fare > 10_000_000) error = 'Check the agreed fare.';
+    else if (driverPhone === null) error = 'Check the driver’s phone number.';
+    else if (edit.flight.length > 40 || edit.dropAddress.length > 200 || edit.driverName.length > 60 || edit.vehicleNumber.length > 20 || edit.notes.length > 1000) error = 'One of the fields is too long.';
+    else {
+      const next = {
+        pickupDate: edit.pickupDate,
+        pickupTime: edit.pickupTime,
+        flight: edit.flight || null,
+        pax,
+        dropAddress: edit.dropAddress || null,
+        driverName: edit.driverName || null,
+        driverPhone: driverPhone || null,
+        vehicleNumber: edit.vehicleNumber.toUpperCase() || null,
+        fareTotal: fare,
+        notes: edit.notes || null,
+        handledBy: edit.handledBy || null,
+      };
+      const changes: Record<string, [unknown, unknown]> = {};
+      for (const [k, v] of Object.entries(next)) {
+        const was = booking[k as keyof typeof next];
+        if ((was ?? null) !== v) changes[k] = [was ?? null, v];
+      }
+      if (Object.keys(changes).length) {
+        // Naming a driver on a confirmed trip moves it along, as the board expects.
+        const promote = booking.status === 'confirmed' && !booking.driverName && next.driverName;
+        await db.transaction(async (tx) => {
+          await tx.update(b).set({ ...next, ...(promote ? { status: 'driver_assigned' as const } : {}) }).where(eq(b.id, booking.id));
+          await tx.insert(schema.bookingEvents).values({ bookingId: booking.id, actorId: user.id, type: 'edited', data: { changes } });
+          if (promote) await tx.insert(schema.bookingEvents).values({ bookingId: booking.id, actorId: user.id, type: 'status', data: { from: 'confirmed', to: 'driver_assigned' } });
+        });
+        await audit({ actorId: user.id, action: 'booking_edited', entity: 'booking', entityId: booking.id, detail: { ref: booking.ref, fields: Object.keys(changes) }, ipHash: ctx.ipHash });
+      }
+      return Astro.redirect(`${here}?done=edited`, 303);
+    }
+    open = 'edit';
+  }
+}
+
+const e = schema.bookingEvents;
+const [payments, events, [itinerary], upi, team, templates] = await Promise.all([
+  paymentsFor(booking.id),
+  db
+    .select({ at: e.at, type: e.type, data: e.data, actor: schema.user.name })
+    .from(e)
+    .leftJoin(schema.user, eq(e.actorId, schema.user.id))
+    .where(eq(e.bookingId, booking.id))
+    .orderBy(asc(e.at)),
+  db
+    .select({ draft: schema.itineraries.draft, sentAt: schema.itineraries.sentAt, sentCount: schema.itineraries.sentCount, updatedAt: schema.itineraries.updatedAt, sentBy: schema.user.name })
+    .from(schema.itineraries)
+    .leftJoin(schema.user, eq(schema.itineraries.sentBy, schema.user.id))
+    .where(eq(schema.itineraries.bookingId, booking.id)),
+  getUpi(),
+  db.select({ id: schema.user.id, name: schema.user.name }).from(schema.user).where(sql`coalesce(${schema.user.banned}, false) = false`).orderBy(asc(schema.user.name)),
+  allTemplates(),
+]);
+const customerBookings = booking.customerId
+  ? ((await db.select({ n: count() }).from(b).where(eq(b.customerId, booking.customerId)))[0]?.n ?? 0)
+  : 0;
+await audit({ actorId: user.id, action: 'view_booking', entity: 'booking', entityId: booking.id, detail: { ref: booking.ref }, ipHash: ctx.ipHash });
+
+const pay = summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments);
+const payRows = payments.slice().reverse();
+const paidPct = booking.fareTotal > 0 ? Math.min(100, Math.round((Math.max(0, pay.paid) / booking.fareTotal) * 100)) : 0;
+const car = vehicleByKey(booking.vehicle)?.name ?? booking.vehicle;
+const route = booking.tripName.split(' · ')[0]!.replace(' (IXB)', '');
+const name = booking.customerName ?? 'Name removed';
+const first = firstName(booking.customerName ?? '');
+const removed = !booking.customerPhone;
+const handler = team.find((t) => t.id === booking.handledBy)?.name;
+const tripUrl = new URL(tripPath(booking), Astro.url.origin).href;
+const draft = itinerary?.draft ?? itineraryFromBooking(booking);
+const place = tripPlace(booking);
+
+const dayFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+const atFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const dateFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+const pickupDay = dayFmt.format(new Date(`${booking.pickupDate}T00:00:00Z`));
+const lastPayment = payments.filter((p) => p.kind === 'payment' && !pay.reversed.has(p.id)).at(-1);
+
+const done = Astro.url.searchParams.get('done') ?? '';
+const doneText: Record<string, string> = {
+  paid: 'Payment recorded.',
+  refund: 'Refund recorded.',
+  reversed: 'Payment reversed. Both entries stay on the record.',
+  edited: 'Saved.',
+};
+
+const callIcon =
+  '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>';
+const waIcon = '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.5 8.5 0 1 1 21 11.5z"/>';
+const sendIcon = '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>';
+const cardIcon = '<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h2"/>';
+const qrIcon = '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>';
+const closeIcon = '<path d="M18 6 6 18M6 6l12 12"/>';
+const facts: [string, string][] = [
+  ['Pickup', `${pickupDay}, ${booking.pickupTime}`],
+  ['Flight or train', booking.flight ?? ''],
+  ['Travellers', String(booking.pax)],
+  ['Address', booking.dropAddress ?? ''],
+  ['Car', [car, booking.vehicleNumber].filter(Boolean).join(' · ')],
+  ['Handled by', handler ?? ''],
+];
+---
+
+<AdminLayout title={booking.ref}>
+  <div class="flex flex-col gap-5 lg:gap-6">
+    <div class="flex flex-col gap-3">
+      <a href="/admin/bookings/" class="inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-semibold text-body no-underline hover:text-ink">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        All bookings
+      </a>
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="flex min-w-0 flex-col gap-1.5">
+          <span class="text-sm text-muted"><strong class="font-mono text-ink">{booking.ref}</strong> · received {atFmt.format(booking.createdAt)} · {booking.source === 'staff' ? 'added by hand' : 'from the website'}</span>
+          <h1 class="m-0 font-display text-[28px] leading-tight font-bold lg:text-[34px]">{route}</h1>
+          <p class="m-0 text-body">{car} · {pickupDay} at {booking.pickupTime} · {booking.pax} {booking.pax === 1 ? 'traveller' : 'travellers'}</p>
+        </div>
+        <div class="flex flex-col items-start gap-1 sm:items-end">
+          <label for="status" class="text-xs font-bold tracking-[0.06em] text-muted uppercase">Status</label>
+          <select id="status" data-status={booking.id} data-was={booking.status} class:list={['a-status', TONE[STATUS_LABEL[booking.status][1]]]}>
+            {BOOKING_STATUSES.map((s) => <option value={s} data-tone={TONE[STATUS_LABEL[s][1]]} selected={s === booking.status}>{STATUS_LABEL[s][0]}</option>)}
+          </select>
+          <span data-status-note class="text-xs text-muted" aria-live="polite"></span>
+        </div>
+      </div>
+    </div>
+
+    {done === 'paid-full' && (
+      <div class="a-celebrate" role="status">
+        <span class="a-burst" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg>
+        <span class="flex flex-col">
+          <strong class="font-display text-xl text-white">Fully paid. Nice work, {firstName(user.name)}.</strong>
+          <span class="text-sm text-[#e3e6ec]">{first ? `${first}'s` : 'This'} trip is settled: {inr(booking.fareTotal)} received.</span>
+        </span>
+      </div>
+    )}
+    {doneText[done] && <p class="a-msg a-msg-ok m-0" role="status">{doneText[done]}</p>}
+    {error && !(open === 'edit' || (open === 'payment' && canPay) || (open === 'refund' && admin)) && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+
+    {/* The four things people do here */}
+    <div class="flex flex-wrap gap-2.5">
+      <button type="button" data-open="dlg-itin" class="a-act a-act-wa" disabled={removed}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={sendIcon} />
+        {itinerary?.sentAt ? 'Send itinerary update' : 'Send itinerary'}
+      </button>
+      {canPay && (
+        <button type="button" data-open="dlg-payment" class="a-act" disabled={pay.due === 0}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={cardIcon} />
+          Record payment
+        </button>
+      )}
+      <button type="button" data-open="dlg-qr" class="a-act" disabled={removed || pay.due === 0}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={qrIcon} />
+        Send QR code
+      </button>
+      {booking.customerPhone && (
+        <>
+          <a href={`tel:+${booking.customerPhone}`} class="a-act" aria-label={`Call ${name}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={callIcon} />
+            <span class="hidden sm:inline">Call</span>
+          </a>
+          <a href={waText(booking.customerPhone, `Namaste ${first}, about your booking ${booking.ref}: `)} target="_blank" rel="noopener" class="a-act" aria-label={`WhatsApp ${name}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={waIcon} />
+            <span class="hidden sm:inline">WhatsApp</span>
+          </a>
+        </>
+      )}
+    </div>
+
+    {/* On a phone the cards run trip, customer, payment, itinerary, timeline; on a laptop in two columns. */}
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] lg:gap-6">
+      <div class="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-6">
+        {/* Trip and driver */}
+        <section class="a-card order-1 flex flex-col gap-4 p-5 lg:order-none lg:p-6" aria-labelledby="trip-h">
+          <div class="flex items-center justify-between gap-3">
+            <h2 id="trip-h" class="m-0 font-display text-xl font-bold">Trip and driver</h2>
+            <button type="button" data-open="dlg-edit" class="btn-ghost min-h-11 px-4 py-2 text-sm">Edit</button>
+          </div>
+          {booking.driverName ? (
+            <div class="flex items-center gap-3 rounded-2xl bg-mist p-3.5">
+              <span class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-ink font-bold text-lime">{booking.driverName[0]!.toUpperCase()}</span>
+              <span class="flex min-w-0 flex-1 flex-col">
+                <span class="text-xs text-muted">Driver</span>
+                <span class="font-semibold">{booking.driverName}{booking.vehicleNumber ? ` · ${booking.vehicleNumber}` : ''}</span>
+              </span>
+              {booking.driverPhone && (
+                <a href={`tel:+${booking.driverPhone}`} class="a-icon-btn" aria-label={`Call ${booking.driverName}`}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={callIcon} />
+                </a>
+              )}
+            </div>
+          ) : (
+            <button type="button" data-open="dlg-edit" class="flex min-h-12 items-center gap-2 rounded-2xl border-0 bg-[#fde8e7] px-4 text-left font-semibold text-[#b42318]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 17h14M6 17l1.5-6h9L18 17M8 21v-4M16 21v-4" /></svg>
+              No driver assigned yet. Assign one.
+            </button>
+          )}
+          <dl class="m-0 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            {facts.map(([k, v]) => (
+              <div class="flex flex-col gap-0.5">
+                <dt class="text-xs font-bold tracking-[0.06em] text-muted uppercase">{k}</dt>
+                <dd class:list={['m-0', v ? 'text-ink' : 'text-muted']}>{v || 'Not given'}</dd>
+              </div>
+            ))}
+          </dl>
+          {booking.notes && <p class="m-0 rounded-xl bg-[#fff8e6] px-4 py-3 text-sm whitespace-pre-line text-body"><strong class="text-ink">Notes:</strong> {booking.notes}</p>}
+        </section>
+
+        {/* Itinerary */}
+        <section class="a-card order-4 flex flex-wrap items-center gap-4 p-5 lg:order-none lg:p-6" aria-labelledby="itin-h">
+          <span class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#e7f5ee]">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0f7a4e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z" /><path d="M9 4v14M15 6v14" /></svg>
+          </span>
+          <div class="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
+            <h2 id="itin-h" class="m-0 font-display text-xl font-bold">Itinerary</h2>
+            <span class="text-sm text-body">
+              {itinerary?.sentAt
+                ? `Sent ${itinerary.sentCount === 1 ? 'once' : `${itinerary.sentCount} times`}, last on ${atFmt.format(itinerary.sentAt)}${itinerary.sentBy ? ` by ${itinerary.sentBy}` : ''}.`
+                : itinerary
+                  ? `Draft saved ${atFmt.format(itinerary.updatedAt)}, not sent yet.`
+                  : 'Not sent yet. It fills in from the booking and the package.'}
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <a href={`${here}trip/`} target="_blank" rel="noopener" class="btn-ghost min-h-11 px-4 py-2 text-sm">Preview page</a>
+            <button type="button" data-copy={tripUrl} class="btn-ghost min-h-11 px-4 py-2 text-sm">Copy link</button>
+          </div>
+        </section>
+
+        {/* Timeline */}
+        <section class="a-card order-5 flex flex-col gap-3 p-5 lg:order-none lg:p-6" aria-labelledby="time-h">
+          <h2 id="time-h" class="m-0 font-display text-xl font-bold">Timeline</h2>
+          <ol class="m-0 flex list-none flex-col p-0">
+            {events.slice().reverse().map((ev) => {
+              const d = describeEvent(ev.type, ev.data, Boolean(ev.actor));
+              return (
+                <li class="relative flex gap-3 pb-4 last:pb-0">
+                  <span class:list={['relative z-10 mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', d.tone === 'lime' ? 'bg-lime' : d.tone === 'amber' ? 'bg-amber' : d.tone === 'red' ? 'bg-[#e5484d]' : 'bg-[#a3aab8]']}></span>
+                  <span class="flex min-w-0 flex-1 flex-col sm:flex-row sm:gap-3">
+                    <span class="min-w-0 flex-1 text-body">{d.text}</span>
+                    <span class="shrink-0 text-sm text-muted">{ev.actor ?? 'Website'} · {atFmt.format(ev.at)}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      </div>
+
+      <div class="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-6">
+        {/* Customer */}
+        <section class="a-card order-2 flex flex-col gap-3 p-5 lg:order-none" aria-labelledby="cust-h">
+          <h2 id="cust-h" class="m-0 font-display text-xl font-bold">Customer</h2>
+          {removed ? (
+            <p class="m-0 text-sm text-muted">Name and number removed 24 months after the trip, as the privacy policy promises.</p>
+          ) : (
+            <>
+              <div class="flex items-center gap-3">
+                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-lime font-bold text-ink">{(booking.customerName ?? '?')[0]!.toUpperCase()}</span>
+                <span class="flex min-w-0 flex-1 flex-col">
+                  <span class="truncate font-semibold">{name}</span>
+                  <a href={`tel:+${booking.customerPhone}`} class="text-sm text-body">{phoneLabel(booking.customerPhone!)}</a>
+                </span>
+              </div>
+              {customerBookings > 1 && <span class="a-badge self-start bg-lime-50 text-[#3f6200]">Returning customer · {customerBookings} bookings</span>}
+              {booking.customerId && <a href={`/admin/customers/${booking.customerId}/`} class="self-start text-sm font-semibold text-ink">Customer page and notes</a>}
+            </>
+          )}
+          {booking.fareMismatch && <p class="a-msg a-msg-error m-0 text-sm">The booking page showed {inr(booking.fareShown)}, but the fare table says {inr(booking.fareServer)}. Agree the price with the customer.</p>}
+        </section>
+
+        {/* Payment */}
+        <section class="a-card order-3 flex flex-col gap-4 p-5 lg:order-none" aria-labelledby="pay-h">
+          <div class="flex items-center justify-between gap-3">
+            <h2 id="pay-h" class="m-0 font-display text-xl font-bold">Payment</h2>
+            <span class:list={['a-badge', TONE[pay.tone]]}>{pay.state === 'full' ? 'Fully paid' : pay.state === 'unpaid' ? 'Unpaid' : pay.state === 'refunded' ? 'Refunded' : pay.state === 'advance' ? 'Advance paid' : 'Part paid'}</span>
+          </div>
+          <div class="flex flex-col gap-2 rounded-2xl bg-[#f7f8fa] p-4 text-[15px]">
+            <div class="flex justify-between gap-3"><span class="text-body">Agreed fare</span><span class="font-semibold">{inr(booking.fareTotal)}</span></div>
+            <div class="flex justify-between gap-3"><span class="text-body">Received</span><span class="font-semibold text-[#3f6200]">{inr(Math.max(0, pay.paid))}</span></div>
+            {pay.refunded > 0 && <div class="flex justify-between gap-3"><span class="text-body">Refunded</span><span class="font-semibold">{inr(pay.refunded)}</span></div>}
+            <div class="h-2 overflow-hidden rounded-full bg-[#e3e6ea]" aria-hidden="true"><div class="h-full rounded-full bg-lime" style={`width:${paidPct}%`}></div></div>
+            <div class="flex justify-between gap-3 border-t border-[#e3e6ea] pt-2"><span class="font-bold">Balance</span><span class="font-bold">{inr(pay.due)}</span></div>
+            {pay.due > 0 && <span class="text-sm text-muted">{pay.askLabel} to ask for now: <strong class="text-ink">{inr(pay.askNow)}</strong></span>}
+          </div>
+
+          {payRows.length > 0 && (
+            <ul class="m-0 flex list-none flex-col p-0">
+              {payRows.map((p) => {
+                const reversed = pay.reversed.has(p.id);
+                return (
+                  <li class="flex items-start gap-3 border-t border-[#f0f1f3] py-3">
+                    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span class:list={['font-semibold', reversed && 'text-muted line-through']}>
+                        {p.kind === 'payment' ? 'Payment' : p.kind === 'refund' ? 'Refund' : 'Reversal'} · {METHOD_LABEL[p.method]}
+                      </span>
+                      <span class="text-[13px] text-muted">
+                        {dateFmt.format(new Date(`${p.receivedOn}T00:00:00Z`))}
+                        {p.receivedBy && ` · ${p.kind === 'refund' ? 'paid by' : 'received by'} ${p.receivedBy}`}
+                        {p.upiRef && ` · ref ${p.upiRef}`}
+                      </span>
+                      {p.note && <span class="text-[13px] text-body">{p.note}</span>}
+                    </div>
+                    <span class:list={['font-bold whitespace-nowrap', p.amount < 0 ? 'text-[#b42318]' : 'text-ink', reversed && 'text-muted line-through']}>{p.amount < 0 ? `−${inr(-p.amount)}` : inr(p.amount)}</span>
+                    {admin && p.kind !== 'reversal' && !reversed && (
+                      <button type="button" data-open="dlg-reverse" data-payment={p.id} data-label={`${p.kind === 'refund' ? 'refund' : 'payment'} of ${inr(Math.abs(p.amount))}`} class="min-h-9 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-body hover:border-ink">Reverse</button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <div class="flex flex-wrap gap-2">
+            {pay.due === 0 && booking.fareTotal > 0 ? (
+              <p class="m-0 flex-1 self-center text-sm font-semibold text-[#3f6200]">Paid in full. Nothing more to collect.</p>
+            ) : canPay ? (
+              <button type="button" data-open="dlg-payment" class="btn-book min-h-11 flex-1 px-4 py-2 text-sm">Record payment</button>
+            ) : (
+              <p class="m-0 text-sm text-muted">Recording payments is switched off for your login. The admin can turn it on in Team.</p>
+            )}
+            {admin && pay.paid > 0 && <button type="button" data-open="dlg-refund" class="btn-ghost min-h-11 px-4 py-2 text-sm">Refund</button>}
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  {/* ---------------- Popups ---------------- */}
+
+  <dialog id="dlg-edit" class="a-dialog" aria-labelledby="dlg-edit-h" data-autoopen={open === 'edit' ? '' : undefined}>
+    <form method="post" class="a-dialog-body">
+      <input type="hidden" name="intent" value="edit" />
+      <header class="a-dialog-head">
+        <h2 id="dlg-edit-h" class="m-0 font-display text-xl font-bold">Edit trip and driver</h2>
+        <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
+      </header>
+      <div class="a-dialog-main grid gap-4 sm:grid-cols-2">
+        {error && open === 'edit' && <p class="a-msg a-msg-error m-0 sm:col-span-2" role="alert">{error}</p>}
+        <label class="a-field">Pickup date<input name="pickupDate" type="date" required value={edit.pickupDate} /></label>
+        <label class="a-field">Pickup time<input name="pickupTime" type="time" required value={edit.pickupTime} /></label>
+        <label class="a-field">Flight or train<input name="flight" maxlength="40" value={edit.flight} autocapitalize="characters" /></label>
+        <label class="a-field">Travellers<input name="pax" type="number" min="1" max="50" required value={edit.pax} /></label>
+        <label class="a-field sm:col-span-2">Pickup or drop address<input name="dropAddress" maxlength="200" value={edit.dropAddress} /></label>
+        <label class="a-field">Driver’s name<input name="driverName" maxlength="60" value={edit.driverName} autocomplete="off" /></label>
+        <label class="a-field">Driver’s phone<input name="driverPhone" type="tel" inputmode="tel" value={edit.driverPhone ? phoneLabel(edit.driverPhone.replace(/\D/g, '')) : ''} autocomplete="off" /></label>
+        <label class="a-field">Car number<input name="vehicleNumber" maxlength="20" value={edit.vehicleNumber} placeholder="WB 73 F 5560" autocapitalize="characters" /></label>
+        <label class="a-field">Agreed fare, ₹<input name="fareTotal" inputmode="numeric" required value={edit.fareTotal} /></label>
+        <label class="a-field sm:col-span-2">Handled by
+          <select name="handledBy">
+            <option value="">Nobody yet</option>
+            {team.map((t) => <option value={t.id} selected={edit.handledBy === t.id}>{t.name}</option>)}
+          </select>
+        </label>
+        <label class="a-field sm:col-span-2">Notes<textarea name="notes" rows="3" maxlength="1000">{edit.notes}</textarea></label>
+        {booking.status === 'confirmed' && !booking.driverName && <p class="m-0 text-sm text-muted sm:col-span-2">Naming a driver moves the booking to “Driver assigned”.</p>}
+      </div>
+      <footer class="a-dialog-foot">
+        <button type="button" data-close class="btn-ghost">Cancel</button>
+        <button type="submit" class="btn-book">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  {[
+    { id: 'dlg-payment', intent: 'payment', title: 'Record payment', d: payDraft, show: canPay },
+    { id: 'dlg-refund', intent: 'refund', title: 'Record a refund', d: refundDraft, show: admin },
+  ].filter((x) => x.show).map((x) => (
+    <dialog id={x.id} class="a-dialog a-dialog-sm" aria-labelledby={`${x.id}-h`} data-autoopen={open === x.intent ? '' : undefined}>
+      <form method="post" class="a-dialog-body" data-pay-form>
+        <input type="hidden" name="intent" value={x.intent} />
+        <header class="a-dialog-head">
+          <div class="flex flex-col">
+            <h2 id={`${x.id}-h`} class="m-0 font-display text-xl font-bold">{x.title}</h2>
+            <span class="text-sm text-muted">{booking.ref} · {name}</span>
+          </div>
+          <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
+        </header>
+        <div class="a-dialog-main flex flex-col gap-4">
+          {error && open === x.intent && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+          <label class="a-field">Amount, ₹<input name="amount" inputmode="numeric" required value={x.d.amount} autocomplete="off" data-amount /></label>
+          {x.intent === 'payment' && pay.due > 0 && (
+            <div class="flex flex-wrap gap-2">
+              {pay.askNow !== pay.due && <button type="button" class="a-chip" data-fill={pay.askNow}>{pay.askLabel} {inr(pay.askNow)}</button>}
+              <button type="button" class="a-chip" data-fill={pay.due}>Full balance {inr(pay.due)}</button>
+            </div>
+          )}
+          {x.intent === 'refund' && <p class="m-0 text-sm text-muted">{inr(pay.paid)} received so far. The cancellation policy sets how much goes back.</p>}
+          <fieldset class="m-0 flex gap-2 border-0 p-0">
+            <legend class="mb-1.5 text-[0.9rem] font-semibold text-body">Method</legend>
+            {(['upi', 'cash'] as const).map((m) => (
+              <label class="a-pill">
+                <input type="radio" name="method" value={m} checked={x.d.method === m} class="sr-only" />
+                <span>{METHOD_LABEL[m]}</span>
+              </label>
+            ))}
+          </fieldset>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="a-field">Date<input name="receivedOn" type="date" required value={x.d.receivedOn} max={addDays(today, 1)} /></label>
+            <label class="a-field">{x.intent === 'refund' ? 'Paid back by' : 'Received by'}<input name="receivedBy" maxlength="80" value={x.d.receivedBy} /></label>
+          </div>
+          <label class="a-field" data-upi-only><span>UPI reference <span class="font-normal text-muted">(the 12-digit number on the screenshot, optional)</span></span><input name="upiRef" maxlength="60" value={x.d.upiRef} inputmode="numeric" autocomplete="off" /></label>
+          <label class="a-field"><span>Note <span class="font-normal text-muted">(optional)</span></span><input name="note" maxlength="300" value={x.d.note} /></label>
+          {x.intent === 'payment' && <p class="m-0 text-sm text-muted">Payments cannot be deleted. A mistake is reversed by the admin, and both entries stay on the record.</p>}
+        </div>
+        <footer class="a-dialog-foot">
+          <button type="button" data-close class="btn-ghost">Cancel</button>
+          <button type="submit" class="btn-book">{x.intent === 'refund' ? 'Record refund' : 'Record payment'}</button>
+        </footer>
+      </form>
+    </dialog>
+  ))}
+
+  {admin && (
+    <dialog id="dlg-reverse" class="a-dialog a-dialog-sm" aria-labelledby="dlg-reverse-h">
+      <form method="post" class="a-dialog-body">
+        <input type="hidden" name="intent" value="reverse" />
+        <input type="hidden" name="paymentId" value="" data-payment-id />
+        <header class="a-dialog-head">
+          <h2 id="dlg-reverse-h" class="m-0 font-display text-xl font-bold">Reverse <span data-payment-label>this payment</span>?</h2>
+          <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
+        </header>
+        <div class="a-dialog-main flex flex-col gap-4">
+          <p class="m-0 text-body">Use this for an entry made by mistake. The original stays on the record, crossed out, with a matching reversal.</p>
+          <label class="a-field">Why<input name="reason" required maxlength="300" placeholder="Entered twice" /></label>
+        </div>
+        <footer class="a-dialog-foot">
+          <button type="button" data-close class="btn-ghost">Cancel</button>
+          <button type="submit" class="btn-book">Reverse it</button>
+        </footer>
+      </form>
+    </dialog>
+  )}
+
+  <dialog id="dlg-qr" class="a-dialog a-dialog-sm" aria-labelledby="dlg-qr-h" data-autoopen={open === 'qr' && !removed ? '' : undefined}>
+    <div class="a-dialog-body" data-qr data-upi={upi ? JSON.stringify(upi) : ''} data-ref={booking.ref} data-booking={booking.id} data-phone={booking.customerPhone ?? ''} data-link={tripUrl} data-first={first} data-route={route}>
+      <header class="a-dialog-head">
+        <div class="flex flex-col">
+          <h2 id="dlg-qr-h" class="m-0 font-display text-xl font-bold">Send QR code</h2>
+          <span class="text-sm text-muted">{booking.ref} · {name}</span>
+        </div>
+        <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
+      </header>
+      {upi ? (
+        <>
+          <div class="a-dialog-main flex flex-col gap-4">
+            <div class="flex flex-wrap items-center gap-4">
+              <div data-qr-box class="grid h-[148px] w-[148px] shrink-0 place-items-center rounded-2xl border border-line bg-white p-2" role="img" aria-label="UPI QR code for this amount"></div>
+              <div class="flex min-w-0 flex-[1_1_160px] flex-col gap-1 text-sm">
+                <span class="font-semibold">{upi.payee}</span>
+                <span class="text-body">UPI ID: {upi.id}</span>
+                <span class="text-muted">Any UPI app opens it with the amount and {booking.ref} filled in.</span>
+              </div>
+            </div>
+            <label class="a-field">Amount, ₹<input inputmode="numeric" value={pay.askNow} data-qr-amount autocomplete="off" /></label>
+            <div class="flex flex-wrap gap-2">
+              {pay.askNow !== pay.due && <button type="button" class="a-chip" data-qr-fill={pay.askNow}>{pay.askLabel} {inr(pay.askNow)}</button>}
+              <button type="button" class="a-chip" data-qr-fill={pay.due}>Full balance {inr(pay.due)}</button>
+            </div>
+            <label class="a-field">Message<textarea rows="5" data-qr-text></textarea></label>
+          </div>
+          <footer class="a-dialog-foot">
+            <button type="button" data-qr-share class="btn-ghost" hidden>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-5-5L5 21" /></svg>
+              Share QR image
+            </button>
+            <a data-qr-send href="#" target="_blank" rel="noopener" class="btn-wa">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={waIcon} />
+              Send on WhatsApp
+            </a>
+          </footer>
+        </>
+      ) : (
+        <div class="a-dialog-main flex flex-col gap-3">
+          <p class="m-0 text-body">The office UPI ID is not set up yet, so there is no QR code to send.</p>
+          {admin ? <a href="/admin/payments/#upi" class="btn-book self-start">Add the UPI ID</a> : <p class="m-0 text-sm text-muted">Ask the admin to add it on the Payments page.</p>}
+        </div>
+      )}
+    </div>
+  </dialog>
+
+  {!removed && (
+    <ItineraryDialog
+      booking={{ id: booking.id, ref: booking.ref }}
+      draft={draft}
+      place={place}
+      sent={Boolean(itinerary?.sentAt)}
+      tripUrl={tripUrl}
+      previewUrl={`${here}trip/`}
+      pay={{ total: booking.fareTotal, paid: Math.max(0, pay.paid), due: pay.due, last: lastPayment ? `${METHOD_LABEL[lastPayment.method]}, ${dateFmt.format(new Date(`${lastPayment.receivedOn}T00:00:00Z`)).replace(/ \d{4}$/, '')}` : '' }}
+      upiReady={Boolean(upi)}
+      templates={templates}
+      library={LIBRARY}
+      autoOpen={open === 'itinerary'}
+    />
+  )}
+</AdminLayout>
+
+<script>
+  import { renderSVG } from 'uqr';
+  import { drawQrCard, inr, logEvent, openDialogs, upiLink } from '../../../../lib/admin-client';
+
+  openDialogs();
+
+  // Status menu: saves on change, as on the bookings list.
+  const sel = document.querySelector<HTMLSelectElement>('select[data-status]');
+  const note = document.querySelector<HTMLElement>('[data-status-note]');
+  sel?.addEventListener('change', async () => {
+    const paint = () => (sel.className = `a-status ${sel.selectedOptions[0]?.dataset.tone ?? ''}`);
+    paint();
+    if (note) note.textContent = 'Saving…';
+    try {
+      const res = await fetch('/admin/api/booking-status/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: sel.dataset.status, status: sel.value }) });
+      if (!res.ok) throw new Error(String(res.status));
+      sel.dataset.was = sel.value;
+      if (note) note.textContent = sel.value === 'confirmed' ? 'Confirmed. Nice one.' : 'Saved';
+      setTimeout(() => location.reload(), 700);
+    } catch {
+      sel.value = sel.dataset.was ?? sel.value;
+      paint();
+      if (note) note.textContent = 'Not saved. Try again.';
+    }
+  });
+
+  // Payment popups: quick amounts, and the UPI reference only for UPI.
+  document.querySelectorAll<HTMLFormElement>('[data-pay-form]').forEach((form) => {
+    const amount = form.querySelector<HTMLInputElement>('[data-amount]')!;
+    const upiOnly = form.querySelector<HTMLElement>('[data-upi-only]');
+    const sync = () => {
+      const method = form.querySelector<HTMLInputElement>('input[name=method]:checked')?.value;
+      if (upiOnly) upiOnly.hidden = method !== 'upi';
+    };
+    form.addEventListener('change', sync);
+    sync();
+    form.querySelectorAll<HTMLButtonElement>('[data-fill]').forEach((b) => b.addEventListener('click', () => { amount.value = b.dataset.fill!; amount.focus(); }));
+  });
+
+  // Reverse: carry the chosen payment into the popup.
+  document.querySelectorAll<HTMLButtonElement>('[data-payment]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const dlg = document.getElementById('dlg-reverse');
+      dlg!.querySelector<HTMLInputElement>('[data-payment-id]')!.value = b.dataset.payment!;
+      dlg!.querySelector<HTMLElement>('[data-payment-label]')!.textContent = `the ${b.dataset.label}`;
+    }),
+  );
+
+  // Copy the trip page link.
+  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(b.dataset.copy!);
+        const was = b.textContent;
+        b.textContent = 'Copied';
+        setTimeout(() => (b.textContent = was), 1500);
+      } catch {
+        prompt('Copy this link', b.dataset.copy);
+      }
+    }),
+  );
+
+  // Send QR code: a live QR for the amount, a WhatsApp message with the UPI ID
+  // and the trip page link, and on a phone the QR picture itself.
+  const qr = document.querySelector<HTMLElement>('[data-qr]');
+  if (qr?.dataset.upi) {
+    const upi = JSON.parse(qr.dataset.upi) as { id: string; payee: string };
+    const { ref, booking, phone, link, first, route } = qr.dataset as Record<string, string>;
+    const amountEl = qr.querySelector<HTMLInputElement>('[data-qr-amount]')!;
+    const textEl = qr.querySelector<HTMLTextAreaElement>('[data-qr-text]')!;
+    const box = qr.querySelector<HTMLElement>('[data-qr-box]')!;
+    const send = qr.querySelector<HTMLAnchorElement>('[data-qr-send]')!;
+    const share = qr.querySelector<HTMLButtonElement>('[data-qr-share]')!;
+    let edited = false;
+    const amount = () => Number(amountEl.value.replace(/\D/g, '')) || 0;
+    const defaultText = (n: number) =>
+      `Namaste ${first} ji, for your booking ${ref} (${route}), please pay ${inr(n)} by UPI.\n\nUPI ID: ${upi.id} (${upi.payee})\nOr scan the QR code on this page: ${link}?amount=${n}\n\nShare the payment screenshot here and we will confirm it. Team Bagdogra Airport Taxi`;
+    const update = () => {
+      const n = amount();
+      box.innerHTML = n > 0 ? renderSVG(upiLink(upi, n, ref), { border: 1 }) : '';
+      if (!edited) textEl.value = defaultText(n);
+      send.href = `https://wa.me/${phone}?text=${encodeURIComponent(textEl.value)}`;
+    };
+    amountEl.addEventListener('input', update);
+    textEl.addEventListener('input', () => { edited = true; update(); });
+    qr.querySelectorAll<HTMLButtonElement>('[data-qr-fill]').forEach((b) => b.addEventListener('click', () => { amountEl.value = b.dataset.qrFill!; edited = false; update(); }));
+    update();
+    send.addEventListener('click', () => logEvent(booking, 'qr_sent', amount()));
+
+    // The share sheet can carry the QR picture into WhatsApp on a phone.
+    const probe = new File([new Blob(['x'], { type: 'image/png' })], 'qr.png', { type: 'image/png' });
+    if (navigator.canShare?.({ files: [probe] })) {
+      share.hidden = false;
+      share.addEventListener('click', async () => {
+        const n = amount();
+        const blob = await drawQrCard({ text: upiLink(upi, n, ref), amount: n, ref, upi });
+        const file = new File([blob], `pay-${ref}.png`, { type: 'image/png' });
+        try {
+          await navigator.share({ files: [file], text: textEl.value });
+          logEvent(booking, 'qr_sent', n);
+        } catch {
+          /* closed the share sheet */
+        }
+      });
+    }
+  }
+</script>
+
+<style is:global>
+  .a-status {
+    appearance: none; border: 0; border-radius: 999px; min-height: 2.75rem; padding: 0.25rem 2.25rem 0.25rem 1rem;
+    font: inherit; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%233d4451' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.8rem center;
+  }
+  .a-act {
+    display: inline-flex; align-items: center; gap: 0.5rem; min-height: 3rem; padding: 0 1.1rem;
+    border-radius: 14px; border: 1px solid var(--color-line); background: #fff; color: var(--color-ink);
+    font: inherit; font-weight: 600; text-decoration: none;
+  }
+  .a-act:hover:not(:disabled) { border-color: var(--color-ink); }
+  .a-act:disabled { opacity: 0.45; }
+  .a-act-wa { border: 0; background: #0f7a4e; color: #fff; }
+  .a-act-wa:hover:not(:disabled) { background: #0b5f3c; }
+  .a-chip { min-height: 2.5rem; padding: 0 0.9rem; border-radius: 999px; border: 1px solid var(--color-line); background: #fff; font: inherit; font-size: 0.875rem; font-weight: 600; color: var(--color-ink); }
+  .a-chip:hover { border-color: var(--color-ink); }
+  .a-pill span { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1.1rem; border-radius: 999px; border: 1px solid var(--color-line); background: #fff; font-weight: 600; font-size: 0.9rem; color: var(--color-body); cursor: pointer; }
+  .a-pill input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
+  .a-pill input:focus-visible + span { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  [data-upi-only][hidden] { display: none; }
+  .a-celebrate { position: relative; overflow: hidden; display: flex; align-items: center; gap: 0.9rem; padding: 1rem 1.25rem; border-radius: 20px; background: var(--color-ink); }
+  .a-burst { position: absolute; left: 1.6rem; top: 50%; width: 0; height: 0; }
+  .a-burst i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--color-lime); opacity: 0; animation: a-pop 900ms ease-out 150ms forwards; }
+  .a-burst i:nth-child(even) { background: var(--color-amber); }
+  .a-burst i:nth-child(1) { --x: 34px; --y: -26px; } .a-burst i:nth-child(2) { --x: 46px; --y: 4px; }
+  .a-burst i:nth-child(3) { --x: 30px; --y: 30px; } .a-burst i:nth-child(4) { --x: -20px; --y: -30px; }
+  .a-burst i:nth-child(5) { --x: -28px; --y: 22px; } .a-burst i:nth-child(6) { --x: 4px; --y: -40px; }
+  @keyframes a-pop { 0% { opacity: 1; transform: translate(0, 0) scale(0.4); } 100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(1); } }
+</style>

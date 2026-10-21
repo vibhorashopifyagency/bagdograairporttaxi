@@ -1,0 +1,94 @@
+---
+/**
+ * Everyone who has booked, most recent first, one row per mobile number.
+ * Opening this page is logged, because it lists names and numbers.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { audit } from '../../../server/admin';
+import { inr, todayIST } from '../../../server/dashboard';
+import { getDb, schema } from '../../../server/db';
+import { ipHash } from '../../../server/security';
+import { phoneLabel } from '../../../lib/itinerary-text';
+import { and, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, 60);
+const c = schema.customers;
+const b = schema.bookings;
+const digits = q.replace(/\D/g, '');
+let search: SQL | undefined;
+if (q) {
+  const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
+  search = or(ilike(c.name, like), digits.length >= 4 ? ilike(c.phone, `%${digits}%`) : undefined);
+}
+
+const paid = sql<string>`coalesce((select sum(p.amount) from ${schema.payments} p join ${b} bb on bb.id = p.booking_id where bb.customer_id = ${c.id}), 0)`;
+const rows = await getDb()
+  .select({
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    last: c.lastBookingAt,
+    notes: c.notes,
+    bookings: sql<number>`count(${b.id})::int`,
+    trips: sql<number>`count(${b.id}) filter (where ${b.status} = 'completed')::int`,
+    nextTrip: sql<string | null>`min(${b.pickupDate}) filter (where ${b.pickupDate} >= ${todayIST()} and ${b.status} not in ('cancelled', 'no_show'))`,
+    paid,
+  })
+  .from(c)
+  .leftJoin(b, eq(b.customerId, c.id))
+  .where(and(isNull(c.personalDataRemovedAt), search))
+  .groupBy(c.id)
+  .orderBy(desc(c.lastBookingAt))
+  .limit(200);
+await audit({ actorId: user.id, action: 'view_customers', entity: 'customers', detail: { count: rows.length, q: q || undefined }, ipHash: ipHash(Astro.request) });
+
+const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+---
+
+<AdminLayout title="Customers">
+  <div class="flex flex-col gap-5">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Customers</h1>
+        <p class="m-0 mt-1 text-sm text-muted">One entry per mobile number, so a returning customer is recognised however they type it.</p>
+      </div>
+      <form method="get" class="flex w-full gap-2 sm:w-auto" role="search">
+        <label class="a-field flex-1"><span class="sr-only">Search customers</span><input name="q" type="search" value={q} placeholder="Name or mobile number" class="w-full sm:w-72" /></label>
+        <button class="btn-book" type="submit">Search</button>
+      </form>
+    </div>
+
+    {rows.length === 0 ? (
+      <div class="a-card p-8 text-body">{q ? 'No customers match that.' : 'No customers yet. Everyone who books appears here.'}</div>
+    ) : (
+      <div class="a-card overflow-x-auto">
+        <table class="a-table">
+          <thead><tr><th>Customer</th><th>Bookings</th><th>Next trip</th><th>Paid so far</th><th>Last booked</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr>
+                <td data-label="Customer">
+                  <a href={`/admin/customers/${r.id}/`} class="font-semibold text-ink no-underline hover:underline">{r.name ?? 'No name'}</a>
+                  {r.phone && <span class="block text-sm text-muted">{phoneLabel(r.phone)}</span>}
+                  {r.notes && <span class="mt-0.5 block max-w-[34ch] truncate text-sm text-body">{r.notes}</span>}
+                </td>
+                <td data-label="Bookings">
+                  <strong>{r.bookings}</strong>
+                  {r.bookings > 1 && <span class="a-badge ml-2 bg-lime-50 text-[#3f6200]">Returning</span>}
+                  {r.trips > 0 && <span class="block text-sm text-muted">{r.trips} completed</span>}
+                </td>
+                <td class="whitespace-nowrap" data-label="Next trip">{r.nextTrip ? day.format(new Date(`${r.nextTrip}T00:00:00Z`)) : <span class="text-muted">None booked</span>}</td>
+                <td class="whitespace-nowrap font-semibold" data-label="Paid so far">{inr(Number(r.paid))}</td>
+                <td class="whitespace-nowrap text-sm text-body" data-label="Last booked">{r.last ? when.format(r.last) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>

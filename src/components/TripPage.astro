@@ -1,0 +1,232 @@
+---
+/**
+ * The customer's trip page, from the owner's mock: the trip at a glance, the
+ * driver, the day-by-day plan, what is paid and still due with the office
+ * UPI QR code, and a way to save it all as a PDF.
+ *
+ * Rendered by /trip/<token>/ for the customer (the itinerary as last sent),
+ * and by the admin's "Preview page" (the draft). Never indexed or cached:
+ * it holds a customer's name and trip.
+ */
+import '../styles/global.css';
+import { renderSVG } from 'uqr';
+import { BUSINESS, SITE } from '../data/site';
+import { dateRange, dayDate, firstName, shortRange } from '../lib/itinerary-text';
+import { upiLink, type Upi } from '../lib/upi';
+import type { ItineraryData } from '../server/db/schema';
+import type { PaySummary } from '../server/payments';
+
+interface Props {
+  ref: string;
+  status: string;
+  data: ItineraryData;
+  /** False when only the booking is known (a QR code sent before any itinerary). */
+  hasPlan: boolean;
+  place: string;
+  pay: PaySummary;
+  upi: Upi | null;
+  /** The amount the QR code asks for, from the link staff sent (?amount=). */
+  amount?: number;
+  photoAlt: (key: string) => string;
+  preview?: boolean;
+}
+const { ref, status, data: d, hasPlan, place, pay, upi, amount, photoAlt, preview = false } = Astro.props;
+
+const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
+const first = firstName(d.name);
+const cancelled = status === 'cancelled' || status === 'no_show';
+const confirmed = ['confirmed', 'driver_assigned', 'completed'].includes(status);
+const cover = d.photos[0] ?? d.days.find((x) => x.photo)?.photo ?? 'hero';
+const range = dateRange(d.start, d.end);
+const heading = cancelled
+  ? `${first ? `${first}, this` : 'This'} booking was cancelled.`
+  : hasPlan
+    ? `${first ? `${first}, ` : ''}${/^your\b/i.test(d.title) ? d.title.replace(/^your/i, first ? 'your' : 'Your') : `your ${d.title}`} is ready.`
+    : `${first ? `${first}, here` : 'Here'} are your trip details.`;
+const ask = Math.min(pay.due, amount && amount > 0 ? amount : pay.askNow);
+const showQr = !cancelled && Boolean(upi) && pay.due > 0 && (hasPlan ? d.showQr : true);
+const link = upi && showQr ? upiLink(upi, ask, ref) : '';
+const qrSvg = link ? renderSVG(link, { border: 1 }) : '';
+const waUs = `https://wa.me/${BUSINESS.whatsapp}?text=${encodeURIComponent(`Namaste, this is ${d.name || 'a customer'} about my booking ${ref}. `)}`;
+const message = d.message.trim();
+const og = new URL(`/img/${cover}-16x9.webp`, SITE.url).href;
+const ogTitle = `${first ? `${first}'s ` : ''}${place} trip${shortRange(d.start, d.end) ? `, ${shortRange(d.start, d.end)}` : ''}`;
+
+const callIcon =
+  '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>';
+const tick = '<path d="M20 6 9 17l-5-5"/>';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{ogTitle} · {SITE.name}</title>
+    <meta property="og:title" content={ogTitle} />
+    <meta property="og:description" content={hasPlan ? 'Day-by-day plan, hotels, driver and payment' : 'Pickup, car, driver and payment'} />
+    <meta property="og:image" content={og} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="675" />
+    <meta property="og:site_name" content={SITE.name} />
+    <link rel="icon" href="/logo-192.png" sizes="192x192" type="image/png" />
+    <link rel="preload" href="/fonts/bricolage-latin-variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/inter-latin-variable.woff2" as="font" type="font/woff2" crossorigin />
+  </head>
+  <body class="bg-mist font-sans text-ink antialiased">
+    {preview && (
+      <div class="sticky top-0 z-20 bg-amber px-4 py-2.5 text-center text-sm font-semibold text-ink print:hidden">
+        Preview of the draft. The customer sees the version last sent.
+      </div>
+    )}
+    <div class="mx-auto flex min-h-screen w-full max-w-[720px] flex-col bg-white sm:my-6 sm:min-h-0 sm:overflow-hidden sm:rounded-[28px] sm:border sm:border-line print:my-0 print:max-w-none print:border-0">
+      <header class="flex items-center gap-2.5 bg-ink px-4 py-3 sm:px-6">
+        <img src="/logo-dark.png" alt="Jai Jawan Travels badge" width="40" height="40" class="h-10 w-10 object-contain" />
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="font-display text-base leading-tight font-bold text-white">{SITE.name}</span>
+          <span class="text-[11px] text-[#a3aab8]">{BUSINESS.tagline}</span>
+        </span>
+        <a href={BUSINESS.phoneHref} class="flex h-10 items-center rounded-[10px] bg-lime px-3 text-[13px] font-bold text-ink no-underline print:hidden">Call us</a>
+      </header>
+
+      <section class="relative h-[300px] text-white sm:h-[340px]">
+        <img src={`/img/${cover}-1600.webp`} srcset={`/img/${cover}-800.webp 800w, /img/${cover}-1600.webp 1600w`} sizes="(min-width: 720px) 720px, 100vw" alt={photoAlt(cover)} class="absolute inset-0 h-full w-full object-cover" />
+        <div class="absolute inset-0 bg-[linear-gradient(180deg,rgb(17_17_17/0.05)_30%,rgb(17_17_17/0.84)_100%)]"></div>
+        <div class="absolute right-5 bottom-5 left-5 flex flex-col gap-1.5 sm:right-7 sm:left-7">
+          <span class:list={['self-start rounded-full px-2.5 py-0.5 text-xs font-bold text-ink', cancelled ? 'bg-[#fde8e7]' : confirmed ? 'bg-lime' : 'bg-amber']}>
+            {cancelled ? 'Cancelled' : confirmed ? 'Confirmed' : 'Booking'} · {ref}
+          </span>
+          <h1 class="m-0 font-display text-[28px] leading-[1.1] font-bold text-white sm:text-[34px]">{heading}</h1>
+          {range && <span class="text-[15px] text-[#eef0f3]">{range} · {d.pax} {d.pax === 1 ? 'traveller' : 'travellers'}</span>}
+        </div>
+      </section>
+
+      <div class="flex flex-col gap-6 px-4 pt-5 pb-8 sm:px-7 sm:pt-7">
+        {cancelled ? (
+          <p class="m-0 text-base text-body">If this is a mistake, or you would like to book again, message us on WhatsApp and we will sort it out.</p>
+        ) : (
+          message && hasPlan && <p class="m-0 text-base whitespace-pre-line text-body">{message}</p>
+        )}
+
+        {!cancelled && (
+          <>
+            <section class="grid grid-cols-2 gap-2.5">
+              <div class="flex flex-col gap-1 rounded-2xl bg-mist p-3.5">
+                <span class="text-xs font-bold tracking-[0.06em] text-muted uppercase">Pickup</span>
+                <span class="font-bold">{[d.time, dayDate(d.start, 0)].filter(Boolean).join(', ')}</span>
+                <span class="text-[13px] text-body">{d.pickup}{d.flight ? `. ${/^(flight|train)/i.test(d.flight) ? '' : 'Flight or train '}${d.flight}.` : ''}</span>
+              </div>
+              <div class="flex flex-col gap-1 rounded-2xl bg-mist p-3.5">
+                <span class="text-xs font-bold tracking-[0.06em] text-muted uppercase">Your car</span>
+                <span class="font-bold">{d.car}</span>
+                <span class="text-[13px] text-body">{d.vehicleNumber || 'Number shared before pickup'}</span>
+              </div>
+            </section>
+
+            <section class="flex items-center gap-3 rounded-2xl border border-line p-3.5">
+              <span class="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-ink font-bold text-lime">{d.driver ? d.driver[0]!.toUpperCase() : '?'}</span>
+              <span class="flex min-w-0 flex-1 flex-col">
+                <span class="text-xs text-muted">Your driver</span>
+                <span class="font-bold">{d.driver || 'We will share the name and number before pickup'}</span>
+              </span>
+              {d.driver && d.driverPhone && (
+                <a href={`tel:+${d.driverPhone.replace(/\D/g, '')}`} aria-label={`Call ${d.driver}`} class="grid h-11 w-11 place-items-center rounded-xl border border-line text-ink print:hidden">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={callIcon} />
+                </a>
+              )}
+            </section>
+          </>
+        )}
+
+        {hasPlan && !cancelled && d.days.length > 0 && (
+          <section class="flex flex-col gap-1">
+            <h2 class="m-0 mb-2.5 font-display text-[22px] font-bold">Day by day</h2>
+            <ol class="m-0 list-none p-0">
+              {d.days.map((day, i) => (
+                <li class="flex gap-3.5 break-inside-avoid">
+                  <div class="flex w-7 shrink-0 flex-col items-center">
+                    <span class="grid h-7 w-7 place-items-center rounded-full bg-ink text-[13px] font-bold text-lime">{i + 1}</span>
+                    {i < d.days.length - 1 && <span class="my-1 w-0.5 flex-1 bg-line"></span>}
+                  </div>
+                  <div class="flex min-w-0 flex-1 flex-col gap-1.5 pb-6">
+                    {dayDate(d.start, i) && <span class="text-xs font-bold tracking-[0.06em] text-lime-text uppercase">{dayDate(d.start, i)}</span>}
+                    <span class="text-[17px] leading-snug font-bold">{day.title}</span>
+                    {day.photo && <img src={`/img/${day.photo}-800.webp`} alt={photoAlt(day.photo)} loading="lazy" width="800" height="533" class="h-[150px] w-full rounded-[14px] object-cover sm:h-[220px]" />}
+                    {day.detail && <span class="text-sm text-body">{day.detail}</span>}
+                    {day.stay && <span class="text-[13px] text-muted">{day.stay}</span>}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+        {!cancelled && pay.total > 0 && (
+          <section class="flex flex-col gap-3 rounded-[20px] bg-ink p-[18px] text-white break-inside-avoid sm:p-6">
+            <h2 class="m-0 font-display text-xl font-bold text-white">Payment</h2>
+            <div class="flex flex-col gap-1.5 text-sm">
+              <div class="flex justify-between gap-3"><span class="text-[#c9ced8]">Total</span><span>{inr(pay.total)}</span></div>
+              <div class="flex justify-between gap-3"><span class="text-[#c9ced8]">{pay.paid > 0 ? 'Received, thank you' : 'Received so far'}</span><span class="text-lime">{inr(Math.max(0, pay.paid))}</span></div>
+              <div class="flex justify-between gap-3 border-t border-ink-700 pt-2 font-bold"><span>{pay.due === 0 ? 'Fully paid' : 'Balance before the trip'}</span><span>{inr(pay.due)}</span></div>
+            </div>
+            {showQr && upi && (
+              <div class="flex flex-wrap items-center gap-3.5 rounded-[14px] bg-white p-3 text-ink">
+                <div class="h-[132px] w-[132px] shrink-0" role="img" aria-label={`UPI QR code to pay ${inr(ask)}`} set:html={qrSvg} />
+                <div class="flex min-w-0 flex-[1_1_160px] flex-col gap-1 text-[13px]">
+                  <span class="text-sm font-bold">Scan with any UPI app to pay {inr(ask)}</span>
+                  <span class="text-body">To {upi.payee}, UPI ID <span class="[overflow-wrap:anywhere]">{upi.id}</span></span>
+                  <span class="text-muted">Share the payment screenshot on WhatsApp and we confirm it.</span>
+                  <a href={link} class="mt-1 inline-flex min-h-11 items-center justify-center self-start rounded-[10px] bg-ink px-3.5 text-[13px] font-bold text-white no-underline sm:hidden print:hidden">Pay with a UPI app</a>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {hasPlan && !cancelled && d.includes.length > 0 && (
+          <section class="flex flex-col gap-2 break-inside-avoid">
+            <h2 class="m-0 mb-1 font-display text-xl font-bold">Included</h2>
+            {d.includes.map((x) => (
+              <span class="flex gap-2.5 text-sm text-body">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f7a00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mt-0.5 shrink-0" set:html={tick} />
+                {x}
+              </span>
+            ))}
+          </section>
+        )}
+        {hasPlan && !cancelled && d.excludes.length > 0 && (
+          <section class="flex flex-col gap-2 break-inside-avoid">
+            <h2 class="m-0 mb-1 font-display text-xl font-bold">Not included</h2>
+            {d.excludes.map((x) => (
+              <span class="flex gap-2.5 text-sm text-body">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5c6373" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" class="mt-0.5 shrink-0"><path d="M6 12h12" /></svg>
+                {x}
+              </span>
+            ))}
+          </section>
+        )}
+
+        <section class="flex flex-col gap-2.5 print:hidden">
+          <a href={waUs} target="_blank" rel="noopener" class="flex h-[52px] items-center justify-center gap-2 rounded-[14px] bg-[#0f7a4e] font-bold text-white no-underline hover:bg-[#0b5f3c]">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.5 8.5 0 1 1 21 11.5z" /></svg>
+            Message us on WhatsApp
+          </a>
+          {!cancelled && <button type="button" data-print class="h-12 rounded-[14px] border border-ink bg-white font-semibold text-ink">Save as PDF</button>}
+        </section>
+        <p class="m-0 text-center text-xs text-muted">{SITE.name}, a unit of {BUSINESS.legalName} · {BUSINESS.hours} · {BUSINESS.phone}</p>
+      </div>
+    </div>
+    <script>
+      document.querySelector('[data-print]')?.addEventListener('click', () => window.print());
+    </script>
+    <style is:global>
+      @media print {
+        @page { margin: 12mm; }
+        body { background: #fff; }
+        .break-inside-avoid { break-inside: avoid; }
+      }
+    </style>
+  </body>
+</html>

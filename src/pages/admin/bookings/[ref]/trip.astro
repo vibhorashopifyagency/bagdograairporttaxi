@@ -1,0 +1,36 @@
+---
+/**
+ * "Preview page" in the itinerary popup: the customer's trip page built from
+ * the draft, with a banner saying so. Signed-in admin and staff only.
+ */
+import TripPage from '../../../../components/TripPage.astro';
+import { REF_RE } from '../../../../server/bookings';
+import { getDb, schema } from '../../../../server/db';
+import { advanceOf } from '../../../../server/fares';
+import { getUpi, paymentsFor, summarise } from '../../../../server/payments';
+import { itineraryFromBooking, photoAlt, tripPlace } from '../../../../server/trip';
+import { eq } from 'drizzle-orm';
+
+export const prerender = false;
+
+const ref = (Astro.params.ref ?? '').toUpperCase();
+const [booking] = REF_RE.test(ref) ? await getDb().select().from(schema.bookings).where(eq(schema.bookings.ref, ref)) : [];
+if (!booking) return Astro.redirect('/admin/bookings/', 303);
+const [[itinerary], payments, upi] = await Promise.all([
+  getDb().select({ draft: schema.itineraries.draft }).from(schema.itineraries).where(eq(schema.itineraries.bookingId, booking.id)),
+  paymentsFor(booking.id),
+  getUpi(),
+]);
+---
+
+<TripPage
+  ref={booking.ref}
+  status={booking.status}
+  data={itinerary?.draft ?? itineraryFromBooking(booking)}
+  hasPlan={true}
+  place={tripPlace(booking)}
+  pay={summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments)}
+  upi={upi}
+  photoAlt={photoAlt}
+  preview
+/>

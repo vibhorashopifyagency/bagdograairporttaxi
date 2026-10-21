@@ -22,7 +22,8 @@
     "check:live": "node scripts/check-live.mjs https://bagdograairporttaxi.com",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
-    "db:local": "node scripts/db-local.mjs"
+    "db:local": "node scripts/db-local.mjs",
+    "db:seed": "node --env-file-if-exists=.env scripts/db-seed.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",

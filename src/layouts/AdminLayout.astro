@@ -55,9 +55,9 @@ const groups: { label?: string; items: Item[] }[] = [
     items: [
       { href: '/admin/', label: 'Today', icon: 'today' },
       { href: '/admin/bookings/', label: 'Bookings', icon: 'bookings', badge: newCount ? `${newCount} new` : undefined },
-      { label: 'Customers', icon: 'customers' },
-      { label: 'Payments', icon: 'payments' },
-      { label: 'Itineraries', icon: 'itineraries' },
+      { href: '/admin/customers/', label: 'Customers', icon: 'customers' },
+      { href: '/admin/payments/', label: 'Payments', icon: 'payments' },
+      { href: '/admin/itineraries/', label: 'Itineraries', icon: 'itineraries' },
     ],
   },
   ...(isAdmin
@@ -172,6 +172,7 @@ const tabs: Item[] = [
               <form action="/admin/bookings/" method="get" role="search" class="flex h-12 flex-1 items-center gap-2.5 rounded-[14px] border border-line bg-white px-3.5 focus-within:outline-3 focus-within:outline-lime">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5c6373" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={ICON.search} />
                 <label for="a-search" class="sr-only">Search bookings</label>
+                {path.startsWith('/admin/bookings') && Astro.url.searchParams.get('pick') && <input type="hidden" name="pick" value={Astro.url.searchParams.get('pick')} />}
                 <input id="a-search" name="q" type="search" value={path.startsWith('/admin/bookings') ? (Astro.url.searchParams.get('q') ?? '') : ''} placeholder="Search name, mobile number or booking reference" class="min-w-0 flex-1 border-0 bg-transparent text-ink outline-none" />
                 <kbd data-kbd class="rounded-md border border-line px-1.5 py-0.5 font-sans text-xs text-[#5c6373]">Ctrl K</kbd>
               </form>
@@ -229,7 +230,7 @@ const tabs: Item[] = [
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON.signOut} />
               Sign out
             </button>
-            <p class="mt-2 border-t border-line px-3 pt-3 text-sm text-muted">Coming next: customers, payments, itineraries{isAdmin ? ' and website editing' : ''}.</p>
+            {isAdmin && <p class="mt-2 border-t border-line px-3 pt-3 text-sm text-muted">Coming next: website editing.</p>}
           </div>
         </dialog>
       </div>
@@ -365,6 +366,23 @@ const tabs: Item[] = [
       .a-icon-btn-wa:hover { background: #0b5f3c; }
       .a-sheet { margin: auto 0 0; width: 100%; max-width: 100%; max-height: 85vh; border: 0; border-radius: 24px 24px 0 0; padding: 0; background: #fff; color: var(--color-ink); }
       .a-sheet::backdrop { background: rgb(17 17 17 / 55%); }
+      /* Popups: centred on a laptop, the whole screen on a phone. */
+      .a-dialog { margin: auto; width: min(100% - 2rem, 640px); max-width: none; max-height: calc(100dvh - 3rem); border: 0; border-radius: 24px; padding: 0; background: #fff; color: var(--color-ink); overflow: hidden; }
+      .a-dialog[open] { display: flex; flex-direction: column; }
+      .a-dialog::backdrop { background: rgb(17 17 17 / 55%); }
+      .a-dialog-sm { width: min(100% - 2rem, 520px); }
+      .a-dialog-xl { width: min(100% - 3rem, 1120px); height: calc(100dvh - 3rem); border-radius: 28px; }
+      .a-dialog-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+      .a-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem; border-bottom: 1px solid #eceef1; }
+      .a-dialog-main { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 1.25rem 1.5rem; }
+      .a-dialog-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.75rem; padding: 1rem 1.5rem; border-top: 1px solid #eceef1; background: #fff; }
+      @media (max-width: 767px) {
+        .a-dialog, .a-dialog-sm, .a-dialog-xl { width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+        .a-dialog-head { padding: 0.75rem 1rem; }
+        .a-dialog-main { padding: 1.1rem 1rem; }
+        .a-dialog-foot { padding: 0.75rem 1rem max(env(safe-area-inset-bottom), 1rem); }
+        .a-dialog-foot > .btn-book, .a-dialog-foot > .btn-ghost, .a-dialog-foot > .btn-wa { flex: 1 1 auto; }
+      }
     </style>
   </body>
 </html>

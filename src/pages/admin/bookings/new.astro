@@ -11,7 +11,7 @@ import { POLICY } from '../../../data/site';
 import { VEHICLES, vehicleByKey } from '../../../data/vehicles';
 import { audit } from '../../../server/admin';
 import { normalizePhone } from '../../../server/bookings';
-import { addDays, todayIST } from '../../../server/dashboard';
+import { addDays, isDay, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { advanceOf, computeFare } from '../../../server/fares';
 import { ipHash, randomCode } from '../../../server/security';
@@ -48,8 +48,7 @@ if (Astro.request.method === 'POST') {
   const pax = Number(draft.pax);
   const fareTyped = draft.fare ? Number(draft.fare.replace(/[^\d]/g, '')) : null;
   const dateOk =
-    /^\d{4}-\d{2}-\d{2}$/.test(draft.date) &&
-    new Date(`${draft.date}T00:00:00Z`).toISOString().slice(0, 10) === draft.date &&
+    isDay(draft.date) &&
     draft.date >= addDays(today, -60) &&
     draft.date <= addDays(today, 400);
   const computed =

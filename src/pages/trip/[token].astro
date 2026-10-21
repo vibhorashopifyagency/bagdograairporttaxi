@@ -1,0 +1,66 @@
+---
+/**
+ * The customer's private trip page. The link is sent on WhatsApp from the
+ * admin ("Send itinerary" or "Send QR code"). It shows the itinerary as last
+ * sent, or, before one is sent, the booking and how to pay. It cannot be
+ * guessed from the booking reference, is never indexed or cached, and stops
+ * working once the booking's personal details are removed.
+ */
+import TripPage from '../../components/TripPage.astro';
+import { BUSINESS, SITE, waLink } from '../../data/site';
+import { getDb, schema } from '../../server/db';
+import { advanceOf } from '../../server/fares';
+import { getUpi, paymentsFor, summarise } from '../../server/payments';
+import { bookingForToken, itineraryFromBooking, photoAlt, tripPlace } from '../../server/trip';
+import { eq } from 'drizzle-orm';
+
+export const prerender = false;
+
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+
+const booking = await bookingForToken(Astro.params.token ?? '');
+const gone = !booking || Boolean(booking.personalDataRemovedAt) || !booking.customerPhone;
+let page: Parameters<typeof TripPage>[0] | null = null;
+if (!gone) {
+  const [[itinerary], payments, upi] = await Promise.all([
+    getDb().select({ published: schema.itineraries.published }).from(schema.itineraries).where(eq(schema.itineraries.bookingId, booking.id)),
+    paymentsFor(booking.id),
+    getUpi(),
+  ]);
+  const amount = Number(Astro.url.searchParams.get('amount') ?? '');
+  page = {
+    ref: booking.ref,
+    status: booking.status,
+    data: itinerary?.published ?? itineraryFromBooking(booking),
+    hasPlan: Boolean(itinerary?.published),
+    place: tripPlace(booking),
+    pay: summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments),
+    upi,
+    amount: Number.isInteger(amount) && amount > 0 ? amount : undefined,
+    photoAlt,
+  };
+} else {
+  Astro.response.status = 404;
+}
+---
+
+{page ? (
+  <TripPage {...page} />
+) : (
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta name="robots" content="noindex, nofollow" />
+      <title>Trip page not found · {SITE.name}</title>
+      <style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1.25rem;color:#111;line-height:1.55}a{color:#111}</style>
+    </head>
+    <body>
+      <h1>This trip page is not available</h1>
+      <p>The link may be mistyped, or the trip details have been removed after 24 months, as our privacy policy promises.</p>
+      <p><a href="/">{SITE.name}</a> · <a href={waLink('Namaste, I have a question about my trip page.')}>Message us on WhatsApp</a> · <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a></p>
+    </body>
+  </html>
+)}

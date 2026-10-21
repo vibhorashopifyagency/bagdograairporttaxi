@@ -1,6 +1,6 @@
 # Admin, live editing and bookings dashboard: plan and todo list
 
-Status: plan agreed and every open question settled on 21 October 2026. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, then the dashboard shell and home screen to the mock (sidebar, phone tab bar, today board at /admin/, bookings list at /admin/bookings/, new booking by hand at /admin/bookings/new/). Not yet deployed. Going-live steps are in docs/admin-setup.md.
+Status: plan agreed and every open question settled on 21 October 2026. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, then the dashboard shell and home screen to the mock (sidebar, phone tab bar, today board at /admin/, bookings list at /admin/bookings/, new booking by hand at /admin/bookings/new/). Later the same day: a page for each booking (/admin/bookings/BAT-.../), payments by UPI QR code and cash (Phase 3b, /admin/payments/), the Send itinerary popup with the customer's private trip page (Phase 3c stage 1, /trip/...), the itineraries list and the customers pages. Not yet deployed. Going-live steps are in docs/admin-setup.md.
 
 ## Decisions taken by the owner
 
@@ -53,20 +53,20 @@ The dashboard should feel like the business: mountains, roads, a veteran-run tea
 **Upbeat and motivating**
 - [x] A greeting by name and time of day, such as "Good morning, Pinku", with today's weather in Bagdogra and Darjeeling. *(Built, with Bagdogra, Darjeeling and Gangtok from Open-Meteo, cached 30 minutes.)*
 - [x] A monthly goal set by the admin, for bookings and for money collected, shown as a progress ring that fills as the month goes on. *(Built: the admin sets trips and a fares target on the home screen. Until payments can be recorded it counts confirmed fares, not money collected.)*
-- [ ] A small celebration when a booking is confirmed or fully paid, and a "wins this week" strip. *(The wins this week strip is built; the celebration is not.)*
+- [x] A small celebration when a booking is confirmed or fully paid, and a "wins this week" strip. *(A "Fully paid. Nice work" banner on the booking after the last payment, and "Confirmed. Nice one." when a booking is confirmed from its page.)*
 - [x] The newest five-star Google review on the home screen, as a reminder of why the work matters. *(Built: a different five-star review each day from the ones already on the site. The site's review file has no exact dates, so it is not strictly the newest.)*
 - [x] Friendly wording everywhere, for example "No pickups left today. Time for chai." when the list is empty.
 
 **Useful first**
 - [x] The home screen is a "today board": today's and tomorrow's pickups as cards with time, place, driver and payment state.
 - [x] New bookings not yet answered show how long they have waited, and turn amber, then red.
-- [ ] Payments due and balances to collect, with one tap to send the QR code. *(Balances and a WhatsApp reminder are built; the QR code waits for Phase 3b.)*
-- [ ] Quick actions always in reach: new booking, send itinerary, record payment, send QR code. *(New booking works; the other three show as "Coming next" until their phases are built.)*
+- [x] Payments due and balances to collect, with one tap to send the QR code. *(On the today board and the Payments page; each balance opens the booking with the QR popup.)*
+- [x] Quick actions always in reach: new booking, send itinerary, record payment, send QR code. *(The last three ask which booking first, then open its popup.)*
 - [ ] Search across bookings and customers from anywhere, with a keyboard shortcut on a laptop. *(Bookings search sits in the top bar on every page, with Ctrl K or ⌘K; customers come with the customer page.)*
 
 **Built for the phone**
 - [x] On a phone, a bottom tab bar, large tap targets and screens that work one-handed.
-- [ ] Popups open as full-screen sheets on a phone.
+- [x] Popups open as full-screen sheets on a phone.
 - [ ] The dashboard installs to the home screen like an app.
 
 **Approval before building**
@@ -113,52 +113,52 @@ This phase can go live before content editing is built.
 
 - [ ] Bookings list showing all bookings to both admin and staff, with filters by status, date, route, package and payment state, plus search by name, phone or reference. *(Built at /admin/bookings/ with search and a status filter; date, route, package and payment filters still to do.)*
 - [x] Statuses: new, contacted, confirmed, driver assigned, completed, cancelled, no-show. *(Changed from the menu on each booking in the list, or by pressing Reply on the home screen.)*
-- [ ] Booking detail page: trip, fare, payment state, notes and a timeline of every change.
-- [ ] Optional "handled by" field on a booking, useful once there is more than one staff member.
-- [ ] Add a driver name, vehicle number and driver phone to a confirmed booking.
-- [x] One-tap buttons to call the customer or open a WhatsApp chat from the booking. *(On the home screen cards and in the bookings list; the booking detail page is still to come.)*
-- [ ] Customer page: contact details, all past bookings and notes.
+- [x] Booking detail page: trip, fare, payment state, notes and a timeline of every change. *(At /admin/bookings/BAT-.../; every edit, payment, reversal, QR code and itinerary sent is on the timeline.)*
+- [x] Optional "handled by" field on a booking, useful once there is more than one staff member. *(In Edit trip and driver on the booking.)*
+- [x] Add a driver name, vehicle number and driver phone to a confirmed booking. *(Naming a driver on a confirmed booking moves it to "Driver assigned".)*
+- [x] One-tap buttons to call the customer or open a WhatsApp chat from the booking. *(On the home screen cards, the bookings list and each booking's page.)*
+- [x] Customer page: contact details, all past bookings and notes. *(At /admin/customers/, with search; notes are shared by the team.)*
 - [x] Staff can create a booking manually for phone and walk-in enquiries. *(Built at /admin/bookings/new/.)*
-- [ ] Export bookings and payments to CSV for accounts.
+- [ ] Export bookings and payments to CSV for accounts. *(Payments done: "Download for accounts" on the Payments page, admin only. Bookings still to do.)*
 - [x] Dashboard home: today's pickups, new bookings, payments due, this week's numbers, top routes and packages.
 
 ## Phase 3b: payments by UPI QR code and cash
 
 There is no payment gateway, so payments are recorded by hand.
 
-- [ ] Store the office's UPI QR code image and UPI ID in business details, editable by the admin.
+- [x] Store the office's UPI QR code image and UPI ID in business details, editable by the admin. *(The admin enters the UPI ID and payee name on the Payments page. No image is stored: each QR code is made from the UPI ID with the amount and booking reference inside, which any UPI app reads.)*
 - [ ] Show the QR code on the booking page in place of the current payment-link button, with the advance amount to pay.
-- [ ] A "send QR code" button on each booking that opens WhatsApp to the customer with the amount and the UPI ID.
-- [ ] Record each payment on the booking: amount, method (UPI or cash), date, who received it, UPI transaction reference, optional screenshot.
-- [ ] Payment state per booking: unpaid, advance paid, fully paid, refunded. It is worked out from the recorded payments, not typed in.
-- [ ] Admin records and edits payments directly.
-- [ ] Staff can record a payment only when the admin has switched on "can record payments" for them. Without it, the payment controls are hidden.
-- [ ] Every payment change is logged with who made it and when, and cannot be deleted, only reversed by the admin.
-- [ ] Refunds recorded by the admin only, following the cancellation policy.
+- [x] A "send QR code" button on each booking that opens WhatsApp to the customer with the amount and the UPI ID. *(The message also links to the trip page, which shows the QR code for that amount. On a phone, "Share QR image" sends the QR code itself as a picture.)*
+- [ ] Record each payment on the booking: amount, method (UPI or cash), date, who received it, UPI transaction reference, optional screenshot. *(All but the screenshot, which needs photo storage (Vercel Blob). A payment larger than the balance is refused.)*
+- [x] Payment state per booking: unpaid, advance paid, fully paid, refunded. It is worked out from the recorded payments, not typed in. *(The advance is 20% of the agreed fare, so changing the fare moves it too.)*
+- [x] Admin records and edits payments directly. *(Edits are reversals, as below.)*
+- [x] Staff can record a payment only when the admin has switched on "can record payments" for them. Without it, the payment controls are hidden. *(Checked on the server on every payment, so switching it off works at once.)*
+- [x] Every payment change is logged with who made it and when, and cannot be deleted, only reversed by the admin. *(A reversal needs a reason; the original stays, crossed out.)*
+- [x] Refunds recorded by the admin only, following the cancellation policy.
 
 ## Phase 3c: send the itinerary to the customer's WhatsApp
 
 A "Send itinerary" button on every booking, and in the quick actions, opens a popup. Admin and staff can both use it.
 
 **Fields in the popup**
-- [ ] Customer name and WhatsApp number, filled in from the booking and editable, with the number checked before sending.
-- [ ] Trip details: trip title, start and end dates, pickup place and time, drop point, number of travellers.
-- [ ] Car and driver: vehicle, vehicle number, driver name and driver phone, filled in from the booking.
-- [ ] Day-by-day plan, filled in from the chosen tour package. Each day has a title, details, the hotel and an optional photo. Days can be added, removed and reordered.
-- [ ] Inclusions and exclusions, filled in from the package and editable.
-- [ ] Payment summary: total, advance paid and balance due, worked out from the recorded payments, with an option to include the UPI QR code.
-- [ ] A personal message, with saved templates such as "Welcome", "Day before pickup" and "Thank you for travelling with us".
-- [ ] Images: pick from the site's photo library or upload new ones, then reorder them.
-- [ ] A live preview of the WhatsApp message and of the itinerary page.
+- [x] Customer name and WhatsApp number, filled in from the booking and editable, with the number checked before sending.
+- [x] Trip details: trip title, start and end dates, pickup place and time, drop point, number of travellers.
+- [x] Car and driver: vehicle, vehicle number, driver name and driver phone, filled in from the booking.
+- [x] Day-by-day plan, filled in from the chosen tour package. Each day has a title, details, the hotel and an optional photo. Days can be added, removed and reordered. *(A taxi booking gets one day from its route. Photos are guessed from the places each day names. Reordering is by Move up and Move down, not dragging.)*
+- [x] Inclusions and exclusions, filled in from the package and editable.
+- [x] Payment summary: total, advance paid and balance due, worked out from the recorded payments, with an option to include the UPI QR code.
+- [x] A personal message, with saved templates such as "Welcome", "Day before pickup" and "Thank you for travelling with us". *("Save as template" turns the names and times back into blanks, so a saved template works for the next customer. Saved templates are shared by the team.)*
+- [ ] Images: pick from the site's photo library or upload new ones, then reorder them. *(Picking from the library works. Uploading waits for photo storage (Vercel Blob).)*
+- [x] A live preview of the WhatsApp message and of the itinerary page.
 
 **How it reaches the customer (stage 1, free, works from day one)**
-- [ ] On send, create a private itinerary page for that booking: branded, with all the text and images, and easy to save as a PDF. Its link cannot be guessed and it is hidden from search engines.
-- [ ] Open a WhatsApp chat to the customer's number with the message and the link already filled in. The sender taps Send once. WhatsApp shows a preview card with the first photo.
-- [ ] On a phone, a "Share with photos" button also sends the actual photos and text through the phone's share sheet into the same chat.
-- [ ] If the itinerary is edited after sending, the same link shows the new version, and a "Send update" button tells the customer.
+- [x] On send, create a private itinerary page for that booking: branded, with all the text and images, and easy to save as a PDF. Its link cannot be guessed and it is hidden from search engines. *(/trip/ plus the reference and a 10-letter code signed with the site's secret. Never cached; noindex.)*
+- [x] Open a WhatsApp chat to the customer's number with the message and the link already filled in. The sender taps Send once. WhatsApp shows a preview card with the first photo.
+- [x] On a phone, a "Share with photos" button also sends the actual photos and text through the phone's share sheet into the same chat. *(The share sheet cannot pick the chat by itself, so the sender chooses the customer in WhatsApp.)*
+- [x] If the itinerary is edited after sending, the same link shows the new version, and a "Send update" button tells the customer. *(Edits stay a draft until Send update, so the customer never sees a half-finished change.)*
 
 **Records**
-- [ ] Log every itinerary sent on the booking's timeline, with who sent it, when, and a copy of what was sent.
+- [x] Log every itinerary sent on the booking's timeline, with who sent it, when, and a copy of what was sent. *(The last version sent is kept in full; earlier versions are counted, not kept.)*
 - [ ] Remove itinerary pages along with the customer's details at 24 months, or earlier if the admin chooses.
 
 ## Phase 4: move content into the database

@@ -1,0 +1,735 @@
+---
+/**
+ * The "Send itinerary" popup from the owner's mock: the form on the left and,
+ * on a laptop, a live preview of the WhatsApp message on the right. On a
+ * phone it fills the screen, with the send buttons pinned at the bottom.
+ *
+ * It saves a draft a moment after each change. "Send on WhatsApp" opens the
+ * chat in the same tap (browsers block windows opened after a wait) and
+ * publishes the itinerary to the customer's trip page alongside it.
+ */
+import type { ItineraryData } from '../../server/db/schema';
+import type { LibraryPhoto } from '../../server/trip';
+import type { Template } from '../../lib/itinerary-text';
+import { firstName, phoneLabel } from '../../lib/itinerary-text';
+
+interface Props {
+  booking: { id: string; ref: string };
+  draft: ItineraryData;
+  place: string;
+  sent: boolean;
+  tripUrl: string;
+  previewUrl: string;
+  pay: { total: number; paid: number; due: number; last: string };
+  upiReady: boolean;
+  templates: Template[];
+  library: LibraryPhoto[];
+  autoOpen?: boolean;
+}
+const { booking, draft, place, sent, tripUrl, previewUrl, pay, upiReady, templates, library, autoOpen = false } = Astro.props;
+const first = firstName(draft.name) || 'the customer';
+const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
+const config = { booking, draft, place, sent, tripUrl, previewUrl, pay, upiReady, templates, library };
+const closeIcon = '<path d="M18 6 6 18M6 6l12 12"/>';
+const waIcon = '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.5 8.5 0 1 1 21 11.5z"/>';
+const photoIcon = '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>';
+const field = 'a-field it-field';
+---
+
+<dialog id="dlg-itin" class="a-dialog a-dialog-xl" aria-labelledby="it-h" data-autoopen={autoOpen ? '' : undefined}>
+  <div class="a-dialog-body" data-itin={JSON.stringify(config)}>
+    <header class="a-dialog-head">
+      <span class="hidden h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[#e7f5ee] lg:grid">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0f7a4e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg>
+      </span>
+      <div class="flex min-w-0 flex-1 flex-col">
+        <h2 id="it-h" class="m-0 font-display text-[21px] font-bold lg:text-2xl">Send itinerary</h2>
+        <span class="truncate text-xs text-muted lg:text-sm">Booking {booking.ref} · <span data-v="name">{draft.name}</span> · <span data-v="title">{draft.title}</span></span>
+      </div>
+      <button type="button" data-close class="a-icon-btn order-first lg:order-none" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
+    </header>
+
+    <div class="flex min-h-0 flex-1">
+      <div class="it-form flex min-w-0 flex-[1.5_1_0] flex-col gap-7 overflow-y-auto px-4 py-5 lg:border-r lg:border-[#eceef1] lg:px-7 lg:py-6">
+        <p class="a-msg a-msg-error m-0" role="alert" data-it-error hidden></p>
+
+        <fieldset class="it-set">
+          <legend>Customer</legend>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class={field}>Name<input data-k="name" value={draft.name} maxlength="80" autocomplete="off" /></label>
+            <label class={field}>WhatsApp number
+              <span class="it-phone" data-phone-box>
+                <input data-k="phone" type="tel" inputmode="tel" value={phoneLabel(draft.phone)} autocomplete="off" />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f7a4e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Number looks right" data-phone-ok><path d="M20 6 9 17l-5-5" /></svg>
+              </span>
+              <span class="text-xs font-normal text-[#b42318]" data-phone-bad hidden>Check the number: ten digits, or with the country code.</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="it-set" data-trip>
+          <legend>Trip and car</legend>
+          <div class="it-trip-summary">
+            <dl class="m-0 flex flex-col gap-2 rounded-2xl bg-[#f7f8fa] p-3.5 text-sm" data-trip-summary></dl>
+            <button type="button" class="it-mini" data-trip-edit>Edit</button>
+          </div>
+          <div class="it-trip-fields grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <label class={`${field} col-span-2 lg:col-span-4`}>Trip title<input data-k="title" value={draft.title} maxlength="120" /></label>
+            <label class={field}>Start<input data-k="start" type="date" value={draft.start} /></label>
+            <label class={field}>End<input data-k="end" type="date" value={draft.end} /></label>
+            <label class={field}>Pickup time<input data-k="time" type="time" value={draft.time} /></label>
+            <label class={field}>Travellers<input data-k="pax" type="number" min="1" max="50" value={draft.pax} /></label>
+            <label class={`${field} col-span-2`}>Pickup point<input data-k="pickup" value={draft.pickup} maxlength="160" /></label>
+            <label class={`${field} col-span-2`}>Flight or train<input data-k="flight" value={draft.flight} maxlength="60" /></label>
+            <label class={field}>Car<input data-k="car" value={draft.car} maxlength="80" /></label>
+            <label class={field}>Car number<input data-k="vehicleNumber" value={draft.vehicleNumber} maxlength="20" autocapitalize="characters" /></label>
+            <label class={field}>Driver<input data-k="driver" value={draft.driver} maxlength="60" /></label>
+            <label class={field}>Driver’s phone<input data-k="driverPhone" type="tel" inputmode="tel" value={draft.driverPhone ? phoneLabel(draft.driverPhone) : ''} maxlength="24" /></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="it-set">
+          <legend>Day by day</legend>
+          <span class="it-note">{sent ? 'The plan you sent. Edit anything, then send an update.' : 'Filled in from the booking. Edit anything.'}</span>
+          <ol class="m-0 flex list-none flex-col gap-2.5 p-0" data-days></ol>
+          <button type="button" class="it-dashed" data-add-day>Add a day</button>
+        </fieldset>
+
+        <div class="grid gap-7 lg:grid-cols-2 lg:gap-5">
+          <fieldset class="it-set">
+            <legend>Payment</legend>
+            <div class="flex flex-col gap-2 rounded-2xl bg-[#f7f8fa] px-4 py-3.5 text-sm">
+              <div class="flex justify-between gap-3"><span class="text-body">Total</span><span class="font-semibold">{inr(pay.total)}</span></div>
+              <div class="flex justify-between gap-3"><span class="text-body">{pay.paid > 0 ? `Paid${pay.last ? ` (last: ${pay.last})` : ''}` : 'Paid so far'}</span><span class="font-semibold text-[#3f6200]">{inr(pay.paid)}</span></div>
+              <div class="flex justify-between gap-3 border-t border-[#e3e6ea] pt-2"><span class="font-bold">Balance before the trip</span><span class="font-bold">{inr(pay.due)}</span></div>
+            </div>
+            <label class="it-switch">
+              <input type="checkbox" data-k="showQr" checked={draft.showQr && upiReady} disabled={!upiReady} class="sr-only" />
+              <span class="it-switch-track" aria-hidden="true"><span></span></span>
+              <span class="flex flex-col">Include our UPI QR code{!upiReady && <span class="text-xs font-normal text-muted">Add the office UPI ID on the Payments page first.</span>}</span>
+            </label>
+          </fieldset>
+          <fieldset class="it-set">
+            <legend><span>Photos</span> <span class="ml-1 font-sans text-[13px] font-normal text-muted" data-photo-count></span></legend>
+            <div class="it-photos" data-photos></div>
+          </fieldset>
+        </div>
+
+        <details class="it-set it-details">
+          <summary><span class="font-display text-lg font-bold">Included and not included</span> <span class="text-sm text-muted" data-inc-count></span></summary>
+          <div class="mt-3 grid gap-3 lg:grid-cols-2">
+            <label class={field}><span>Included <span class="font-normal text-muted">(one per line)</span></span><textarea rows="6" data-list="includes">{draft.includes.join('\n')}</textarea></label>
+            <label class={field}><span>Not included <span class="font-normal text-muted">(one per line)</span></span><textarea rows="6" data-list="excludes">{draft.excludes.join('\n')}</textarea></label>
+          </div>
+        </details>
+
+        <fieldset class="it-set">
+          <legend>Message</legend>
+          <div class="it-chips" data-templates></div>
+          <label class={field}>Your message<textarea rows="6" data-k="message" maxlength="2000">{draft.message}</textarea></label>
+          <a href={previewUrl} target="_blank" rel="noopener" class="flex min-h-11 items-center self-start text-sm font-semibold text-ink lg:hidden" data-preview>Preview what {first} will see</a>
+        </fieldset>
+      </div>
+
+      {/* Laptop: what the customer will see */}
+      <aside class="hidden min-w-0 flex-[1_1_0] flex-col items-center gap-3.5 overflow-y-auto bg-mist px-7 py-6 lg:flex" aria-label="Preview">
+        <span class="self-stretch text-[13px] font-bold tracking-[0.06em] text-body uppercase">What <span data-v="first">{first}</span> will see</span>
+        <div class="w-[330px] max-w-full rounded-[36px] bg-ink p-2.5">
+          <div class="overflow-hidden rounded-[28px] bg-[#efeae2]">
+            <div class="flex items-center gap-2.5 bg-[#0b5c4a] px-4 py-3.5 text-white">
+              <img src="/logo-192.png" alt="" width="34" height="34" class="h-[34px] w-[34px] rounded-full bg-white object-contain" />
+              <div class="flex flex-col"><span class="text-sm font-semibold">Bagdogra Airport Taxi</span><span class="text-[11px] text-[#cfe9df]">Business account</span></div>
+            </div>
+            <div class="flex min-h-[520px] flex-col gap-2 px-3 pt-4 pb-5">
+              <div class="flex max-w-[92%] flex-col gap-1.5 self-end rounded-[12px_4px_12px_12px] bg-[#d9fdd3] p-1">
+                <div class="overflow-hidden rounded-[9px] bg-[#c9f0c1]">
+                  <img src="" alt="" class="block h-[140px] w-full object-cover" data-card-img />
+                  <div class="flex flex-col gap-0.5 px-2.5 py-2">
+                    <span class="text-[13px] font-bold" data-card-title></span>
+                    <span class="text-xs text-body">Day-by-day plan, hotels, driver and payment</span>
+                    <span class="text-[11px] text-muted" data-card-host></span>
+                  </div>
+                </div>
+                <p class="m-0 px-1.5 py-0.5 text-[13.5px] leading-[1.45] break-words whitespace-pre-line" data-bubble></p>
+                <span class="self-end px-1.5 pb-0.5 text-[11px] text-muted" data-clock></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="m-0 max-w-[320px] text-center text-[13px] text-muted" data-share-note></p>
+      </aside>
+    </div>
+
+    <footer class="a-dialog-foot it-foot">
+      <span class="text-[13px] text-muted lg:mr-auto" data-status aria-live="polite">{sent ? 'Sent before. Changes reach the customer when you send an update.' : 'Every send is logged on the booking.'}</span>
+      <a href={previewUrl} target="_blank" rel="noopener" class="btn-ghost hidden lg:inline-flex" data-preview>Preview page</a>
+      <button type="button" class="btn-ghost border-ink" data-share hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={photoIcon} />
+        Share with photos
+      </button>
+      <a href="#" target="_blank" rel="noopener" class="btn-wa" data-send>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={waIcon} />
+        <span data-send-label>{sent ? 'Send update on WhatsApp' : 'Send on WhatsApp'}</span>
+      </a>
+    </footer>
+  </div>
+</dialog>
+
+{/* Picking photos from the website's library */}
+<dialog id="dlg-photos" class="a-dialog" aria-labelledby="ph-h">
+  <div class="a-dialog-body">
+    <header class="a-dialog-head">
+      <div class="flex flex-col">
+        <h2 id="ph-h" class="m-0 font-display text-xl font-bold" data-picker-title>Choose photos</h2>
+        <span class="text-sm text-muted">From the website's photo library. Uploading your own comes with photo storage.</span>
+      </div>
+      <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
+    </header>
+    <div class="a-dialog-main">
+      <ul class="m-0 grid list-none grid-cols-2 gap-2.5 p-0 sm:grid-cols-3" data-picker>
+        {library.map((p) => (
+          <li>
+            <button type="button" class="it-pick" data-pick={p.key} aria-pressed="false">
+              <img src={`/img/${p.key}-400.webp`} alt="" loading="lazy" width="400" height="267" />
+              <span class="flex flex-col px-2.5 py-2 text-left"><span class="text-sm font-semibold">{p.title}</span><span class="text-xs text-muted">{p.place}</span></span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+    <footer class="a-dialog-foot">
+      <button type="button" class="btn-book" data-picker-done>Done</button>
+    </footer>
+  </div>
+</dialog>
+
+<script>
+  import {
+    BUILT_IN_TEMPLATES,
+    dayDate,
+    fillTemplate,
+    firstName,
+    shortDate,
+    shortRange,
+    toTemplate,
+    whatsappText,
+    withArticle,
+    type Template,
+  } from '../../lib/itinerary-text';
+  import { inr } from '../../lib/admin-client';
+
+  type Day = { title: string; detail: string; stay: string; photo: string };
+  type Data = {
+    name: string; phone: string; title: string; start: string; end: string; time: string; pax: number;
+    pickup: string; flight: string; car: string; vehicleNumber: string; driver: string; driverPhone: string;
+    days: Day[]; includes: string[]; excludes: string[]; photos: string[]; message: string; showQr: boolean;
+  };
+  type Config = {
+    booking: { id: string; ref: string };
+    draft: Data;
+    place: string;
+    sent: boolean;
+    tripUrl: string;
+    previewUrl: string;
+    pay: { total: number; paid: number; due: number; last: string };
+    upiReady: boolean;
+    templates: Template[];
+    library: { key: string; title: string; place: string; alt: string }[];
+  };
+
+  const root = document.querySelector<HTMLElement>('[data-itin]');
+  const dialog = document.getElementById('dlg-itin') as HTMLDialogElement | null;
+  const picker = document.getElementById('dlg-photos') as HTMLDialogElement | null;
+
+  if (root && dialog && picker) {
+    const cfg = JSON.parse(root.dataset.itin!) as Config;
+    const d: Data = structuredClone(cfg.draft);
+    d.showQr = d.showQr && cfg.upiReady;
+    let templates = cfg.templates;
+    let sentOnce = cfg.sent;
+    const $ = <T extends Element = HTMLElement>(sel: string, el: ParentNode = root) => el.querySelector<T>(sel)!;
+    const titleOf = (key: string) => cfg.library.find((p) => p.key === key)?.title ?? '';
+    const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text) n.textContent = text;
+      return n;
+    };
+
+    /* ---------- Phone numbers, as the server reads them ---------- */
+    const normalize = (raw: string) => {
+      let x = raw.replace(/\D/g, '');
+      if (x.startsWith('00')) x = x.slice(2);
+      if (x.length === 11 && x.startsWith('0')) x = '91' + x.slice(1);
+      if (x.length === 10) x = '91' + x;
+      return x.length >= 11 && x.length <= 15 ? x : '';
+    };
+
+    /* ---------- The message ---------- */
+    const values = () => ({
+      first: firstName(d.name),
+      place: cfg.place,
+      driver: d.driver,
+      driverPhone: d.driverPhone,
+      pickup: d.pickup,
+      time: d.time,
+      date: shortDate(d.start),
+      car: d.car,
+      aCar: withArticle(d.car),
+      vehicleNumber: d.vehicleNumber,
+      title: d.title,
+    });
+    const fullText = () => whatsappText({ message: d.message, link: cfg.tripUrl, balance: cfg.pay.due, showQr: d.showQr, inr });
+    const messageBox = $<HTMLTextAreaElement>('[data-k=message]');
+    if (!d.message.trim()) {
+      d.message = fillTemplate(BUILT_IN_TEMPLATES[0]!.text, values());
+      messageBox.value = d.message;
+    }
+
+    /* ---------- Saving ---------- */
+    const status = $('[data-status]');
+    const errorBox = $('[data-it-error]');
+    let timer = 0;
+    let dirty = false;
+    const payload = () => ({ ...d, pax: Number(d.pax) || 1 });
+    async function post(action: 'save' | 'send'): Promise<boolean> {
+      try {
+        const res = await fetch('/admin/api/itinerary/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: cfg.booking.id, action, data: payload() }),
+          keepalive: action === 'send',
+        });
+        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!res.ok || !body.ok) {
+          status.textContent = `Not saved: ${body.error ?? 'try again.'}`;
+          return false;
+        }
+        dirty = false;
+        status.textContent = action === 'send' ? 'Sent. It is on the booking’s timeline.' : 'Draft saved just now.';
+        return true;
+      } catch {
+        status.textContent = 'Not saved. Check the connection.';
+        return false;
+      }
+    }
+    const changed = () => {
+      dirty = true;
+      status.textContent = 'Saving…';
+      clearTimeout(timer);
+      timer = window.setTimeout(() => post('save'), 1200);
+      render();
+    };
+
+    /* ---------- Simple fields ---------- */
+    root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-k]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const k = input.dataset.k as keyof Data;
+        if (input instanceof HTMLInputElement && input.type === 'checkbox') (d as Record<string, unknown>)[k] = input.checked;
+        else if (k === 'pax') d.pax = Number(input.value) || 1;
+        else (d as Record<string, unknown>)[k] = input.value;
+        changed();
+      });
+    });
+    root.querySelectorAll<HTMLTextAreaElement>('[data-list]').forEach((ta) =>
+      ta.addEventListener('input', () => {
+        d[ta.dataset.list as 'includes' | 'excludes'] = ta.value.split('\n').map((s) => s.trim()).filter(Boolean);
+        changed();
+      }),
+    );
+    $('[data-trip-edit]').addEventListener('click', () => $('[data-trip]').classList.toggle('is-editing'));
+
+    /* ---------- Days ---------- */
+    const daysList = $<HTMLOListElement>('[data-days]');
+    let editing = -1;
+    function renderDays() {
+      daysList.replaceChildren(
+        ...d.days.map((day, i) => {
+          const li = el('li', 'it-day');
+          const row = el('div', 'flex items-start gap-3');
+          const img = el('img', 'it-day-img') as HTMLImageElement;
+          img.alt = titleOf(day.photo);
+          if (day.photo) img.src = `/img/${day.photo}-400.webp`;
+          else img.classList.add('is-empty');
+          const text = el('div', 'flex min-w-0 flex-1 flex-col gap-0.5');
+          text.append(
+            el('span', 'it-day-no', [`Day ${i + 1}`, dayDate(d.start, i)].filter(Boolean).join(' · ')),
+            el('span', 'font-bold', day.title || 'Untitled day'),
+          );
+          if (day.detail) text.append(el('span', 'hidden text-sm text-body lg:block', day.detail));
+          if (day.stay) text.append(el('span', 'text-[13px] text-muted', day.stay));
+          const btn = el('button', 'it-mini shrink-0', editing === i ? 'Done' : 'Edit') as HTMLButtonElement;
+          btn.type = 'button';
+          btn.setAttribute('aria-expanded', String(editing === i));
+          btn.setAttribute('aria-label', `${editing === i ? 'Done editing' : 'Edit'} day ${i + 1}`);
+          btn.addEventListener('click', () => {
+            editing = editing === i ? -1 : i;
+            renderDays();
+          });
+          row.append(img, text, btn);
+          li.append(row);
+          if (editing === i) li.append(dayEditor(day, i));
+          return li;
+        }),
+      );
+    }
+    function dayEditor(day: Day, i: number) {
+      const box = el('div', 'mt-3 grid gap-3 border-t border-[#eceef1] pt-3');
+      const input = (label: string, key: keyof Day, multi = false) => {
+        const l = el('label', 'a-field it-field', label);
+        const f = multi ? (el('textarea') as HTMLTextAreaElement) : (el('input') as HTMLInputElement);
+        if (multi) (f as HTMLTextAreaElement).rows = 3;
+        f.value = day[key];
+        f.maxLength = key === 'detail' ? 1000 : 160;
+        f.addEventListener('input', () => {
+          day[key] = f.value;
+          dirty = true;
+          changedQuiet();
+        });
+        l.append(f);
+        return l;
+      };
+      const tools = el('div', 'flex flex-wrap gap-2');
+      const tool = (label: string, fn: () => void, disabled = false) => {
+        const b = el('button', 'it-mini', label) as HTMLButtonElement;
+        b.type = 'button';
+        b.disabled = disabled;
+        b.addEventListener('click', fn);
+        tools.append(b);
+      };
+      tool(day.photo ? 'Change photo' : 'Add a photo', () => openPicker({ day: i }));
+      if (day.photo) tool('No photo', () => { day.photo = ''; changed(); renderDays(); });
+      tool('Move up', () => { [d.days[i - 1], d.days[i]] = [d.days[i]!, d.days[i - 1]!]; editing = i - 1; changed(); renderDays(); }, i === 0);
+      tool('Move down', () => { [d.days[i + 1], d.days[i]] = [d.days[i]!, d.days[i + 1]!]; editing = i + 1; changed(); renderDays(); }, i === d.days.length - 1);
+      tool('Remove day', () => { d.days.splice(i, 1); editing = -1; changed(); renderDays(); });
+      box.append(input('Title', 'title'), input('What happens', 'detail', true), input('Stay or drop', 'stay'), tools);
+      return box;
+    }
+    // Typing in a day updates the preview without redrawing the box being typed in.
+    const changedQuiet = () => {
+      status.textContent = 'Saving…';
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        post('save');
+        renderDays();
+      }, 1200);
+      renderPreview();
+    };
+    $('[data-add-day]').addEventListener('click', () => {
+      d.days.push({ title: '', detail: '', stay: '', photo: '' });
+      editing = d.days.length - 1;
+      changed();
+      renderDays();
+      daysList.lastElementChild?.querySelector<HTMLInputElement>('input')?.focus();
+    });
+
+    /* ---------- Photos ---------- */
+    const photosBox = $('[data-photos]');
+    function renderPhotos() {
+      const tiles = d.photos.map((key, i) => {
+        const tile = el('div', 'it-photo');
+        const img = el('img') as HTMLImageElement;
+        img.src = `/img/${key}-400.webp`;
+        img.alt = titleOf(key);
+        const rm = el('button', 'it-photo-x') as HTMLButtonElement;
+        rm.type = 'button';
+        rm.setAttribute('aria-label', `Remove ${titleOf(key)}`);
+        rm.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+        rm.addEventListener('click', () => { d.photos.splice(i, 1); changed(); renderPhotos(); });
+        tile.append(img, rm);
+        return tile;
+      });
+      const add = el('button', 'it-photo-add') as HTMLButtonElement;
+      add.type = 'button';
+      add.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add</span>';
+      add.setAttribute('aria-label', 'Add photos');
+      add.addEventListener('click', () => openPicker({}));
+      photosBox.replaceChildren(...tiles, add);
+      $('[data-photo-count]').textContent = d.photos.length ? `${d.photos.length} selected` : '';
+      prepareShare();
+    }
+
+    let pickFor: { day?: number } = {};
+    function openPicker(target: { day?: number }) {
+      pickFor = target;
+      const single = target.day !== undefined;
+      $('[data-picker-title]', picker!).textContent = single ? `Photo for day ${target.day! + 1}` : 'Choose photos';
+      picker!.querySelectorAll<HTMLButtonElement>('[data-pick]').forEach((b) => {
+        const on = single ? d.days[target.day!]?.photo === b.dataset.pick : d.photos.includes(b.dataset.pick!);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      picker!.showModal();
+    }
+    picker.querySelectorAll<HTMLButtonElement>('[data-pick]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const key = b.dataset.pick!;
+        if (pickFor.day !== undefined) {
+          d.days[pickFor.day]!.photo = key;
+          picker.close();
+          changed();
+          renderDays();
+          return;
+        }
+        const at = d.photos.indexOf(key);
+        if (at >= 0) d.photos.splice(at, 1);
+        else if (d.photos.length < 10) d.photos.push(key);
+        b.setAttribute('aria-pressed', String(at < 0));
+        changed();
+        renderPhotos();
+      }),
+    );
+    $('[data-picker-done]', picker).addEventListener('click', () => picker.close());
+
+    /* ---------- Templates ---------- */
+    const chips = $('[data-templates]');
+    function renderTemplates() {
+      const list = templates.map((t) => {
+        const wrap = el('span', 'it-chip-wrap');
+        const b = el('button', 'it-chip', t.name) as HTMLButtonElement;
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          d.message = fillTemplate(t.text, values());
+          messageBox.value = d.message;
+          changed();
+        });
+        wrap.append(b);
+        if (t.custom) {
+          const x = el('button', 'it-chip-x') as HTMLButtonElement;
+          x.type = 'button';
+          x.setAttribute('aria-label', `Remove the template ${t.name}`);
+          x.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+          x.addEventListener('click', async () => {
+            if (!confirm(`Remove the template “${t.name}” for everyone?`)) return;
+            const res = await fetch('/admin/api/templates/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', id: t.id }) });
+            if (res.ok) { templates = templates.filter((y) => y.id !== t.id); renderTemplates(); }
+          });
+          wrap.append(x);
+        }
+        return wrap;
+      });
+      const save = el('button', 'it-chip it-chip-save', 'Save as template') as HTMLButtonElement;
+      save.type = 'button';
+      save.addEventListener('click', async () => {
+        const name = prompt('Name this template, for example “Darjeeling welcome”')?.trim();
+        if (!name) return;
+        const res = await fetch('/admin/api/templates/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'add', name, text: toTemplate(d.message, values()) }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { template?: Template; error?: string };
+        if (body.template) { templates = [...templates, body.template]; renderTemplates(); status.textContent = `Saved the template “${name}” for the whole team.`; }
+        else status.textContent = body.error ?? 'Could not save the template.';
+      });
+      chips.replaceChildren(...list, save);
+    }
+
+    /* ---------- Preview, trip summary and the send buttons ---------- */
+    const send = $<HTMLAnchorElement>('[data-send]');
+    function renderPreview() {
+      const phone = normalize(d.phone);
+      const text = fullText();
+      send.href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : '#';
+      $('[data-phone-box]').classList.toggle('is-bad', !phone);
+      $('[data-phone-ok]').style.visibility = phone ? 'visible' : 'hidden';
+      $('[data-phone-bad]').hidden = Boolean(phone) || !d.phone;
+      root!.querySelectorAll('[data-v=name]').forEach((n) => (n.textContent = d.name));
+      root!.querySelectorAll('[data-v=title]').forEach((n) => (n.textContent = d.title));
+      root!.querySelectorAll('[data-v=first]').forEach((n) => (n.textContent = firstName(d.name) || 'the customer'));
+
+      const cover = d.photos[0] ?? d.days.find((x) => x.photo)?.photo ?? '';
+      const img = $<HTMLImageElement>('[data-card-img]');
+      img.hidden = !cover;
+      if (cover) { img.src = `/img/${cover}-800.webp`; img.alt = titleOf(cover); }
+      const range = shortRange(d.start, d.end);
+      $('[data-card-title]').textContent = `${firstName(d.name) ? `${firstName(d.name)}'s ` : ''}${cfg.place} trip${range ? `, ${range}` : ''}`;
+      $('[data-card-host]').textContent = new URL(cfg.tripUrl).host;
+      const bubble = $('[data-bubble]');
+      const [before, after] = text.split(cfg.tripUrl);
+      const link = el('span', 'text-[#027eb5]', cfg.tripUrl.replace(/^https?:\/\//, ''));
+      bubble.replaceChildren(before ?? '', link, after ?? '');
+      $('[data-clock]').textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+      $('[data-share-note]').textContent = d.photos.length ? `On a phone, “Share with photos” also sends the ${d.photos.length} ${d.photos.length === 1 ? 'photo' : 'photos'} into the same chat.` : '';
+      $('[data-inc-count]').textContent = `(${d.includes.length} and ${d.excludes.length})`;
+
+      const rows: [string, string][] = [
+        ['Dates', `${range || 'Not set'} · ${d.pax} ${Number(d.pax) === 1 ? 'person' : 'people'}`],
+        ['Pickup', [d.pickup, d.time].filter(Boolean).join(', ')],
+        ['Flight', d.flight],
+        ['Car', [d.car, d.vehicleNumber].filter(Boolean).join(' · ')],
+        ['Driver', [d.driver, d.driverPhone].filter(Boolean).join(' · ')],
+      ];
+      $('[data-trip-summary]').replaceChildren(
+        ...rows.filter(([, v]) => v).map(([k, v]) => {
+          const r = el('div', 'flex justify-between gap-3');
+          r.append(el('dt', 'text-muted', k), el('dd', 'm-0 text-right font-semibold', v));
+          return r;
+        }),
+      );
+    }
+    function render() {
+      renderPreview();
+    }
+
+    function problem(): string {
+      if (!d.name.trim()) return 'Enter the customer’s name.';
+      if (!normalize(d.phone)) return 'Check the WhatsApp number.';
+      if (!d.title.trim()) return 'Give the trip a title.';
+      if (!d.message.trim()) return 'Write a message, or pick a template.';
+      return '';
+    }
+    function sent() {
+      sentOnce = true;
+      $('[data-send-label]').textContent = 'Send update on WhatsApp';
+    }
+
+    send.addEventListener('click', (e) => {
+      const p = problem();
+      if (p) {
+        e.preventDefault();
+        errorBox.textContent = p;
+        errorBox.hidden = false;
+        errorBox.scrollIntoView({ block: 'nearest' });
+        return;
+      }
+      errorBox.hidden = true;
+      // WhatsApp opens from the link itself; the save runs alongside it.
+      clearTimeout(timer);
+      post('send').then((ok) => ok && sent());
+    });
+
+    /* ---------- Phone: share the photos and the text together ---------- */
+    const share = $<HTMLButtonElement>('[data-share]');
+    const canShareFiles = (() => {
+      try {
+        return Boolean(navigator.canShare?.({ files: [new File([new Blob(['x'], { type: 'image/jpeg' })], 'x.jpg', { type: 'image/jpeg' })] }));
+      } catch {
+        return false;
+      }
+    })();
+    share.hidden = !canShareFiles;
+    // WhatsApp wants JPEGs. Convert ahead of time so the share sheet opens in the same tap.
+    const files = new Map<string, File>();
+    async function toJpeg(key: string): Promise<File | null> {
+      try {
+        const img = new Image();
+        img.src = `/img/${key}-1600.webp`;
+        await img.decode();
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        c.getContext('2d')!.drawImage(img, 0, 0);
+        const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.86));
+        return blob ? new File([blob], `${key}.jpg`, { type: 'image/jpeg' }) : null;
+      } catch {
+        return null;
+      }
+    }
+    function prepareShare() {
+      if (!canShareFiles) return;
+      for (const key of d.photos) if (!files.has(key)) toJpeg(key).then((f) => f && files.set(key, f));
+    }
+    share.addEventListener('click', async () => {
+      const p = problem();
+      if (p) { errorBox.textContent = p; errorBox.hidden = false; return; }
+      const ready = d.photos.map((k) => files.get(k)).filter((f): f is File => Boolean(f));
+      try {
+        await navigator.share({ files: ready, text: fullText() });
+        clearTimeout(timer);
+        if (await post('send')) sent();
+      } catch {
+        /* closed the share sheet */
+      }
+    });
+
+    /* ---------- Preview page: save first so it shows the latest ---------- */
+    root.querySelectorAll<HTMLAnchorElement>('[data-preview]').forEach((a) =>
+      a.addEventListener('click', async (e) => {
+        if (!dirty) return;
+        e.preventDefault();
+        const w = window.open('about:blank', '_blank');
+        clearTimeout(timer);
+        await post('save');
+        if (w) w.location.href = a.href;
+        else location.href = a.href;
+      }),
+    );
+
+    dialog.addEventListener('close', () => {
+      if (dirty) { clearTimeout(timer); post('save'); }
+      if (sentOnce !== cfg.sent) location.reload();
+    });
+
+    renderDays();
+    renderPhotos();
+    renderTemplates();
+    render();
+  }
+</script>
+
+<style is:global>
+  .it-set { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; margin: 0; padding: 0; border: 0; }
+  .it-set > legend, .it-set > summary > span:first-child { font-family: var(--font-display); font-size: 1.125rem; font-weight: 700; padding: 0; margin-bottom: 0.75rem; color: var(--color-ink); }
+  .it-details > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 0.5rem; min-height: 2.75rem; }
+  .it-details > summary::-webkit-details-marker { display: none; }
+  .it-details > summary > span:first-child { margin: 0; }
+  .it-details > summary::after { content: '+'; margin-left: auto; font-weight: 700; font-size: 1.25rem; }
+  .it-details[open] > summary::after { content: '−'; }
+  .it-field { font-size: 0.8125rem; }
+  .it-field input, .it-field textarea { min-height: 2.75rem; font-size: 0.95rem; }
+  @media (max-width: 1023px) { .it-field input, .it-field textarea { min-height: 3rem; font-size: 1rem; } }
+  .it-phone { display: flex; align-items: center; gap: 0.5rem; border: 1px solid #0f7a4e; border-radius: 0.75rem; padding-right: 0.75rem; background: #fff; }
+  .it-phone.is-bad { border-color: #d5d9e0; }
+  .it-phone input { flex: 1 1 auto; min-width: 0; border: 0 !important; outline: 0 !important; }
+  .it-phone:focus-within { outline: 3px solid var(--color-lime); outline-offset: 1px; }
+  .it-note { align-self: flex-start; font-size: 0.8125rem; font-weight: 600; color: #3f6200; background: var(--color-lime-50); border-radius: 999px; padding: 0.25rem 0.65rem; margin-top: -0.25rem; }
+  .it-mini { min-height: 2.5rem; padding: 0 0.8rem; border-radius: 10px; border: 1px solid #dfe2e7; background: #fff; font: inherit; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink); }
+  .it-mini:hover:not(:disabled) { border-color: var(--color-ink); }
+  .it-mini:disabled { opacity: 0.4; }
+  .it-dashed { min-height: 2.75rem; border-radius: 12px; border: 1px dashed #b9bfca; background: #fff; font: inherit; font-weight: 600; color: var(--color-ink); }
+  .it-dashed:hover { border-color: var(--color-ink); }
+  .it-day { border: 1px solid var(--color-line); border-radius: 16px; padding: 0.75rem; background: #fff; }
+  .it-day-img { width: 60px; height: 60px; flex-shrink: 0; border-radius: 12px; object-fit: cover; background: var(--color-mist); }
+  @media (min-width: 1024px) { .it-day-img { width: 76px; height: 76px; } }
+  .it-day-no { font-size: 0.75rem; font-weight: 700; color: var(--color-lime-text); text-transform: uppercase; letter-spacing: 0.06em; }
+  .it-trip-summary { display: flex; flex-direction: column; gap: 0.5rem; }
+  .it-trip-summary > button { align-self: flex-end; margin-top: -0.25rem; }
+  .it-trip-fields { display: none; }
+  [data-trip].is-editing .it-trip-fields { display: grid; }
+  [data-trip].is-editing .it-trip-summary dl { display: none; }
+  @media (min-width: 1024px) {
+    .it-trip-summary { display: none; }
+    .it-trip-fields { display: grid; }
+  }
+  .it-photos { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem; }
+  @media (min-width: 1024px) { .it-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; } }
+  .it-photo, .it-photo-add { position: relative; width: 88px; height: 88px; flex-shrink: 0; border-radius: 12px; }
+  @media (min-width: 1024px) { .it-photo, .it-photo-add { width: auto; height: auto; aspect-ratio: 1; } }
+  .it-photo img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
+  .it-photo-x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 999px; background: rgb(17 17 17 / 72%); color: #fff; }
+  .it-photo-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem; border: 1px dashed #b9bfca; background: #fff; font: inherit; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink); order: -1; }
+  @media (min-width: 1024px) { .it-photo-add { order: 0; } }
+  .it-switch { display: flex; align-items: center; gap: 0.65rem; min-height: 2.75rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+  .it-switch-track { position: relative; width: 44px; height: 26px; flex-shrink: 0; border-radius: 13px; background: #c9ced8; transition: background 0.15s; }
+  .it-switch-track span { position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+  .it-switch input:checked + .it-switch-track { background: var(--color-ink); }
+  .it-switch input:checked + .it-switch-track span { transform: translateX(18px); background: var(--color-lime); }
+  .it-switch input:focus-visible + .it-switch-track { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  .it-switch input:disabled + .it-switch-track { opacity: 0.5; }
+  .it-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  @media (max-width: 1023px) { .it-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 0.25rem; } }
+  .it-chip-wrap { display: inline-flex; flex-shrink: 0; }
+  .it-chip { min-height: 2.5rem; padding: 0 0.9rem; border-radius: 999px; border: 1px solid #dfe2e7; background: #fff; font: inherit; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink); white-space: nowrap; }
+  .it-chip:hover { border-color: var(--color-ink); }
+  .it-chip-wrap:has(.it-chip-x) .it-chip { border-radius: 999px 0 0 999px; border-right: 0; }
+  .it-chip-x { display: grid; place-items: center; min-width: 2.25rem; border: 1px solid #dfe2e7; border-radius: 0 999px 999px 0; background: #fff; color: #5c6373; }
+  .it-chip-save { border-style: dashed; border-color: #b9bfca; color: var(--color-body); font-weight: 500; }
+  .it-pick { display: flex; flex-direction: column; width: 100%; padding: 0; overflow: hidden; border: 2px solid transparent; border-radius: 14px; background: var(--color-mist); font: inherit; color: var(--color-ink); }
+  .it-pick img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; }
+  .it-pick[aria-pressed='true'] { border-color: var(--color-ink); background: var(--color-lime-50); }
+  .it-pick[aria-pressed='true'] img { outline: 3px solid var(--color-lime); outline-offset: -3px; }
+  @media (max-width: 1023px) {
+    .it-foot { flex-direction: column-reverse; align-items: stretch; }
+    .it-foot > [data-status] { text-align: center; }
+  }
+</style>
