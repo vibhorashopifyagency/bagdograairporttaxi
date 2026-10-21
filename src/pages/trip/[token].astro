@@ -11,7 +11,9 @@ import { BUSINESS, SITE, waLink } from '../../data/site';
 import { getDb, schema } from '../../server/db';
 import { advanceOf } from '../../server/fares';
 import { getUpi, paymentsFor, summarise } from '../../server/payments';
-import { bookingForToken, itineraryFromBooking, photoAlt, tripPlace } from '../../server/trip';
+import { LIMITS, rateLimit, tooManyPage } from '../../server/rate-limit';
+import { ipHash } from '../../server/security';
+import { bookingForToken, itineraryFromBooking, looksLikeTripToken, photoAlt, tripPlace } from '../../server/trip';
 import { eq } from 'drizzle-orm';
 
 export const prerender = false;
@@ -20,7 +22,13 @@ Astro.response.headers.set('Cache-Control', 'private, no-store');
 Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
 Astro.response.headers.set('Referrer-Policy', 'no-referrer');
 
-const booking = await bookingForToken(Astro.params.token ?? '');
+// Links of the wrong shape never reach the database; well-formed ones are limited per IP.
+const token = Astro.params.token ?? '';
+if (looksLikeTripToken(token)) {
+  const limit = await rateLimit(LIMITS.trip, ipHash(Astro.request));
+  if (!limit.ok) return tooManyPage(limit.retryAfter);
+}
+const booking = await bookingForToken(token);
 const gone = !booking || Boolean(booking.personalDataRemovedAt) || !booking.customerPhone;
 let page: Parameters<typeof TripPage>[0] | null = null;
 if (!gone) {

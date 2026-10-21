@@ -23,7 +23,8 @@ if (inUse) {
 
 console.log(`Starting the local database on port ${PORT}. Keep this terminal open while you use /admin/. Press Ctrl+C to stop it.`);
 const server = fileURLToPath(new URL('../node_modules/@electric-sql/pglite-socket/dist/scripts/server.js', import.meta.url));
-const child = spawn(process.execPath, [server, '--db=.data/pglite', `--port=${PORT}`, '--max-connections=4'], { stdio: 'inherit' });
+// pg_trgm backs the "contains" search indexes, as on Neon (migration 0003).
+const child = spawn(process.execPath, [server, '--db=.data/pglite', `--port=${PORT}`, '--max-connections=4', '--extensions=pg_trgm'], { stdio: 'inherit' });
 // Ctrl+C reaches both processes; let the database shut down cleanly first.
 process.on('SIGINT', () => {});
 process.on('SIGTERM', () => child.kill('SIGTERM'));

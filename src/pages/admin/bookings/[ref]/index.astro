@@ -20,6 +20,7 @@ import {
   canRecordPayments,
   getUpi,
   paymentsFor,
+  qrSrc,
   recordPayment,
   recordRefund,
   reversePayment,
@@ -617,7 +618,7 @@ const facts: [string, string][] = [
   )}
 
   <dialog id="dlg-qr" class="a-dialog a-dialog-sm" aria-labelledby="dlg-qr-h" data-autoopen={open === 'qr' && !removed ? '' : undefined}>
-    <div class="a-dialog-body" data-qr data-upi={upi ? JSON.stringify(upi) : ''} data-ref={booking.ref} data-booking={booking.id} data-phone={booking.customerPhone ?? ''} data-link={tripUrl} data-first={first} data-route={route}>
+    <div class="a-dialog-body" data-qr data-upi={upi?.qr ? JSON.stringify({ id: upi.id, payee: upi.payee, src: qrSrc(upi.qr) }) : ''} data-ref={booking.ref} data-booking={booking.id} data-phone={booking.customerPhone ?? ''} data-link={tripUrl} data-first={first} data-route={route}>
       <header class="a-dialog-head">
         <div class="flex flex-col">
           <h2 id="dlg-qr-h" class="m-0 font-display text-xl font-bold">Send QR code</h2>
@@ -625,15 +626,15 @@ const facts: [string, string][] = [
         </div>
         <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
       </header>
-      {upi ? (
+      {upi?.qr ? (
         <>
           <div class="a-dialog-main flex flex-col gap-4">
             <div class="flex flex-wrap items-center gap-4">
-              <div data-qr-box class="grid h-[148px] w-[148px] shrink-0 place-items-center rounded-2xl border border-line bg-white p-2" role="img" aria-label="UPI QR code for this amount"></div>
+              <img src={qrSrc(upi.qr)} width={upi.qr.w} height={upi.qr.h} alt="The office QR code" class="h-[148px] w-[148px] shrink-0 rounded-2xl border border-line bg-white object-contain p-1.5" />
               <div class="flex min-w-0 flex-[1_1_160px] flex-col gap-1 text-sm">
                 <span class="font-semibold">{upi.payee}</span>
-                <span class="text-body">UPI ID: {upi.id}</span>
-                <span class="text-muted">Any UPI app opens it with the amount and {booking.ref} filled in.</span>
+                {upi.id && <span class="text-body">UPI ID: {upi.id}</span>}
+                <span class="text-muted">The office QR code carries no amount, so the customer types it. The message tells them how much.</span>
               </div>
             </div>
             <label class="a-field">Amount, ₹<input inputmode="numeric" value={pay.askNow} data-qr-amount autocomplete="off" /></label>
@@ -644,9 +645,9 @@ const facts: [string, string][] = [
             <label class="a-field">Message<textarea rows="5" data-qr-text></textarea></label>
           </div>
           <footer class="a-dialog-foot">
-            <button type="button" data-qr-share class="btn-ghost" hidden>
+            <button type="button" data-qr-share class="btn-ghost">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-5-5L5 21" /></svg>
-              Share QR image
+              <span data-qr-share-label>Download QR image</span>
             </button>
             <a data-qr-send href="#" target="_blank" rel="noopener" class="btn-wa">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={waIcon} />
@@ -656,8 +657,8 @@ const facts: [string, string][] = [
         </>
       ) : (
         <div class="a-dialog-main flex flex-col gap-3">
-          <p class="m-0 text-body">The office UPI ID is not set up yet, so there is no QR code to send.</p>
-          {admin ? <a href="/admin/payments/#upi" class="btn-book self-start">Add the UPI ID</a> : <p class="m-0 text-sm text-muted">Ask the admin to add it on the Payments page.</p>}
+          <p class="m-0 text-body">The office QR code has not been uploaded yet, so there is nothing to send.</p>
+          {admin ? <a href="/admin/payments/#upi" class="btn-book self-start">Upload the QR code</a> : <p class="m-0 text-sm text-muted">Ask the admin to upload it on the Payments page.</p>}
         </div>
       )}
     </div>
@@ -673,7 +674,7 @@ const facts: [string, string][] = [
       tripUrl={tripUrl}
       previewUrl={`${here}trip/`}
       pay={{ total: booking.fareTotal, paid: Math.max(0, pay.paid), due: pay.due, last: lastPayment ? `${METHOD_LABEL[lastPayment.method]}, ${dateFmt.format(new Date(`${lastPayment.receivedOn}T00:00:00Z`)).replace(/ \d{4}$/, '')}` : '' }}
-      upiReady={Boolean(upi)}
+      upiReady={Boolean(upi?.qr)}
       templates={templates}
       library={LIBRARY}
       drivers={pickable}
@@ -683,7 +684,7 @@ const facts: [string, string][] = [
 </AdminLayout>
 
 <script>
-  import { drawQrCard, inr, loadQr, logEvent, openDialogs, upiLink, wirePayFields } from '../../../../lib/admin-client';
+  import { drawQrCard, inr, logEvent, openDialogs, wirePayFields } from '../../../../lib/admin-client';
 
   openDialogs();
   wirePayFields();
@@ -793,56 +794,75 @@ const facts: [string, string][] = [
     }),
   );
 
-  // Send QR code: a live QR for the amount, a WhatsApp message with the UPI ID
-  // and the trip page link, and on a phone the QR picture itself.
+  // Send QR code: the office QR picture, a WhatsApp message with the amount,
+  // the UPI ID and the trip page link, and the picture with the amount under
+  // it to share (phone) or download (laptop, to drop into WhatsApp Web).
   const qr = document.querySelector<HTMLElement>('[data-qr]');
   if (qr?.dataset.upi) {
-    const upi = JSON.parse(qr.dataset.upi) as { id: string; payee: string };
+    const upi = JSON.parse(qr.dataset.upi) as { id: string; payee: string; src: string };
     const { ref, booking, phone, link, first, route } = qr.dataset as Record<string, string>;
     const amountEl = qr.querySelector<HTMLInputElement>('[data-qr-amount]')!;
     const textEl = qr.querySelector<HTMLTextAreaElement>('[data-qr-text]')!;
-    const box = qr.querySelector<HTMLElement>('[data-qr-box]')!;
     const send = qr.querySelector<HTMLAnchorElement>('[data-qr-send]')!;
     const share = qr.querySelector<HTMLButtonElement>('[data-qr-share]')!;
     let edited = false;
-    let renderSVG: ((text: string, options?: { border?: number }) => string) | null = null;
     const amount = () => Number(amountEl.value.replace(/\D/g, '')) || 0;
     const defaultText = (n: number) =>
-      `Namaste ${first} ji, for your booking ${ref} (${route}), please pay ${inr(n)} by UPI.\n\nUPI ID: ${upi.id} (${upi.payee})\nOr scan the QR code on this page: ${link}?amount=${n}\n\nShare the payment screenshot here and we will confirm it. Team Bagdogra Airport Taxi`;
+      `Namaste ${first} ji, for your booking ${ref} (${route}), please pay ${inr(n)} by UPI.\n\n${upi.id ? `UPI ID: ${upi.id} (${upi.payee})\nOr scan` : 'Scan'} our QR code on this page and enter ${inr(n)} as the amount: ${link}?amount=${n}\n\nShare the payment screenshot here and we will confirm it. Team Bagdogra Airport Taxi`;
     const update = () => {
-      const n = amount();
-      if (renderSVG) box.innerHTML = n > 0 ? renderSVG(upiLink(upi, n, ref), { border: 1 }) : '';
-      if (!edited) textEl.value = defaultText(n);
+      if (!edited) textEl.value = defaultText(amount());
       send.href = `https://wa.me/${phone}?text=${encodeURIComponent(textEl.value)}`;
     };
     amountEl.addEventListener('input', update);
     textEl.addEventListener('input', () => { edited = true; update(); });
     qr.querySelectorAll<HTMLButtonElement>('[data-qr-fill]').forEach((b) => b.addEventListener('click', () => { amountEl.value = b.dataset.qrFill!; edited = false; update(); }));
     update();
-    loadQr()
-      .then((m) => {
-        renderSVG = m.renderSVG;
-        update();
-      })
-      .catch(() => (box.textContent = 'The QR picture did not load. Reload the page. The WhatsApp message still works.'));
     send.addEventListener('click', () => logEvent(booking, 'qr_sent', amount()));
 
-    // The share sheet can carry the QR picture into WhatsApp on a phone.
+    // A phone's share sheet carries the picture into WhatsApp; on a laptop it
+    // downloads, ready to drop into WhatsApp Web. The picture is drawn ahead,
+    // whenever the amount changes, because iPhones refuse to share once a tap
+    // is more than a moment old.
     const probe = new File([new Blob(['x'], { type: 'image/png' })], 'qr.png', { type: 'image/png' });
-    if (navigator.canShare?.({ files: [probe] })) {
-      share.hidden = false;
-      share.addEventListener('click', async () => {
-        const n = amount();
-        const blob = await drawQrCard({ text: upiLink(upi, n, ref), amount: n, ref, upi });
-        const file = new File([blob], `pay-${ref}.png`, { type: 'image/png' });
+    const canShare = matchMedia('(pointer: coarse)').matches && Boolean(navigator.canShare?.({ files: [probe] }));
+    if (canShare) qr.querySelector('[data-qr-share-label]')!.textContent = 'Share QR image';
+    let card: { n: number; file: Promise<File> } | null = null;
+    const cardFor = (n: number) => {
+      if (card?.n !== n) {
+        const file = drawQrCard({ src: upi.src, amount: n, ref, payee: upi.payee, id: upi.id }).then((b) => new File([b], `pay-${ref}.png`, { type: 'image/png' }));
+        file.catch(() => (card = null));
+        card = { n, file };
+      }
+      return card.file;
+    };
+    let timer = 0;
+    amountEl.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(() => cardFor(amount()), 300); });
+    qr.querySelectorAll('[data-qr-fill]').forEach((b) => b.addEventListener('click', () => cardFor(amount())));
+    qr.closest('dialog')?.addEventListener('toggle', () => cardFor(amount()));
+    share.addEventListener('click', async () => {
+      const n = amount();
+      let file: File;
+      try {
+        file = await cardFor(n);
+      } catch {
+        alert('The QR picture did not load. Reload the page and try again. The WhatsApp message still works.');
+        return;
+      }
+      if (canShare) {
         try {
           await navigator.share({ files: [file], text: textEl.value });
           logEvent(booking, 'qr_sent', n);
         } catch {
           /* closed the share sheet */
         }
-      });
-    }
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(file);
+      a.download = file.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    });
   }
 </script>
 

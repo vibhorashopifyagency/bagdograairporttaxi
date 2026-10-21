@@ -1,15 +1,18 @@
 ---
 /**
- * Everyone who has booked, most recent first, one row per mobile number.
- * Opening this page is logged, because it lists names and numbers.
+ * Everyone who has booked, most recent first, one row per mobile number,
+ * 50 to a page. Opening this page is logged, because it lists names and
+ * numbers.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Pager from '../../../components/admin/Pager.astro';
 import { audit } from '../../../server/admin';
 import { inr, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
+import { cursorField, listHref, pageFrom, pageQuery, pageResult, type SortKey } from '../../../server/paging';
 import { ipHash } from '../../../server/security';
 import { phoneLabel } from '../../../lib/itinerary-text';
-import { and, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 
 export const prerender = false;
 
@@ -24,25 +27,45 @@ if (q) {
   search = or(ilike(c.name, like), digits.length >= 4 ? ilike(c.phone, `%${digits}%`) : undefined);
 }
 
-const paid = sql<string>`coalesce((select sum(p.amount) from ${schema.payments} p join ${b} bb on bb.id = p.booking_id where bb.customer_id = ${c.id}), 0)`;
-const rows = await getDb()
-  .select({
-    id: c.id,
-    name: c.name,
-    phone: c.phone,
-    last: c.lastBookingAt,
-    notes: c.notes,
-    bookings: sql<number>`count(${b.id})::int`,
-    trips: sql<number>`count(${b.id}) filter (where ${b.status} = 'completed')::int`,
-    nextTrip: sql<string | null>`min(${b.pickupDate}) filter (where ${b.pickupDate} >= ${todayIST()} and ${b.status} not in ('cancelled', 'no_show'))`,
-    paid,
-  })
+// Same expression as the customers_recent_idx index, so a page is read straight from it.
+const key: SortKey = { cols: [sql`coalesce(${c.lastBookingAt}, ${c.createdAt})`, sql`${c.id}`], types: ['timestamptz', 'uuid'], order: 'desc' };
+const page = pageFrom(Astro.url, key);
+const pq = pageQuery(key, page);
+const db = getDb();
+const fetched = await db
+  .select({ id: c.id, name: c.name, phone: c.phone, last: c.lastBookingAt, notes: c.notes, cursor: cursorField(key) })
   .from(c)
-  .leftJoin(b, eq(b.customerId, c.id))
-  .where(and(isNull(c.personalDataRemovedAt), search))
-  .groupBy(c.id)
-  .orderBy(desc(c.lastBookingAt))
-  .limit(200);
+  .where(and(isNull(c.personalDataRemovedAt), search, pq.where))
+  .orderBy(...pq.orderBy)
+  .limit(pq.limit);
+const list = pageResult(fetched, page, listHref('/admin/customers/', { q }));
+
+// Totals for this page's customers only, so the work stays the same however many there are.
+const ids = list.rows.map((r) => r.id);
+const p = schema.payments;
+const [totals, paidRows] = ids.length
+  ? await Promise.all([
+      db
+        .select({
+          id: b.customerId,
+          bookings: sql<number>`count(*)::int`,
+          trips: sql<number>`(count(*) filter (where ${b.status} = 'completed'))::int`,
+          nextTrip: sql<string | null>`min(${b.pickupDate}) filter (where ${b.pickupDate} >= ${todayIST()} and ${b.status} not in ('cancelled', 'no_show'))`,
+        })
+        .from(b)
+        .where(inArray(b.customerId, ids))
+        .groupBy(b.customerId),
+      db
+        .select({ id: b.customerId, paid: sql<string>`coalesce(sum(${p.amount}), 0)` })
+        .from(p)
+        .innerJoin(b, eq(p.bookingId, b.id))
+        .where(inArray(b.customerId, ids))
+        .groupBy(b.customerId),
+    ])
+  : [[], []];
+const totalOf = new Map(totals.map((t) => [t.id, t]));
+const paidOf = new Map(paidRows.map((t) => [t.id, Number(t.paid)]));
+const rows = list.rows.map((r) => ({ ...r, bookings: totalOf.get(r.id)?.bookings ?? 0, trips: totalOf.get(r.id)?.trips ?? 0, nextTrip: totalOf.get(r.id)?.nextTrip ?? null, paid: paidOf.get(r.id) ?? 0 }));
 await audit({ actorId: user.id, action: 'view_customers', entity: 'customers', detail: { count: rows.length, q: q || undefined }, ipHash: ipHash(Astro.request) });
 
 const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
@@ -63,7 +86,7 @@ const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '
     </div>
 
     {rows.length === 0 ? (
-      <div class="a-card p-8 text-body">{q ? 'No customers match that.' : 'No customers yet. Everyone who books appears here.'}</div>
+      <div class="a-card p-8 text-body">{page.cursor ? 'Nothing more on this page.' : q ? 'No customers match that.' : 'No customers yet. Everyone who books appears here.'}</div>
     ) : (
       <div class="a-card overflow-x-auto">
         <table class="a-table">
@@ -82,7 +105,7 @@ const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '
                   {r.trips > 0 && <span class="block text-sm text-muted">{r.trips} completed</span>}
                 </td>
                 <td class="whitespace-nowrap" data-label="Next trip">{r.nextTrip ? day.format(new Date(`${r.nextTrip}T00:00:00Z`)) : <span class="text-muted">None booked</span>}</td>
-                <td class="whitespace-nowrap font-semibold" data-label="Paid so far">{inr(Number(r.paid))}</td>
+                <td class="whitespace-nowrap font-semibold" data-label="Paid so far">{inr(r.paid)}</td>
                 <td class="whitespace-nowrap text-sm text-body" data-label="Last booked">{r.last ? when.format(r.last) : '—'}</td>
               </tr>
             ))}
@@ -90,5 +113,7 @@ const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '
         </table>
       </div>
     )}
+
+    <Pager prev={list.newer} next={list.older} start={list.start} prevLabel="More recent" nextLabel="Earlier" />
   </div>
 </AdminLayout>

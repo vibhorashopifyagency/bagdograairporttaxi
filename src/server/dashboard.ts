@@ -217,21 +217,31 @@ export async function countNew(): Promise<number> {
 
 export type Balance = { id: string; ref: string; name: string; what: string; amt: number; waLink: string | null };
 
-/** Confirmed trips from the last 30 days and the next 14 that still have money due. */
+/**
+ * Confirmed trips from the last 30 days and the next 14 that still have money
+ * due: the first few, and the total over all of them. Both are worked out in
+ * the database from each trip's own payments (an index lookup per trip), so
+ * the work depends on how many trips fall in those 44 days, never on how many
+ * payments were ever recorded.
+ */
 export async function balancesToCollect(now = Date.now()): Promise<{ items: Balance[]; total: number }> {
   const b = schema.bookings;
+  const p = schema.payments;
   const today = todayIST(now);
-  const rows = await getDb()
-    .select()
-    .from(b)
-    .where(and(inArray(b.status, LIVE), gte(b.pickupDate, addDays(today, -30)), lte(b.pickupDate, addDays(today, 14))))
-    .orderBy(asc(b.pickupDate), asc(b.pickupTime))
-    .limit(300);
-  const paid = await paidFor(rows.map((r) => r.id));
-  const due = rows
-    .map((r) => ({ r, amt: r.fareTotal - (paid.get(r.id) ?? 0) }))
-    .filter((x) => x.amt > 0);
-  const items = due.slice(0, 4).map(({ r, amt }) => ({
+  const due = sql<number>`(${b.fareTotal} - coalesce((select sum(${p.amount}) from ${p} where ${p.bookingId} = ${b.id}), 0))::int`;
+  const inWindow = and(inArray(b.status, LIVE), gte(b.pickupDate, addDays(today, -30)), lte(b.pickupDate, addDays(today, 14)));
+  const db = getDb();
+  const [rows, [sum]] = await Promise.all([
+    db
+      .select({ id: b.id, ref: b.ref, customerName: b.customerName, customerPhone: b.customerPhone, tripName: b.tripName, pickupDate: b.pickupDate, amt: due })
+      .from(b)
+      .where(and(inWindow, sql`${due} > 0`))
+      .orderBy(asc(b.pickupDate), asc(b.pickupTime))
+      .limit(4),
+    // greatest() leaves out trips paid in full, with one payments lookup per trip.
+    db.select({ total: sql<string>`coalesce(sum(greatest(${due}, 0)), 0)` }).from(b).where(inWindow),
+  ]);
+  const items = rows.map(({ amt, ...r }) => ({
     id: r.id,
     ref: r.ref,
     name: r.customerName ?? 'Name removed',
@@ -244,7 +254,7 @@ export async function balancesToCollect(now = Date.now()): Promise<{ items: Bala
         )
       : null,
   }));
-  return { items, total: due.reduce((s, x) => s + x.amt, 0) };
+  return { items, total: Number(sum?.total ?? 0) };
 }
 
 /* ---------------- Wins this week ---------------- */
@@ -255,27 +265,32 @@ export async function weekWins(now = Date.now()) {
   const weekStart = addDays(today, -((dow + 6) % 7));
   const b = schema.bookings;
   const db = getDb();
-  const [rows, [money]] = await Promise.all([
-    db.select({ createdAt: b.createdAt, status: b.status }).from(b).where(gte(b.createdAt, istMidnight(weekStart))),
+  // Counted per Indian day in the database: at most seven rows come back, however busy the week.
+  const istDay = sql<string>`((${b.createdAt} at time zone 'UTC') + interval '330 minutes')::date::text`;
+  const [days, [money]] = await Promise.all([
+    db
+      .select({
+        day: istDay,
+        received: sql<number>`(count(*) filter (where ${notInArray(b.status, DEAD)}))::int`,
+        confirmed: sql<number>`(count(*) filter (where ${inArray(b.status, LIVE)}))::int`,
+      })
+      .from(b)
+      .where(gte(b.createdAt, istMidnight(weekStart)))
+      .groupBy(istDay),
     db
       .select({ sum: sql<string>`coalesce(sum(${schema.payments.amount}), 0)` })
       .from(schema.payments)
       .where(gte(schema.payments.receivedOn, weekStart)),
   ]);
-  const real = rows.filter((r) => !DEAD.includes(r.status));
-  const byDay = new Map<string, number>();
-  for (const r of real) {
-    const d = todayIST(r.createdAt.getTime());
-    byDay.set(d, (byDay.get(d) ?? 0) + 1);
-  }
-  const [bestDay, bestCount] = [...byDay].sort((a, z) => z[1] - a[1])[0] ?? ['', 0];
+  const received = days.reduce((s, d) => s + d.received, 0);
+  const best = [...days].sort((a, z) => z.received - a.received)[0];
   let line: string;
-  if (bestCount >= 2) line = `${weekday.format(new Date(`${bestDay}T00:00:00Z`))} was the best day so far, with ${bestCount} bookings. Keep it going.`;
-  else if (real.length) line = 'Every booking counts. Keep them coming.';
+  if (best && best.received >= 2) line = `${weekday.format(new Date(`${best.day}T00:00:00Z`))} was the best day so far, with ${best.received} bookings. Keep it going.`;
+  else if (received) line = 'Every booking counts. Keep them coming.';
   else line = 'A fresh week. The first booking is the best one.';
   return {
-    received: real.length,
-    confirmed: rows.filter((r) => LIVE.includes(r.status)).length,
+    received,
+    confirmed: days.reduce((s, d) => s + d.confirmed, 0),
     collected: Number(money?.sum ?? 0),
     line,
   };
@@ -333,12 +348,15 @@ export async function monthGoal(now = Date.now()) {
 export async function topRoutes(now = Date.now()) {
   const monthStart = `${todayIST(now).slice(0, 8)}01`;
   const b = schema.bookings;
+  // Counted per route in the database (the part of the trip name before " · "), so one row per route comes back.
+  const route = sql<string>`split_part(${b.tripName}, ' · ', 1)`;
   const rows = await getDb()
-    .select({ tripName: b.tripName })
+    .select({ route, n: sql<number>`count(*)::int` })
     .from(b)
-    .where(and(gte(b.createdAt, istMidnight(monthStart)), notInArray(b.status, DEAD)));
+    .where(and(gte(b.createdAt, istMidnight(monthStart)), notInArray(b.status, DEAD)))
+    .groupBy(route);
   const counts = new Map<string, number>();
-  for (const r of rows) counts.set(shortRoute(r.tripName), (counts.get(shortRoute(r.tripName)) ?? 0) + 1);
+  for (const r of rows) counts.set(shortRoute(r.route), (counts.get(shortRoute(r.route)) ?? 0) + r.n);
   const top = [...counts].sort((a, z) => z[1] - a[1]).slice(0, 5);
   const max = top[0]?.[1] ?? 1;
   return top.map(([name, n]) => ({ name, count: n, pct: Math.max(6, Math.round((n / max) * 100)) }));

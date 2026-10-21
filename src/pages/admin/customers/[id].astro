@@ -1,18 +1,20 @@
 ---
 /**
- * One customer: how to reach them, every booking they have made, what they
- * have paid, and the office's notes about them (shared by the team).
- * Opening this page is logged.
+ * One customer: how to reach them, every booking they have made (50 to a
+ * page), what they have paid, and the office's notes about them (shared by
+ * the team). Opening this page is logged.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Pager from '../../../components/admin/Pager.astro';
 import { audit } from '../../../server/admin';
 import { STATUS_LABEL, TONE, inr, waText } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { advanceOf } from '../../../server/fares';
+import { PAGE_SIZE, pageNumber } from '../../../server/paging';
 import { paymentsByBooking, summarise } from '../../../server/payments';
 import { ipHash } from '../../../server/security';
 import { firstName, phoneLabel } from '../../../lib/itinerary-text';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 
 export const prerender = false;
 
@@ -39,24 +41,51 @@ if (Astro.request.method === 'POST') {
 }
 
 const b = schema.bookings;
-const bookings = await db.select().from(b).where(eq(b.customerId, customer.id)).orderBy(desc(b.pickupDate));
+const p = schema.payments;
+const page = pageNumber(Astro.url);
+// The totals cover every booking and are added up in the database; only one page of bookings is loaded.
+const paidPer = db
+  .select({ bookingId: p.bookingId, paid: sql<number>`sum(${p.amount})`.as('paid') })
+  .from(p)
+  .innerJoin(b, eq(p.bookingId, b.id))
+  .where(eq(b.customerId, customer.id))
+  .groupBy(p.bookingId)
+  .as('paid_per');
+const [[totals], bookings] = await Promise.all([
+  db
+    .select({
+      bookings: sql<number>`count(*)::int`,
+      trips: sql<number>`(count(*) filter (where ${b.status} = 'completed'))::int`,
+      paid: sql<string>`coalesce(sum(${paidPer.paid}), 0)`,
+      due: sql<string>`coalesce(sum(greatest(0, ${b.fareTotal} - coalesce(${paidPer.paid}, 0))) filter (where ${b.status} not in ('cancelled', 'no_show')), 0)`,
+    })
+    .from(b)
+    .leftJoin(paidPer, eq(paidPer.bookingId, b.id))
+    .where(eq(b.customerId, customer.id)),
+  db
+    .select()
+    .from(b)
+    .where(eq(b.customerId, customer.id))
+    .orderBy(desc(b.pickupDate), desc(b.id))
+    .limit(PAGE_SIZE)
+    .offset((page - 1) * PAGE_SIZE),
+]);
 const pays = await paymentsByBooking(bookings.map((x) => x.id));
-await audit({ actorId: user.id, action: 'view_customer', entity: 'customer', entityId: customer.id, detail: { bookings: bookings.length }, ipHash: ipHash(Astro.request) });
+await audit({ actorId: user.id, action: 'view_customer', entity: 'customer', entityId: customer.id, detail: { bookings: totals?.bookings ?? 0 }, ipHash: ipHash(Astro.request) });
 
 const sums = bookings.map((x) => ({ x, pay: summarise(x.fareTotal, advanceOf(x.fareTotal), pays.get(x.id) ?? []) }));
-const live = sums.filter(({ x }) => x.status !== 'cancelled' && x.status !== 'no_show');
-const totalPaid = sums.reduce((s, { pay }) => s + pay.paid, 0);
-const totalDue = live.reduce((s, { pay }) => s + pay.due, 0);
-const trips = bookings.filter((x) => x.status === 'completed').length;
+const count = totals?.bookings ?? 0;
+const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+const pageHref = (n: number) => `/admin/customers/${customer.id}/${n > 1 ? `?page=${n}` : ''}`;
 const name = customer.name ?? 'No name';
 const first = firstName(customer.name ?? '');
 const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 const since = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', month: 'long', year: 'numeric' }).format(customer.createdAt);
 const stats = [
-  { k: 'Bookings', v: String(bookings.length) },
-  { k: 'Trips completed', v: String(trips) },
-  { k: 'Paid so far', v: inr(totalPaid) },
-  { k: 'Still to pay', v: inr(totalDue) },
+  { k: 'Bookings', v: String(count) },
+  { k: 'Trips completed', v: String(totals?.trips ?? 0) },
+  { k: 'Paid so far', v: inr(Number(totals?.paid ?? 0)) },
+  { k: 'Still to pay', v: inr(Number(totals?.due ?? 0)) },
 ];
 ---
 
@@ -110,6 +139,15 @@ const stats = [
             </li>
           ))}
         </ul>
+        {sums.length === 0 && <p class="m-0 border-t border-[#f0f1f3] px-5 py-4 text-body">Nothing on this page.</p>}
+        <Pager
+          class="border-t border-[#f0f1f3] px-5 py-4"
+          prev={page > 1 ? pageHref(Math.min(page - 1, pages)) : null}
+          next={page < pages ? pageHref(page + 1) : null}
+          prevLabel="Later"
+          nextLabel="Earlier"
+          summary={`Page ${page} of ${pages}`}
+        />
       </section>
 
       <section class="a-card flex flex-col gap-3 self-start p-5" aria-labelledby="notes-h">

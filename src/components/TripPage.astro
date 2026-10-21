@@ -2,17 +2,16 @@
 /**
  * The customer's trip page, from the owner's mock: the trip at a glance, the
  * driver, the day-by-day plan, what is paid and still due with the office
- * UPI QR code, and a way to save it all as a PDF.
+ * QR code the admin uploaded, and a way to save it all as a PDF.
  *
  * Rendered by /trip/<token>/ for the customer (the itinerary as last sent),
  * and by the admin's "Preview page" (the draft). Never indexed or cached:
  * it holds a customer's name and trip.
  */
 import '../styles/global.css';
-import { renderSVG } from 'uqr';
 import { BUSINESS, SITE } from '../data/site';
 import { dateRange, dayDate, firstName, shortRange } from '../lib/itinerary-text';
-import { upiLink, type Upi } from '../lib/upi';
+import { qrSrc, upiLink, type Upi } from '../lib/upi';
 import type { ItineraryData } from '../server/db/schema';
 import type { PaySummary } from '../server/payments';
 
@@ -44,9 +43,11 @@ const heading = cancelled
     ? `${first ? `${first}, ` : ''}${/^your\b/i.test(d.title) ? d.title.replace(/^your/i, first ? 'your' : 'Your') : `your ${d.title}`} is ready.`
     : `${first ? `${first}, here` : 'Here'} are your trip details.`;
 const ask = Math.min(pay.due, amount && amount > 0 ? amount : pay.askNow);
-const showQr = !cancelled && Boolean(upi) && pay.due > 0 && (hasPlan ? d.showQr : true);
-const link = upi && showQr ? upiLink(upi, ask, ref) : '';
-const qrSvg = link ? renderSVG(link, { border: 1 }) : '';
+const qr = upi?.qr ?? null;
+const showQr = !cancelled && Boolean(qr) && pay.due > 0 && (hasPlan ? d.showQr : true);
+const src = qr && showQr ? qrSrc(qr) : '';
+// On a phone the QR code cannot scan itself: the UPI ID opens their UPI app with the amount filled in.
+const link = showQr && upi?.id ? upiLink(upi, ask, ref) : '';
 const waUs = `https://wa.me/${BUSINESS.whatsapp}?text=${encodeURIComponent(`Namaste, this is ${d.name || 'a customer'} about my booking ${ref}. `)}`;
 const message = d.message.trim();
 const og = new URL(`/img/${cover}-16x9.webp`, SITE.url).href;
@@ -171,14 +172,17 @@ const tick = '<path d="M20 6 9 17l-5-5"/>';
               <div class="flex justify-between gap-3"><span class="text-[#c9ced8]">{pay.paid > 0 ? 'Received, thank you' : 'Received so far'}</span><span class="text-lime">{inr(Math.max(0, pay.paid))}</span></div>
               <div class="flex justify-between gap-3 border-t border-ink-700 pt-2 font-bold"><span>{pay.due === 0 ? 'Fully paid' : 'Balance before the trip'}</span><span>{inr(pay.due)}</span></div>
             </div>
-            {showQr && upi && (
+            {src && upi && qr && (
               <div class="flex flex-wrap items-center gap-3.5 rounded-[14px] bg-white p-3 text-ink">
-                <div class="h-[132px] w-[132px] shrink-0" role="img" aria-label={`UPI QR code to pay ${inr(ask)}`} set:html={qrSvg} />
-                <div class="flex min-w-0 flex-[1_1_160px] flex-col gap-1 text-[13px]">
-                  <span class="text-sm font-bold">Scan with any UPI app to pay {inr(ask)}</span>
-                  <span class="text-body">To {upi.payee}, UPI ID <span class="[overflow-wrap:anywhere]">{upi.id}</span></span>
-                  <span class="text-muted">Share the payment screenshot on WhatsApp and we confirm it.</span>
-                  <a href={link} class="mt-1 inline-flex min-h-11 items-center justify-center self-start rounded-[10px] bg-ink px-3.5 text-[13px] font-bold text-white no-underline sm:hidden print:hidden">Pay with a UPI app</a>
+                <img src={src} width={qr.w} height={qr.h} alt={`UPI QR code of ${upi.payee}`} class="h-auto max-h-[300px] w-[180px] shrink-0 object-contain sm:max-h-[380px] sm:w-[220px]" />
+                <div class="flex min-w-0 flex-[1_1_180px] flex-col gap-1 text-[13px]">
+                  <span class="text-sm font-bold">Scan with any UPI app and pay {inr(ask)}</span>
+                  <span class="text-body">To {upi.payee}{upi.id && <>, UPI ID <span class="[overflow-wrap:anywhere]">{upi.id}</span></>}</span>
+                  <span class="text-muted">Enter {inr(ask)} as the amount, then share the payment screenshot on WhatsApp and we confirm it.</span>
+                  <span class="mt-1 flex flex-wrap gap-2 sm:hidden print:hidden">
+                    {link && <a href={link} class="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-ink px-3.5 text-[13px] font-bold text-white no-underline">Pay with a UPI app</a>}
+                    <a href={src} download={`pay-${ref}.${qr.mime === 'image/png' ? 'png' : 'jpg'}`} class="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-ink px-3.5 text-[13px] font-bold text-ink no-underline">Save QR image</a>
+                  </span>
                 </div>
               </div>
             )}

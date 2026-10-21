@@ -11,6 +11,7 @@
  * Change a table, then run `npm run db:generate` to write a migration and
  * `npm run db:migrate` to apply it. Never edit an applied migration.
  */
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   bigserial,
@@ -147,17 +148,29 @@ export const rateLimit = pgTable('rate_limit', {
  * After the retention period the name and number are removed and
  * `personalDataRemovedAt` is set; the row stays so totals still add up.
  */
-export const customers = pgTable('customers', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name'),
-  phone: text('phone').unique(),
-  email: text('email'),
-  notes: text('notes'),
-  lastBookingAt: timestamp('last_booking_at', { withTimezone: true }),
-  personalDataRemovedAt: timestamp('personal_data_removed_at', { withTimezone: true }),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const customers = pgTable(
+  'customers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name'),
+    phone: text('phone').unique(),
+    email: text('email'),
+    notes: text('notes'),
+    lastBookingAt: timestamp('last_booking_at', { withTimezone: true }),
+    personalDataRemovedAt: timestamp('personal_data_removed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // The customers list, most recent first, a page at a time (src/server/paging.ts).
+    index('customers_recent_idx')
+      .on(sql`coalesce(${t.lastBookingAt}, ${t.createdAt})`, t.id)
+      .where(sql`${t.personalDataRemovedAt} is null`),
+    // Search by any part of a name or number without reading every row.
+    index('customers_name_trgm_idx').using('gin', t.name.op('gin_trgm_ops')),
+    index('customers_phone_trgm_idx').using('gin', t.phone.op('gin_trgm_ops')),
+  ],
+);
 
 /**
  * The office's drivers. We pay them for each completed trip: a share of the
@@ -255,11 +268,18 @@ export const bookings = pgTable(
   },
   (t) => [
     index('bookings_pickup_date_idx').on(t.pickupDate),
-    index('bookings_status_idx').on(t.status),
-    index('bookings_customer_idx').on(t.customerId),
-    index('bookings_created_idx').on(t.createdAt),
+    // The bookings list pages newest first, with or without a status filter.
+    index('bookings_created_id_idx').on(t.createdAt, t.id),
+    index('bookings_status_created_idx').on(t.status, t.createdAt, t.id),
+    index('bookings_customer_pickup_idx').on(t.customerId, t.pickupDate),
+    // The per-IP and per-number limits on new bookings.
     index('bookings_ip_created_idx').on(t.ipHash, t.createdAt),
+    index('bookings_phone_created_idx').on(t.customerPhone, t.createdAt),
     index('bookings_driver_idx').on(t.driverId, t.pickupDate),
+    // Search by any part of the reference, name or number without reading every row.
+    index('bookings_ref_trgm_idx').using('gin', t.ref.op('gin_trgm_ops')),
+    index('bookings_name_trgm_idx').using('gin', t.customerName.op('gin_trgm_ops')),
+    index('bookings_phone_trgm_idx').using('gin', t.customerPhone.op('gin_trgm_ops')),
   ],
 );
 
@@ -277,7 +297,11 @@ export const bookingEvents = pgTable(
     type: text('type').notNull(),
     data: jsonb('data').$type<Record<string, unknown>>(),
   },
-  (t) => [index('booking_events_booking_idx').on(t.bookingId, t.at)],
+  (t) => [
+    index('booking_events_booking_idx').on(t.bookingId, t.at),
+    // "Latest changes" on the today board.
+    index('booking_events_at_idx').on(t.at),
+  ],
 );
 
 /**
@@ -305,7 +329,13 @@ export const payments = pgTable(
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
-  (t) => [index('payments_booking_idx').on(t.bookingId)],
+  (t) => [
+    index('payments_booking_idx').on(t.bookingId),
+    // The payments list pages newest first.
+    index('payments_created_idx').on(t.createdAt, t.id),
+    // The week and month totals, and the CSV export in date order.
+    index('payments_received_idx').on(t.receivedOn, t.createdAt, t.id),
+  ],
 );
 
 /** One day of an itinerary. `photo` is a key from src/data/photos.json, or ''. */
@@ -429,6 +459,17 @@ export const settings = pgTable('settings', {
   value: jsonb('value').notNull(),
   updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
   updatedAt: updatedAt(),
+});
+
+/**
+ * Request counts for the rate limits in src/server/rate-limit.ts: one row
+ * per limit and caller (a hashed IP or a user id) with the hits in the
+ * current window. Rows a day old are cleared as it goes, so it stays small.
+ */
+export const requestLimits = pgTable('request_limits', {
+  key: text('key').primaryKey(),
+  windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+  hits: integer('hits').notNull(),
 });
 
 /** Better Auth's Drizzle adapter looks tables up by these model names. */

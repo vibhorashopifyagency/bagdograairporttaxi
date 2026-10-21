@@ -2,8 +2,6 @@
  * Browser helpers for the admin popups. Imported only from <script> tags in
  * /admin/ pages; nothing here runs on the server.
  */
-export { upiLink } from './upi';
-
 export const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
 
 /**
@@ -60,48 +58,46 @@ export function logEvent(bookingId: string, type: 'qr_sent', amount?: number): v
 }
 
 /**
- * The QR code library, loaded only when a QR code is drawn. Nothing else on
- * a page waits for it, so the buttons and popups keep working even if it
- * fails to load.
- */
-export const loadQr = () => import('uqr');
-
-/**
- * A picture of the QR code with the amount and UPI ID under it, for the
+ * The office QR code picture with the amount to pay under it, for the
  * phone's share sheet: WhatsApp receives it as a photo the customer can scan
- * from another phone or save and open in their UPI app.
+ * from another phone, or save and open from their UPI app's scanner. The
+ * uploaded picture is drawn whole and unchanged, only scaled to fit.
  */
-export async function drawQrCard(input: { text: string; amount: number; ref: string; upi: { id: string; payee: string } }): Promise<Blob> {
-  const { encode } = await loadQr();
-  const qr = encode(input.text, { ecc: 'M', border: 0 });
-  const W = 720;
-  const cell = Math.floor(520 / qr.size);
-  const side = cell * qr.size;
-  const top = 132;
+export async function drawQrCard(input: { src: string; amount: number; ref: string; payee: string; id: string }): Promise<Blob> {
+  const img = new Image();
+  img.src = input.src;
+  await img.decode();
+  const W = 900;
+  const scale = Math.min(780 / img.naturalWidth, 960 / img.naturalHeight, 2);
+  const w = Math.round(img.naturalWidth * scale);
+  const h = Math.round(img.naturalHeight * scale);
+  const top = 150;
+  const lines = [`Booking ${input.ref} · ${input.payee}`, input.id && `UPI ID: ${input.id}`].filter(Boolean);
   const c = document.createElement('canvas');
   c.width = W;
-  c.height = top + side + 210;
+  c.height = top + h + 80 + lines.length * 46 + 100;
   const g = c.getContext('2d')!;
   g.fillStyle = '#ffffff';
   g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = '#111111';
-  g.fillRect(0, 0, W, 96);
+  g.fillRect(0, 0, W, 110);
   g.fillStyle = '#a1e005';
-  g.font = '700 34px Bricolage, Inter, system-ui, sans-serif';
+  g.font = '700 40px Bricolage, Inter, system-ui, sans-serif';
   g.textAlign = 'center';
-  g.fillText('Bagdogra Airport Taxi', W / 2, 60);
+  g.fillText('Bagdogra Airport Taxi', W / 2, 70);
+  // Enlarging a small QR code stays sharp without smoothing; shrinking needs it.
+  g.imageSmoothingEnabled = scale < 1;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, (W - w) / 2, top, w, h);
+  let y = top + h + 80;
   g.fillStyle = '#111111';
-  const x0 = (W - side) / 2;
-  qr.data.forEach((row, y) => row.forEach((on, x) => on && g.fillRect(x0 + x * cell, top + y * cell, cell, cell)));
-  const y1 = top + side + 66;
-  g.font = '800 48px Inter, system-ui, sans-serif';
-  g.fillText(input.amount > 0 ? inr(input.amount) : 'Scan to pay', W / 2, y1);
-  g.font = '500 26px Inter, system-ui, sans-serif';
+  g.font = '800 56px Inter, system-ui, sans-serif';
+  g.fillText(input.amount > 0 ? `Pay ${inr(input.amount)}` : 'Scan to pay', W / 2, y);
+  g.font = '500 30px Inter, system-ui, sans-serif';
   g.fillStyle = '#3d4451';
-  g.fillText(`Booking ${input.ref} · ${input.upi.payee}`, W / 2, y1 + 48);
-  g.fillText(`UPI ID: ${input.upi.id}`, W / 2, y1 + 86);
-  g.font = '500 22px Inter, system-ui, sans-serif';
+  for (const line of lines) g.fillText(line, W / 2, (y += 46));
+  g.font = '500 26px Inter, system-ui, sans-serif';
   g.fillStyle = '#5c6373';
-  g.fillText('Scan with any UPI app', W / 2, y1 + 124);
+  g.fillText(input.amount > 0 ? `Scan with any UPI app and enter ${inr(input.amount)}` : 'Scan with any UPI app', W / 2, (y += 50));
   return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error('no image'))), 'image/png'));
 }

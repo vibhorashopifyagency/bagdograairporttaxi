@@ -173,7 +173,7 @@ const data = {
     }
     function save(p: object) {
       fetch('/api/bookings/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p), keepalive: true })
-        .then((r) => { if (r.status >= 500) keep(p); })
+        .then((r) => { if (r.status >= 500 || r.status === 429) keep(p); })
         .catch(() => keep(p));
     }
 

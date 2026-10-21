@@ -6,7 +6,9 @@
  * row, so the history always adds up. Only the admin reverses or refunds;
  * staff record payments only when the admin has switched that on for them.
  */
+import { createHash } from 'node:crypto';
 import { asc, eq, inArray } from 'drizzle-orm';
+import { readUpiText, type Upi, type UpiQr } from '../lib/upi';
 import { audit } from './admin';
 import { addDays, inr, isDay, todayIST, type Tone } from './dashboard';
 import { getDb, schema } from './db';
@@ -198,33 +200,138 @@ export async function reversePayment(b: Booking, paymentId: string, reason: stri
   return error;
 }
 
-/* ---------------- The office UPI details ---------------- */
+/* ---------------- The office QR code and UPI details ---------------- */
 
-export type Upi = { id: string; payee: string };
+/**
+ * The admin uploads the office's own QR code picture (from the bank or UPI
+ * business app) and it is shown and sent exactly as uploaded. It carries no
+ * amount, so the message and the trip page say how much to pay.
+ *
+ * 'upi' holds the name, UPI ID and the picture's details; 'upi_qr' holds the
+ * picture itself, so pages that only need the details never load it. One
+ * small picture does not need file storage.
+ */
+export type { Upi, UpiQr } from '../lib/upi';
 export const UPI_KEY = 'upi';
+const QR_KEY = 'upi_qr';
 const UPI_ID_RE = /^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9.-]{1,64}$/;
+const MAX_BYTES = 1_500_000;
 
 export async function getUpi(): Promise<Upi | null> {
   const [row] = await getDb().select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, UPI_KEY));
-  const v = row?.value as Upi | undefined;
-  return v?.id ? v : null;
+  const v = row?.value as Partial<Upi> | undefined;
+  if (!v?.qr && !v?.id) return null;
+  return { id: v.id ?? '', payee: v.payee ?? '', qr: v.qr ?? null };
 }
 
-export async function setUpi(input: { id: string; payee: string }, ctx: Ctx): Promise<string | null> {
-  const id = input.id.trim();
-  const payee = input.payee.trim();
-  if (!UPI_ID_RE.test(id)) return 'A UPI ID looks like name@bank, for example jaijawan@okhdfcbank.';
-  if (!payee || payee.length > 60) return 'Enter the name customers should see when they pay, up to 60 characters.';
-  const value = { id, payee };
-  await getDb()
-    .insert(schema.settings)
-    .values({ key: UPI_KEY, value, updatedBy: ctx.actorId })
-    .onConflictDoUpdate({ target: schema.settings.key, set: { value, updatedBy: ctx.actorId } });
-  await audit({ actorId: ctx.actorId, action: 'upi_set', entity: 'settings', entityId: UPI_KEY, detail: value, ipHash: ctx.ipHash });
+/**
+ * /trip/qr/<sha>.png (or .jpg): the picture, for the trip pages and the Send
+ * QR code popup. Anyone may load it, as anyone may scan the printed one. The
+ * address carries the picture's hash, so it may be cached for good; an old
+ * address stops working once the picture is replaced.
+ */
+export async function qrImageResponse(sha: string, mime: UpiQr['mime']): Promise<Response> {
+  const [row] = /^[0-9a-f]{16}$/.test(sha)
+    ? await getDb().select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, QR_KEY))
+    : [];
+  const v = row?.value as { sha: string; mime: UpiQr['mime']; b64: string } | undefined;
+  if (!v || v.sha !== sha || v.mime !== mime) {
+    return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
+  }
+  return new Response(Buffer.from(v.b64, 'base64'), {
+    headers: {
+      'Content-Type': mime,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Robots-Tag': 'noindex',
+      'Content-Disposition': `inline; filename="upi-qr.${mime === 'image/png' ? 'png' : 'jpg'}"`,
+    },
+  });
+}
+
+/** Type and size from the file's own bytes, not its name. PNG and JPEG only. */
+function imageInfo(b: Uint8Array): { mime: UpiQr['mime']; w: number; h: number } | null {
+  const u16 = (i: number) => (b[i]! << 8) | b[i + 1]!;
+  if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+    return { mime: 'image/png', w: (u16(16) << 16) | u16(18), h: (u16(20) << 16) | u16(22) };
+  }
+  if (b.length > 4 && b[0] === 0xff && b[1] === 0xd8) {
+    // Walk the segments to the frame header (SOF0 to SOF15, not DHT, JPG or DAC).
+    for (let i = 2; i + 9 < b.length; ) {
+      if (b[i] !== 0xff) return null;
+      const m = b[i + 1]!;
+      if (m === 0xff) { i++; continue; }
+      if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; }
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { mime: 'image/jpeg', w: u16(i + 7), h: u16(i + 5) };
+      i += 2 + u16(i + 2);
+    }
+  }
   return null;
 }
 
-export { upiLink } from '../lib/upi';
+/**
+ * Only the admin adds, changes or removes the office QR code: it decides
+ * where customers' money goes. Read from the database, not the session, so
+ * no page or caller can get round it.
+ */
+const ADMIN_ONLY = 'Only the admin can add, change or remove the office QR code.';
+async function actorIsAdmin(actorId: string): Promise<boolean> {
+  const [row] = await getDb().select({ role: schema.user.role, banned: schema.user.banned }).from(schema.user).where(eq(schema.user.id, actorId));
+  return row?.role === 'admin' && !row.banned;
+}
+
+export type UpiForm = { id: string; payee: string; qrText: string; file: File | null };
+
+export async function setUpi(input: UpiForm, ctx: Ctx): Promise<string | null> {
+  if (!(await actorIsAdmin(ctx.actorId))) return ADMIN_ONLY;
+  let id = input.id.trim();
+  const payee = input.payee.trim();
+  const current = await getUpi();
+  let picture: { qr: UpiQr; b64: string } | null = null;
+
+  if (input.file && input.file.size > 0) {
+    if (input.file.size > MAX_BYTES) return 'That picture is too large. Use the QR code image from the UPI app, or a screenshot of it.';
+    const bytes = new Uint8Array(await input.file.arrayBuffer());
+    const info = imageInfo(bytes);
+    if (!info) return 'Use a PNG or JPG picture. A screenshot of the QR code works.';
+    if (Math.min(info.w, info.h) < 150 || Math.max(info.w, info.h) > 5000) return 'That picture is too small to scan. Use the QR code image from the UPI app, or a clearer screenshot.';
+    const sha = createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+    const text = input.qrText.trim().slice(0, 1000);
+    if (text && !readUpiText(text)) return 'This QR code is not a UPI payment code. Choose the QR code from the bank or UPI app.';
+    picture ={ qr: { sha, ...info, text }, b64: Buffer.from(bytes).toString('base64') };
+  }
+  const qr = picture?.qr ?? current?.qr ?? null;
+  if (!qr) return 'Choose the QR code picture.';
+
+  // The UPI ID is shown in messages for customers paying on the same phone,
+  // so it must be the one the QR code pays.
+  const inQr = readUpiText(qr.text);
+  if (!id && inQr) id = inQr.id;
+  if (id && !UPI_ID_RE.test(id)) return 'A UPI ID looks like name@bank, for example jaijawan@okhdfcbank.';
+  if (id && inQr && id.toLowerCase() !== inQr.id.toLowerCase()) return `The QR code pays ${inQr.id}, not ${id}. Leave the UPI ID empty to use the one in the QR code.`;
+  if (!payee || payee.length > 60) return 'Enter the name customers should see when they pay, up to 60 characters.';
+
+  const value: Upi = { id, payee, qr };
+  await getDb().transaction(async (tx) => {
+    const put = (key: string, v: unknown) =>
+      tx.insert(schema.settings).values({ key, value: v, updatedBy: ctx.actorId }).onConflictDoUpdate({ target: schema.settings.key, set: { value: v, updatedBy: ctx.actorId } });
+    if (picture) await put(QR_KEY, { sha: picture.qr.sha, mime: picture.qr.mime, b64: picture.b64 });
+    await put(UPI_KEY, value);
+  });
+  await audit({ actorId: ctx.actorId, action: 'upi_set', entity: 'settings', entityId: UPI_KEY, detail: { id, payee, qr: qr.sha, newPicture: Boolean(picture), readable: Boolean(inQr) }, ipHash: ctx.ipHash });
+  return null;
+}
+
+/** Removes the picture, name and UPI ID. Trip pages, even ones already sent, then show no QR code. */
+export async function removeUpi(ctx: Ctx): Promise<string | null> {
+  if (!(await actorIsAdmin(ctx.actorId))) return ADMIN_ONLY;
+  const current = await getUpi();
+  if (!current) return 'There is no QR code to remove.';
+  await getDb().delete(schema.settings).where(inArray(schema.settings.key, [UPI_KEY, QR_KEY]));
+  await audit({ actorId: ctx.actorId, action: 'upi_removed', entity: 'settings', entityId: UPI_KEY, detail: { id: current.id, payee: current.payee, qr: current.qr?.sha ?? null }, ipHash: ctx.ipHash });
+  return null;
+}
+
+export { qrSrc, readUpiText, upiLink } from '../lib/upi';
 
 /** Every payment row for several bookings at once, for lists. */
 export async function paymentsByBooking(ids: string[]): Promise<Map<string, PaymentRow[]>> {

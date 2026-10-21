@@ -55,6 +55,18 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     return ctx.redirect(`/admin/login/?next=${encodeURIComponent(ctx.url.pathname)}`, 303);
   }
 
+  // A page stuck in a loop, or a script, cannot flood the database through the admin's JSON calls.
+  if (ctx.locals.user && path.startsWith('/admin/api/')) {
+    const { LIMITS, rateLimit } = await import('./server/rate-limit');
+    const limit = await rateLimit(LIMITS.adminApi, ctx.locals.user.id);
+    if (!limit.ok) {
+      return new Response(JSON.stringify({ ok: false, error: 'Too many changes at once. Wait a moment and try again.' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': String(limit.retryAfter) },
+      });
+    }
+  }
+
   const res = await next();
   res.headers.set('Cache-Control', 'no-store');
   res.headers.set('X-Robots-Tag', 'noindex, nofollow');

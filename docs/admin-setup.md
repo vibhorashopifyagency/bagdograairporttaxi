@@ -13,7 +13,7 @@ private trip page at `/trip/...`. Website editing comes next. The plan is in
 - Data lives in Neon Postgres. The schema is `src/server/db/schema.ts`; migrations are in `drizzle/`.
 - Logins use Better Auth (`src/server/auth.ts`): username and password, roles `admin` and `staff`, optional two-factor.
 - Each booking gets a reference such as `BAT-7K2Q9M`. It goes in the WhatsApp message and is saved by `POST /api/bookings/`.
-- `/trip/<code>/` is the customer's own page for a booking (itinerary, driver, what is paid, the UPI QR code). It runs on the server too, needs no login, is never cached or indexed, and its link is signed with `BETTER_AUTH_SECRET`: changing that secret breaks every trip link already sent.
+- `/trip/<code>/` is the customer's own page for a booking (itinerary, driver, what is paid, the UPI QR code). It runs on the server too, needs no login, is never cached or indexed, and its link is signed with `BETTER_AUTH_SECRET`: changing that secret breaks every trip link already sent. The office QR code picture is served beside it from `/trip/qr/<hash>.png` (or `.jpg`), straight from the database; that address may be cached, because a new picture gets a new address.
 
 ## Going live on Vercel (one time)
 
@@ -35,7 +35,7 @@ private trip page at `/trip/...`. Website editing comes next. The plan is in
 6. **Two-factor.** Sign in, open My account and set up two-factor login with Google Authenticator or a similar app. Keep its backup codes with the recovery codes.
 7. **Staff.** Open Team, add the staff member with a username and a password, and give them the password in person. Switch on "can record payments" only if they should.
 8. **Drivers.** Open Drivers and add each driver with their phone, car number and pay (a share of the fare or a fixed amount a trip). Drivers already typed on bookings are on the list with their pay not set: set it for each.
-9. **UPI.** Open Payments and enter the office UPI ID (it is on the printed QR code, or in the bank or PhonePe Business app) and the name customers should see. Scan the QR code it shows with your own phone and check the payee before sending one to a customer.
+9. **UPI QR code.** Open Payments and upload the office QR code picture: the QR image from the bank, PhonePe Business, Paytm for Business or Google Pay for Business app (Share or Download QR), or a clear screenshot of it. The page reads the QR code, says which UPI ID it pays and fills that in; check it, add the name customers should see, and save. Then scan the saved QR code with your own phone and check the payee before sending it to a customer. Customers see the picture exactly as uploaded, so they type the amount themselves; the WhatsApp message and the trip page tell them how much.
 10. **Booking emails.** In Resend, add the domain `bagdograairporttaxi.com` and the DNS records it lists at the domain registrar. Until then bookings are still saved and WhatsApp still opens; only the backup email is skipped.
 11. **Test.** Make a booking on `/book/`, press Confirm on WhatsApp, and check it appears at `/admin/` with the same `BAT-` reference as the WhatsApp message.
 

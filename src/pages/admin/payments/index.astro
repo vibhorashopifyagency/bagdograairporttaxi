@@ -1,19 +1,19 @@
 ---
 /**
  * Money in: what was collected this month and this week, what is still to
- * collect on confirmed trips, every payment recorded, and the office UPI
- * details the QR codes are made from (admin only). Payments themselves are
- * recorded on each booking's page.
+ * collect on confirmed trips, every payment recorded, and the office QR code
+ * picture with its UPI details (uploaded and changed by the admin only).
+ * Payments themselves are recorded on each booking's page.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Pager from '../../../components/admin/Pager.astro';
 import { audit, isAdmin } from '../../../server/admin';
 import { TONE, addDays, balancesToCollect, inr, inrShort, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
-import { METHOD_LABEL, getUpi, setUpi } from '../../../server/payments';
+import { cursorField, listHref, pageFrom, pageQuery, pageResult, type SortKey } from '../../../server/paging';
+import { METHOD_LABEL, getUpi, qrSrc, readUpiText, removeUpi, setUpi } from '../../../server/payments';
 import { ipHash } from '../../../server/security';
-import { upiLink } from '../../../lib/upi';
-import { renderSVG } from 'uqr';
-import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, sql } from 'drizzle-orm';
 
 export const prerender = false;
 
@@ -23,13 +23,20 @@ const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
 let upiError = '';
 let upiDraft = { id: '', payee: '' };
 
-if (Astro.request.method === 'POST' && admin) {
+// Adding, changing and removing the office QR code: admin only, checked
+// again inside setUpi and removeUpi, so a staff login gets a refusal.
+if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
-  if (f.get('intent') === 'upi') {
+  const intent = f.get('intent');
+  if (intent === 'upi') {
     upiDraft = { id: String(f.get('id') ?? ''), payee: String(f.get('payee') ?? '') };
-    upiError = (await setUpi(upiDraft, ctx)) ?? '';
-    if (!upiError) return Astro.redirect('/admin/payments/?saved=upi#upi', 303);
+    const file = f.get('qr');
+    upiError = (await setUpi({ ...upiDraft, qrText: String(f.get('qrText') ?? ''), file: file instanceof File ? file : null }, ctx)) ?? '';
+  } else if (intent === 'upi-remove') {
+    upiError = (await removeUpi(ctx)) ?? '';
   }
+  if ((intent === 'upi' || intent === 'upi-remove') && !upiError) return Astro.redirect(`/admin/payments/?saved=${intent}#upi`, 303);
+  if (upiError && !admin) Astro.response.status = 403;
 }
 
 const today = todayIST();
@@ -42,26 +49,41 @@ const db = getDb();
 const sumSince = (from: string) =>
   db.select({ sum: sql<string>`coalesce(sum(${p.amount}), 0)`, n: sql<string>`count(*) filter (where ${p.kind} = 'payment')` }).from(p).where(and(gte(p.receivedOn, from), lt(p.receivedOn, addDays(today, 2))));
 
-const [[month], [week], balances, upi, rows] = await Promise.all([
+// The entries list, newest first, 50 to a page (src/server/paging.ts).
+const key: SortKey = { cols: [sql`${p.createdAt}`, sql`${p.id}`], types: ['timestamptz', 'uuid'], order: 'desc' };
+const page = pageFrom(Astro.url, key);
+const pq = pageQuery(key, page);
+const [[month], [week], balances, upi, fetched] = await Promise.all([
   sumSince(monthStart),
   sumSince(weekStart),
   balancesToCollect(),
   getUpi(),
   db
-    .select({ pay: p, ref: b.ref, name: b.customerName, trip: b.tripName, by: schema.user.name })
+    .select({
+      pay: p,
+      ref: b.ref,
+      name: b.customerName,
+      trip: b.tripName,
+      by: schema.user.name,
+      // Asked of the database, so a reversal on another page still strikes its payment through.
+      reversed: sql<boolean>`exists (select 1 from ${p} r where r.booking_id = ${p.bookingId} and r.reverses_payment_id = ${p.id})`,
+      cursor: cursorField(key),
+    })
     .from(p)
     .innerJoin(b, eq(p.bookingId, b.id))
     .leftJoin(schema.user, eq(p.createdBy, schema.user.id))
-    .orderBy(desc(p.createdAt))
-    .limit(150),
+    .where(pq.where)
+    .orderBy(...pq.orderBy)
+    .limit(pq.limit),
 ]);
+const list = pageResult(fetched, page, listHref('/admin/payments/', {}));
+const rows = list.rows;
 await audit({ actorId: user.id, action: 'view_payments', entity: 'payments', detail: { count: rows.length }, ipHash: ctx.ipHash });
 
 if (upi && !upiError) upiDraft = upi;
-const reversed = new Set(rows.filter((r) => r.pay.kind === 'reversal').map((r) => r.pay.reversesPaymentId));
 const dateFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 const monthName = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', month: 'long' }).format(new Date(`${today}T00:00:00Z`));
-const qr = upi ? renderSVG(upiLink(upi, 0, ''), { border: 1 }) : '';
+const inQr = upi?.qr ? readUpiText(upi.qr.text) : null;
 const stats = [
   { label: `Collected in ${monthName}`, value: inrShort(Number(month?.sum ?? 0)), sub: `${Number(month?.n ?? 0)} payments` },
   { label: 'Collected this week', value: inrShort(Number(week?.sum ?? 0)), sub: `${Number(week?.n ?? 0)} payments since Monday` },
@@ -100,7 +122,7 @@ const stats = [
               <thead><tr><th>Date</th><th>Booking</th><th>What</th><th>Amount</th><th>Recorded by</th></tr></thead>
               <tbody>
                 {rows.map((r) => {
-                  const off = reversed.has(r.pay.id);
+                  const off = r.reversed;
                   return (
                     <tr>
                       <td class="whitespace-nowrap" data-label="Date">{dateFmt.format(new Date(`${r.pay.receivedOn}T00:00:00Z`))}</td>
@@ -121,35 +143,60 @@ const stats = [
             </table>
           </div>
         )}
+        <Pager class="border-t border-[#f0f1f3] px-5 py-4" prev={list.newer} next={list.older} start={list.start} />
       </section>
 
       <div class="flex min-w-0 flex-col gap-5 lg:gap-6">
         <section id="upi" class="a-card flex scroll-mt-6 flex-col gap-4 p-5" aria-labelledby="upi-h">
-          <h2 id="upi-h" class="m-0 font-display text-xl font-bold">Office UPI</h2>
-          {Astro.url.searchParams.get('saved') === 'upi' && <p class="a-msg a-msg-ok m-0" role="status">Saved. Every new QR code uses it.</p>}
-          {upi ? (
+          <h2 id="upi-h" class="m-0 font-display text-xl font-bold">Office QR code</h2>
+          {Astro.url.searchParams.get('saved') === 'upi' && <p class="a-msg a-msg-ok m-0" role="status">Saved. Send QR code and the trip pages use it from now on.</p>}
+          {Astro.url.searchParams.get('saved') === 'upi-remove' && <p class="a-msg a-msg-ok m-0" role="status">Removed. Trip pages show no QR code, and Send QR code has nothing to send, until a new one is uploaded.</p>}
+          {upi?.qr ? (
             <div class="flex items-center gap-4">
-              <div class="h-[112px] w-[112px] shrink-0 rounded-xl border border-line p-1.5" role="img" aria-label="QR code for the office UPI ID" set:html={qr} />
+              <a href={qrSrc(upi.qr)} target="_blank" rel="noopener" class="shrink-0" title="Open the picture full size">
+                <img src={qrSrc(upi.qr)} width={upi.qr.w} height={upi.qr.h} alt="The office QR code as uploaded" class="h-[132px] w-[132px] rounded-xl border border-line bg-white object-contain p-1" />
+              </a>
               <div class="flex min-w-0 flex-col gap-0.5 text-sm">
                 <span class="font-semibold">{upi.payee}</span>
-                <span class="break-all text-body">{upi.id}</span>
+                {upi.id && <span class="break-all text-body">{upi.id}</span>}
+                {inQr ? (
+                  <span class="text-[#3f6200]">The QR code pays {inQr.id}.</span>
+                ) : (
+                  <span class="text-[#8a5300]">The dashboard could not read this picture as a QR code.</span>
+                )}
                 <span class="text-muted">Scan it with your own UPI app to check it reaches the right account before sending it to customers.</span>
               </div>
             </div>
           ) : (
-            <p class="m-0 text-body">Not set up yet. Until it is, Send QR code has nothing to send.</p>
+            <p class="m-0 text-body">Not uploaded yet. Until it is, Send QR code has nothing to send.</p>
           )}
           {admin ? (
-            <form method="post" action="/admin/payments/#upi" class="flex flex-col gap-3">
+            <form method="post" action="/admin/payments/#upi" enctype="multipart/form-data" class="flex flex-col gap-3" data-upi-form>
               <input type="hidden" name="intent" value="upi" />
+              <input type="hidden" name="qrText" value="" data-qr-text />
               {upiError && <p class="a-msg a-msg-error m-0" role="alert">{upiError}</p>}
-              <label class="a-field">UPI ID<input name="id" required value={upiDraft.id} placeholder="jaijawan@okhdfcbank" autocomplete="off" autocapitalize="none" spellcheck="false" /></label>
-              <label class="a-field">Name customers see<input name="payee" required maxlength="60" value={upiDraft.payee} placeholder="Jai Jawan Travels" /></label>
-              <p class="m-0 text-sm text-muted">It is on the office's printed QR code, or in the bank or PhonePe Business app. Each QR code the dashboard makes carries the amount and the booking reference.</p>
-              <button type="submit" class="btn-book self-start">{upi ? 'Save changes' : 'Save'}</button>
+              <label class="a-drop">
+                <input type="file" name="qr" accept="image/png,image/jpeg,image/*" class="sr-only" data-qr-file />
+                <img data-qr-preview hidden alt="The picture you chose" class="h-[96px] w-[96px] shrink-0 rounded-lg bg-white object-contain" />
+                <span class="flex min-w-0 flex-col">
+                  <span class="font-semibold text-ink" data-qr-pick>{upi?.qr ? 'Choose a new QR code picture' : 'Choose the QR code picture'}</span>
+                  <span class="text-sm font-normal text-muted">PNG or JPG from the bank or UPI business app, or a clear screenshot of it</span>
+                </span>
+              </label>
+              <p class="m-0 text-sm empty:hidden" data-qr-read role="status" aria-live="polite"></p>
+              <label class="a-field">Name customers see<input name="payee" required maxlength="60" value={upiDraft.payee} placeholder="Jai Jawan Travels" data-qr-payee /></label>
+              <label class="a-field"><span>UPI ID <span class="font-normal text-muted">(read from the QR code)</span></span><input name="id" value={upiDraft.id} placeholder="jaijawan@okhdfcbank" autocomplete="off" autocapitalize="none" spellcheck="false" data-qr-id /></label>
+              <p class="m-0 text-sm text-muted">Customers see the picture exactly as uploaded and type the amount themselves; the WhatsApp message and the trip page tell them how much.</p>
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <button type="submit" class="btn-book">{upi ? 'Save changes' : 'Save'}</button>
+                {upi && <button type="button" data-open="dlg-upi-remove" class="min-h-11 rounded-xl px-3 text-sm font-semibold text-[#b42318] hover:bg-[#fde8e7]">Remove QR code</button>}
+              </div>
             </form>
           ) : (
-            <p class="m-0 text-sm text-muted">Only the admin can change it.</p>
+            <>
+              {upiError && <p class="a-msg a-msg-error m-0" role="alert">{upiError}</p>}
+              <p class="m-0 text-sm text-muted">Only the admin can add, change or remove it.</p>
+            </>
           )}
         </section>
 
@@ -172,4 +219,131 @@ const stats = [
       </div>
     </div>
   </div>
+
+  {admin && upi && (
+    <dialog id="dlg-upi-remove" class="a-dialog a-dialog-sm" aria-labelledby="dlg-upi-remove-h">
+      <form method="post" action="/admin/payments/#upi" class="a-dialog-body">
+        <input type="hidden" name="intent" value="upi-remove" />
+        <header class="a-dialog-head">
+          <h2 id="dlg-upi-remove-h" class="m-0 font-display text-xl font-bold">Remove the office QR code?</h2>
+          <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+        </header>
+        <div class="a-dialog-main flex flex-col gap-3 text-body">
+          <p class="m-0">{upi.id ? <>The picture, the name customers see and the UPI ID <strong class="text-ink">{upi.id}</strong> are removed.</> : 'The picture and the name customers see are removed.'}</p>
+          <p class="m-0">Customers' trip pages stop showing a QR code, including pages already sent, and Send QR code has nothing to send until a new one is uploaded. To switch to a new QR code, choose a new picture and save instead.</p>
+          <p class="m-0 text-sm text-muted">Payments already recorded stay as they are. Who removed it, and when, is kept on record.</p>
+        </div>
+        <footer class="a-dialog-foot">
+          <button type="button" data-close class="btn-ghost">Keep it</button>
+          <button type="submit" class="btn-book bg-[#b42318] hover:bg-[#8f1d14]">Remove QR code</button>
+        </footer>
+      </form>
+    </dialog>
+  )}
 </AdminLayout>
+
+<script>
+  import { openDialogs } from '../../../lib/admin-client';
+  import { readUpiText } from '../../../lib/upi';
+
+  openDialogs();
+
+  // Office QR code: the picture is read here before it is sent, so the admin
+  // sees which account it pays, the UPI ID fills itself in, and the upload
+  // is a clean PNG or JPG (no photo location data, no oversized files).
+  const form = document.querySelector<HTMLFormElement>('[data-upi-form]');
+  if (form) {
+    const fileEl = form.querySelector<HTMLInputElement>('[data-qr-file]')!;
+    const textEl = form.querySelector<HTMLInputElement>('[data-qr-text]')!;
+    const preview = form.querySelector<HTMLImageElement>('[data-qr-preview]')!;
+    const pick = form.querySelector<HTMLElement>('[data-qr-pick]')!;
+    const note = form.querySelector<HTMLElement>('[data-qr-read]')!;
+    const idEl = form.querySelector<HTMLInputElement>('[data-qr-id]')!;
+    const payeeEl = form.querySelector<HTMLInputElement>('[data-qr-payee]')!;
+    const say = (text: string, tone: 'ok' | 'warn' | 'bad' | '') => {
+      note.textContent = text;
+      note.dataset.tone = tone;
+    };
+
+    const draw = (img: HTMLImageElement, maxSide: number) => {
+      const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const g = c.getContext('2d', { willReadFrequently: true })!;
+      g.fillStyle = '#ffffff'; // see-through parts become white, as on paper
+      g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(img, 0, 0, c.width, c.height);
+      return c;
+    };
+    const toBlob = (c: HTMLCanvasElement, type: string, quality?: number) =>
+      new Promise<Blob>((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error('no image'))), type, quality));
+
+    /** The QR code's text, trying a few sizes because the reader likes a medium-sized code. */
+    const read = async (img: HTMLImageElement) => {
+      const { default: jsQR } = await import('jsqr');
+      for (const side of [1000, 600, 1600]) {
+        const c = draw(img, side);
+        const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+        const found = jsQR(d.data, c.width, c.height);
+        if (found?.data) return found.data;
+      }
+      return '';
+    };
+
+    fileEl.addEventListener('change', async () => {
+      const picked = fileEl.files?.[0];
+      textEl.value = '';
+      if (!picked) return;
+      say('Reading the QR code…', '');
+      const url = URL.createObjectURL(picked);
+      try {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const text = await read(img).catch(() => '');
+        const c = draw(img, 1400);
+        let blob = await toBlob(c, 'image/png');
+        if (blob.size > 1_000_000) blob = await toBlob(c, 'image/jpeg', 0.92);
+        const file = new File([blob], blob.type === 'image/png' ? 'upi-qr.png' : 'upi-qr.jpg', { type: blob.type });
+        try {
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          fileEl.files = dt.files;
+        } catch {
+          /* An older browser sends the original picture; the server still checks it. */
+        }
+        preview.src = URL.createObjectURL(file);
+        preview.hidden = false;
+        pick.textContent = 'Choose a different picture';
+        textEl.value = text;
+        const upi = text ? readUpiText(text) : null;
+        if (upi) {
+          idEl.value = upi.id;
+          if (upi.payee && !payeeEl.value.trim()) payeeEl.value = upi.payee;
+          say(`This QR code pays ${upi.payee ? `${upi.payee}, ` : ''}${upi.id}. Check that is the office account, then save.`, 'ok');
+        } else if (text) {
+          say('This QR code is not a UPI payment code. Choose the QR code from the bank or UPI app.', 'bad');
+        } else {
+          say('No QR code could be read in this picture. A screenshot of the QR code from the UPI app works best. You can still save it, but scan it with your phone first.', 'warn');
+        }
+      } catch {
+        say('This picture could not be opened here. Save it as a PNG or JPG (a screenshot works) and choose it again.', 'bad');
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    });
+  }
+</script>
+
+<style>
+  .a-drop {
+    display: flex; align-items: center; gap: 1rem; min-height: 4.5rem; padding: 0.9rem 1rem;
+    border: 2px dashed var(--color-line); border-radius: 16px; background: #fafbfc; cursor: pointer;
+  }
+  .a-drop:hover { border-color: var(--color-ink); }
+  .a-drop:has(input:focus-visible) { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  [data-qr-read][data-tone='ok'] { color: #3f6200; }
+  [data-qr-read][data-tone='warn'] { color: #8a5300; }
+  [data-qr-read][data-tone='bad'] { color: #b42318; }
+</style>

@@ -1,17 +1,20 @@
 ---
 /**
- * Every booking, newest first, with search and a status filter. The status
- * menu on each row moves a booking along (new, contacted, confirmed ...).
- * Opening this page is logged, because it shows customer names and numbers.
+ * Every booking, newest first, 50 to a page, with search and a status
+ * filter. The status menu on each row moves a booking along (new,
+ * contacted, confirmed ...). Opening this page is logged, because it shows
+ * customer names and numbers.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Pager from '../../../components/admin/Pager.astro';
 import { audit } from '../../../server/admin';
 import { REF_RE } from '../../../server/bookings';
 import { STATUS_LABEL, TONE, inr, longDate, waText } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { BOOKING_STATUSES, type BookingStatus } from '../../../server/db/schema';
+import { cursorField, listHref, pageFrom, pageQuery, pageResult, type SortKey } from '../../../server/paging';
 import { ipHash } from '../../../server/security';
-import { and, count, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
+import { and, count, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 
 export const prerender = false;
 
@@ -43,16 +46,27 @@ if (q) {
   );
 }
 
+const key: SortKey = { cols: [sql`${b.createdAt}`, sql`${b.id}`], types: ['timestamptz', 'uuid'], order: 'desc' };
+const page = pageFrom(Astro.url, key);
+const pq = pageQuery(key, page);
 const db = getDb();
-const [rows, counts, [created]] = await Promise.all([
-  db.select().from(b).where(and(search, status ? eq(b.status, status) : undefined)).orderBy(desc(b.createdAt)).limit(200),
+const [fetched, counts, [created]] = await Promise.all([
+  db
+    .select({ row: b, cursor: cursorField(key) })
+    .from(b)
+    .where(and(search, status ? eq(b.status, status) : undefined, pq.where))
+    .orderBy(...pq.orderBy)
+    .limit(pq.limit),
   db.select({ status: b.status, n: count() }).from(b).where(search).groupBy(b.status),
   REF_RE.test(createdRef) ? db.select().from(b).where(eq(b.ref, createdRef)) : Promise.resolve([]),
 ]);
+const list = pageResult(fetched, page, listHref('/admin/bookings/', { q, status, pick }));
+const rows = list.rows.map((r) => r.row);
 await audit({ actorId: user.id, action: 'view_bookings', entity: 'bookings', detail: { count: rows.length, q: q || undefined, status: status ?? undefined }, ipHash: ipHash(Astro.request) });
 
 const countOf = new Map(counts.map((c) => [c.status, c.n]));
 const total = counts.reduce((s, c) => s + c.n, 0);
+const matching = status ? (countOf.get(status) ?? 0) : total;
 const filterHref = (s: BookingStatus | null) => {
   const p = new URLSearchParams();
   if (q) p.set('q', q);
@@ -113,7 +127,7 @@ const confirmText = (x: typeof b.$inferSelect) =>
 
     {rows.length === 0 ? (
       <div class="a-card p-8 text-center text-body">
-        {q || status ? 'No bookings match that.' : 'No bookings yet. They appear here the moment a customer presses Confirm on WhatsApp, or when you add one by hand.'}
+        {page.cursor ? 'Nothing more on this page.' : q || status ? 'No bookings match that.' : 'No bookings yet. They appear here the moment a customer presses Confirm on WhatsApp, or when you add one by hand.'}
       </div>
     ) : (
       <div class="a-card overflow-x-auto">
@@ -167,6 +181,8 @@ const confirmText = (x: typeof b.$inferSelect) =>
         </table>
       </div>
     )}
+
+    <Pager prev={list.newer} next={list.older} start={list.start} summary={`${matching.toLocaleString('en-IN')} ${matching === 1 ? 'booking' : 'bookings'}${q ? ' match' : ''}`} />
   </div>
 </AdminLayout>
 

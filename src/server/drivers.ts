@@ -10,6 +10,7 @@ import { audit } from './admin';
 import { normalizePhone } from './bookings';
 import { addDays, inr, isDay, todayIST } from './dashboard';
 import { getDb, schema } from './db';
+import { PAGE_SIZE } from './paging';
 import { phoneLabel } from '../lib/itinerary-text';
 import { vehicleByKey } from '../data/vehicles';
 
@@ -106,11 +107,12 @@ export async function updateDriver(id: string, row: Partial<Driver>, ctx: Ctx): 
  */
 export async function removeDriver(id: string, ctx: Ctx): Promise<'deleted' | 'switched_off'> {
   const db = getDb();
-  const [[used], [paid]] = await Promise.all([
-    db.select({ n: sql<number>`count(*)::int` }).from(schema.bookings).where(eq(schema.bookings.driverId, id)),
-    db.select({ n: sql<number>`count(*)::int` }).from(schema.driverPayouts).where(eq(schema.driverPayouts.driverId, id)),
+  // One row is enough to know; no need to count them all.
+  const [used, paid] = await Promise.all([
+    db.select({ id: schema.bookings.id }).from(schema.bookings).where(eq(schema.bookings.driverId, id)).limit(1),
+    db.select({ id: schema.driverPayouts.id }).from(schema.driverPayouts).where(eq(schema.driverPayouts.driverId, id)).limit(1),
   ]);
-  const result = (used?.n ?? 0) + (paid?.n ?? 0) > 0 ? 'switched_off' : 'deleted';
+  const result = used.length + paid.length > 0 ? 'switched_off' : 'deleted';
   if (result === 'deleted') await db.delete(schema.drivers).where(eq(schema.drivers.id, id));
   else await db.update(schema.drivers).set({ active: false }).where(eq(schema.drivers.id, id));
   await audit({ actorId: ctx.actorId, action: `driver_${result}`, entity: 'driver', entityId: id, ipHash: ctx.ipHash });
@@ -186,39 +188,44 @@ export type Account = {
 
 const blank = (): Account => ({ trips: 0, earned: 0, unpriced: 0, paid: 0, balance: 0, upcoming: 0, upcomingPay: 0, monthTrips: 0, monthEarned: 0 });
 
+/**
+ * Every driver's account (or only those in `ids`), added up in the database:
+ * one row per driver comes back, however many trips they have driven.
+ */
 export async function accounts(ids?: string[]): Promise<Map<string, Account>> {
   const b = schema.bookings;
   const p = schema.driverPayouts;
   const db = getDb();
   const monthStart = `${todayIST().slice(0, 8)}01`;
+  const none = ['00000000-0000-0000-0000-000000000000'];
+  const done = sql`${b.status} = 'completed'`;
+  const ahead = sql`${b.status} in ('confirmed', 'driver_assigned')`;
+  const thisMonth = sql`${done} and ${b.pickupDate} >= ${monthStart}`;
+  const int = (x: ReturnType<typeof sql>) => sql<number>`(${x})::int`;
   const [trips, payouts] = await Promise.all([
     db
-      .select({ driverId: b.driverId, status: b.status, pay: b.driverPay, day: b.pickupDate })
+      .select({
+        driverId: b.driverId,
+        trips: int(sql`count(*) filter (where ${done})`),
+        earned: int(sql`coalesce(sum(${b.driverPay}) filter (where ${done}), 0)`),
+        unpriced: int(sql`count(*) filter (where ${done} and ${b.driverPay} is null)`),
+        upcoming: int(sql`count(*) filter (where ${ahead})`),
+        upcomingPay: int(sql`coalesce(sum(${b.driverPay}) filter (where ${ahead}), 0)`),
+        monthTrips: int(sql`count(*) filter (where ${thisMonth})`),
+        monthEarned: int(sql`coalesce(sum(${b.driverPay}) filter (where ${thisMonth}), 0)`),
+      })
       .from(b)
-      .where(and(ids ? inArray(b.driverId, ids.length ? ids : ['00000000-0000-0000-0000-000000000000']) : sql`${b.driverId} is not null`, inArray(b.status, ['confirmed', 'driver_assigned', 'completed']))),
+      .where(and(ids ? inArray(b.driverId, ids.length ? ids : none) : sql`${b.driverId} is not null`, inArray(b.status, ['confirmed', 'driver_assigned', 'completed'])))
+      .groupBy(b.driverId),
     db
       .select({ driverId: p.driverId, sum: sql<string>`coalesce(sum(${p.amount}), 0)` })
       .from(p)
-      .where(ids ? inArray(p.driverId, ids.length ? ids : ['00000000-0000-0000-0000-000000000000']) : undefined)
+      .where(ids ? inArray(p.driverId, ids.length ? ids : none) : undefined)
       .groupBy(p.driverId),
   ]);
   const map = new Map<string, Account>();
   const get = (id: string) => map.get(id) ?? (map.set(id, blank()), map.get(id)!);
-  for (const t of trips) {
-    const a = get(t.driverId!);
-    if (t.status === 'completed') {
-      a.trips++;
-      a.earned += t.pay ?? 0;
-      if (t.pay === null) a.unpriced++;
-      if (t.day >= monthStart) {
-        a.monthTrips++;
-        a.monthEarned += t.pay ?? 0;
-      }
-    } else {
-      a.upcoming++;
-      a.upcomingPay += t.pay ?? 0;
-    }
-  }
+  for (const { driverId, ...t } of trips) Object.assign(get(driverId!), t);
   for (const r of payouts) get(r.driverId).paid = Number(r.sum);
   for (const a of map.values()) a.balance = a.earned - a.paid;
   return map;
@@ -226,40 +233,69 @@ export async function accounts(ids?: string[]): Promise<Map<string, Account>> {
 
 export const accountOf = async (id: string) => (await accounts([id])).get(id) ?? blank();
 
-/** The statement: earnings and payouts in date order with the running balance, newest first. */
-export async function statement(driverId: string) {
+export type StatementLine = {
+  day: string;
+  kind: 'trip' | 'payout' | 'reversal';
+  text: string;
+  sub: string;
+  amount: number;
+  ref?: string;
+  id?: string;
+  reversed?: boolean;
+  /** Owed to the driver after this line. */
+  balance: number;
+};
+
+/**
+ * The statement: earnings and payouts with the running balance, newest
+ * first, one page at a time. The database works out the balance over the
+ * whole history and sends back only the page asked for. On the same day,
+ * trips come before payouts.
+ */
+export async function statement(driverId: string, page = 1, size = PAGE_SIZE): Promise<{ lines: StatementLine[]; total: number }> {
   const b = schema.bookings;
   const p = schema.driverPayouts;
-  const db = getDb();
-  const [trips, payouts] = await Promise.all([
-    db
-      .select({ ref: b.ref, trip: b.tripName, day: b.pickupDate, pay: b.driverPay, fare: b.fareTotal })
-      .from(b)
-      .where(and(eq(b.driverId, driverId), eq(b.status, 'completed'))),
-    db
-      .select({ row: p, by: schema.user.name })
-      .from(p)
-      .leftJoin(schema.user, eq(p.createdBy, schema.user.id))
-      .where(eq(p.driverId, driverId)),
-  ]);
-  const reversed = new Set(payouts.filter((x) => x.row.kind === 'reversal').map((x) => x.row.reversesPayoutId));
-  type Line = { day: string; at: number; kind: 'trip' | 'payout' | 'reversal'; text: string; sub: string; amount: number; ref?: string; id?: string; reversed?: boolean; balance?: number };
-  const lines: Line[] = [
-    ...trips.map((t) => ({ day: t.day, at: 0, kind: 'trip' as const, text: t.trip.split(' · ')[0]!.replace(' (IXB)', ''), sub: t.pay === null ? `${t.ref} · pay not set` : `${t.ref} · fare ${inr(t.fare)}`, amount: t.pay ?? 0, ref: t.ref })),
-    ...payouts.map((x) => ({
-      day: x.row.paidOn,
-      at: x.row.createdAt.getTime(),
-      kind: x.row.kind,
-      text: x.row.kind === 'reversal' ? `Payout reversed: ${x.row.note ?? ''}` : `Paid by ${x.row.method === 'bank' ? 'bank transfer' : x.row.method === 'upi' ? 'UPI' : 'cash'}`,
-      sub: [x.row.reference && `ref ${x.row.reference}`, x.row.kind === 'payout' && x.row.note, x.by && `recorded by ${x.by}`].filter(Boolean).join(' · '),
-      amount: -x.row.amount,
-      id: x.row.id,
-      reversed: reversed.has(x.row.id),
-    })),
-  ].sort((a, z) => a.day.localeCompare(z.day) || a.at - z.at);
-  let running = 0;
-  for (const l of lines) l.balance = running += l.amount;
-  return lines.reverse();
+  const u = schema.user;
+  type Row = {
+    day: string; kind: StatementLine['kind']; id: string; ref: string | null; trip: string | null; fare: number | null; pay: number | null;
+    method: string | null; reference: string | null; note: string | null; by: string | null; amount: number; reversed: boolean; balance: number; total: number;
+  };
+  const res = await getDb().execute<Row>(sql`
+    with lines as (
+      select ${b.pickupDate}::text as day, 0 as k, null::timestamptz as at, ${b.id}::text as id, 'trip'::text as kind,
+             ${b.ref} as ref, ${b.tripName} as trip, ${b.fareTotal} as fare, ${b.driverPay} as pay,
+             null::text as method, null::text as reference, null::text as note, null::text as by,
+             coalesce(${b.driverPay}, 0) as amount, false as reversed
+      from ${b}
+      where ${b.driverId} = ${driverId} and ${b.status} = 'completed'
+      union all
+      select ${p.paidOn}::text, 1, ${p.createdAt}, ${p.id}::text, ${p.kind},
+             null, null, null, null, ${p.method}, ${p.reference}, ${p.note}, ${u.name},
+             -${p.amount}, exists (select 1 from ${p} r where r.driver_id = ${p.driverId} and r.reverses_payout_id = ${p.id})
+      from ${p} left join ${u} on ${u.id} = ${p.createdBy}
+      where ${p.driverId} = ${driverId}
+    )
+    select day, kind, id, ref, trip, fare, pay, method, reference, note, by, amount, reversed,
+           (sum(amount) over (order by day, k, at, id rows unbounded preceding))::int as balance,
+           (count(*) over ())::int as total
+    from lines
+    order by day desc, k desc, at desc, id desc
+    limit ${size} offset ${(page - 1) * size}`);
+  const lines = res.rows.map((r): StatementLine =>
+    r.kind === 'trip'
+      ? { day: r.day, kind: 'trip', text: r.trip!.split(' · ')[0]!.replace(' (IXB)', ''), sub: r.pay === null ? `${r.ref} · pay not set` : `${r.ref} · fare ${inr(r.fare ?? 0)}`, amount: r.amount, ref: r.ref!, balance: r.balance }
+      : {
+          day: r.day,
+          kind: r.kind,
+          text: r.kind === 'reversal' ? `Payout reversed: ${r.note ?? ''}` : `Paid by ${r.method === 'bank' ? 'bank transfer' : r.method === 'upi' ? 'UPI' : 'cash'}`,
+          sub: [r.reference && `ref ${r.reference}`, r.kind === 'payout' && r.note, r.by && `recorded by ${r.by}`].filter(Boolean).join(' · '),
+          amount: r.amount,
+          id: r.id,
+          reversed: r.reversed,
+          balance: r.balance,
+        },
+  );
+  return { lines, total: res.rows[0]?.total ?? 0 };
 }
 
 /** Trips assigned to the driver and not completed yet, soonest first. */
@@ -295,11 +331,15 @@ export async function recordPayout(driverId: string, f: PayoutForm, ctx: Ctx): P
 /** Admin only. Undoes a payout entered by mistake; both rows stay. */
 export async function reversePayout(driverId: string, payoutId: string, reason: string, ctx: Ctx): Promise<string | null> {
   if (!reason.trim() || reason.length > 300) return 'Say why, in a few words. It stays on the record.';
+  if (!/^[0-9a-f-]{36}$/i.test(payoutId)) return 'That payout cannot be reversed.';
   const db = getDb();
-  const rows = await db.select().from(schema.driverPayouts).where(eq(schema.driverPayouts.driverId, driverId));
-  const target = rows.find((r) => r.id === payoutId);
+  const p = schema.driverPayouts;
+  const [[target], [already]] = await Promise.all([
+    db.select().from(p).where(and(eq(p.id, payoutId), eq(p.driverId, driverId))),
+    db.select({ id: p.id }).from(p).where(and(eq(p.driverId, driverId), eq(p.reversesPayoutId, payoutId))).limit(1),
+  ]);
   if (!target || target.kind !== 'payout') return 'That payout cannot be reversed.';
-  if (rows.some((r) => r.reversesPayoutId === payoutId)) return 'That payout is already reversed.';
+  if (already) return 'That payout is already reversed.';
   await db.insert(schema.driverPayouts).values({ driverId, kind: 'reversal', amount: -target.amount, method: target.method, paidOn: todayIST(), note: reason.trim(), reversesPayoutId: payoutId, createdBy: ctx.actorId });
   await audit({ actorId: ctx.actorId, action: 'driver_payout_reversed', entity: 'driver', entityId: driverId, detail: { payoutId }, ipHash: ctx.ipHash });
   return null;

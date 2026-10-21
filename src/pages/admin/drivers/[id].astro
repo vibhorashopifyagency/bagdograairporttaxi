@@ -7,6 +7,7 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import DriverFields from '../../../components/admin/DriverFields.astro';
+import Pager from '../../../components/admin/Pager.astro';
 import { isAdmin } from '../../../server/admin';
 import { STATUS_LABEL, TONE, addDays, inr, todayIST, waText } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
@@ -26,6 +27,7 @@ import {
   type DriverForm,
   type PayoutForm,
 } from '../../../server/drivers';
+import { PAGE_SIZE, pageNumber } from '../../../server/paging';
 import { canRecordPayments } from '../../../server/payments';
 import { ipHash } from '../../../server/security';
 import { phoneLabel } from '../../../lib/itinerary-text';
@@ -94,7 +96,11 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const [acc, lines, upcoming] = await Promise.all([accountOf(driver.id), statement(driver.id), upcomingTrips(driver.id)]);
+const page = pageNumber(Astro.url);
+const [acc, st, upcoming] = await Promise.all([accountOf(driver.id), statement(driver.id, page), upcomingTrips(driver.id)]);
+const lines = st.lines;
+const pages = Math.max(1, Math.ceil(st.total / PAGE_SIZE));
+const pageHref = (n: number) => `${here}${n > 1 ? `?page=${n}` : ''}`;
 if (!payout.amount && acc.balance > 0) payout.amount = String(acc.balance);
 
 const done = Astro.url.searchParams.get('done') ?? '';
@@ -165,7 +171,11 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
           <span class="text-sm text-muted">Trips count when marked completed</span>
         </div>
         {lines.length === 0 ? (
-          <p class="m-0 px-5 pb-5 text-body">Nothing yet. Each completed trip adds what it earned; each payout takes it off.</p>
+          page > 1 ? (
+            <p class="m-0 px-5 pb-5 text-body">Nothing on this page. <a href={here}>Back to the latest entries</a>.</p>
+          ) : (
+            <p class="m-0 px-5 pb-5 text-body">Nothing yet. Each completed trip adds what it earned; each payout takes it off.</p>
+          )
         ) : (
           <ul class="m-0 list-none p-0">
             {lines.map((l) => (
@@ -177,7 +187,7 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
                 </span>
                 <span class="flex shrink-0 flex-col items-end">
                   <span class:list={['font-bold', l.amount > 0 ? 'text-[#3f6200]' : 'text-ink', l.reversed && 'text-muted line-through']}>{l.amount >= 0 ? `+${inr(l.amount)}` : `−${inr(-l.amount)}`}</span>
-                  <span class="text-[13px] text-muted">owed {inr(l.balance ?? 0)}</span>
+                  <span class="text-[13px] text-muted">owed {inr(l.balance)}</span>
                 </span>
                 {admin && l.kind === 'payout' && !l.reversed && (
                   <button type="button" data-open="dlg-reverse" data-payout={l.id} data-label={`payout of ${inr(-l.amount)}`} class="min-h-9 shrink-0 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-body hover:border-ink">Reverse</button>
@@ -186,6 +196,12 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
             ))}
           </ul>
         )}
+        <Pager
+          class="border-t border-[#f0f1f3] px-5 py-4"
+          prev={page > 1 && lines.length ? pageHref(page - 1) : null}
+          next={page < pages ? pageHref(page + 1) : null}
+          summary={`Page ${page} of ${pages}`}
+        />
       </section>
 
       <div class="flex min-w-0 flex-col gap-5 lg:gap-6">

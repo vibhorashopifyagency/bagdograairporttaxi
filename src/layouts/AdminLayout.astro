@@ -27,7 +27,6 @@ const initials = (user?.name ?? '')
   .slice(0, 2)
   .map((w) => w[0]!.toUpperCase())
   .join('');
-const [taglineA, taglineB] = BUSINESS.tagline.split(', ');
 
 /** Stroke icons on a 24px grid, the same set as the mock. */
 const ICON = {
@@ -103,25 +102,25 @@ const tabs: Item[] = [
     {shell && user ? (
       <div class="lg:flex">
         {/* Laptop: the dark sidebar */}
-        <nav aria-label="Main" class="hidden w-[264px] shrink-0 flex-col gap-7 overflow-y-auto bg-ink px-4 py-6 text-[#c9ced8] lg:sticky lg:top-0 lg:flex lg:h-screen">
-          <a href="/admin/" class="flex items-center gap-3 px-2 no-underline">
+        <nav aria-label="Main" class="hidden w-[264px] shrink-0 flex-col gap-5 bg-ink px-4 py-5 text-[#c9ced8] lg:sticky lg:top-0 lg:flex lg:h-screen">
+          <a href="/admin/" class="flex shrink-0 items-center gap-3 px-2 no-underline">
             <img src="/logo-dark.png" alt="" width="52" height="52" class="h-[52px] w-[52px]" />
             <span class="flex flex-col">
               <span class="font-display text-[17px] leading-tight font-bold text-white">Bagdogra Airport Taxi</span>
               <span class="text-xs text-[#a3aab8]">{BUSINESS.legalName}</span>
             </span>
           </a>
-          <div class="flex flex-col gap-1">
+          <div class="-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-1">
             {groups.map((g, i) => (
               <>
-                {i > 0 && <div class="mx-2 my-3 h-px bg-ink-700" />}
+                {i > 0 && <div class="mx-2 my-2 h-px bg-ink-700" />}
                 {g.label && <span class="px-3 pb-1 text-xs tracking-[0.08em] text-[#a3aab8] uppercase">{g.label}</span>}
                 {g.items.map((n) =>
                   n.href ? (
                     <a
                       href={n.href}
                       class:list={[
-                        'flex items-center gap-3 rounded-xl px-3 py-[11px] no-underline transition-colors',
+                        'flex items-center gap-3 rounded-xl px-3 py-2 no-underline transition-colors',
                         current(n.href) ? 'bg-lime font-semibold text-ink' : 'font-medium text-[#e3e6ec] hover:bg-white/8 hover:text-white',
                       ]}
                       aria-current={current(n.href) ? 'page' : undefined}
@@ -131,7 +130,7 @@ const tabs: Item[] = [
                       {n.badge && <span class="rounded-full bg-amber px-2 py-px text-xs font-bold text-ink">{n.badge}</span>}
                     </a>
                   ) : (
-                    <span class="flex items-center gap-3 rounded-xl px-3 py-[11px] font-medium text-white/40" aria-disabled="true">
+                    <span class="flex items-center gap-3 rounded-xl px-3 py-2 font-medium text-white/40" aria-disabled="true">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON[n.icon]} />
                       <span class="flex-1">{n.label}</span>
                       <span class="text-[11px] font-semibold tracking-wide text-[#a3aab8] uppercase">Soon</span>
@@ -141,20 +140,17 @@ const tabs: Item[] = [
               </>
             ))}
           </div>
-          <div class="mt-auto flex flex-col gap-4 px-2">
-            <p class="m-0 font-display text-lg leading-snug text-white">{taglineA},<br />{taglineB}.</p>
-            <div class="flex items-center gap-2.5 border-t border-ink-700 pt-4">
-              <a href="/admin/account/" class="flex min-w-0 flex-1 items-center gap-2.5 no-underline">
-                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lime font-bold text-ink">{initials}</span>
-                <span class="flex min-w-0 flex-col">
-                  <span class="truncate text-sm font-semibold text-white">{user.name}</span>
-                  <span class="text-xs text-[#a3aab8]">{isAdmin ? 'Admin' : 'Staff'}</span>
-                </span>
-              </a>
-              <button type="button" data-sign-out aria-label="Sign out" title="Sign out" class="grid h-11 w-11 place-items-center rounded-xl text-[#c9ced8] hover:bg-white/8 hover:text-white">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON.signOut} />
-              </button>
-            </div>
+          <div class="mx-2 flex shrink-0 items-center gap-2.5 border-t border-ink-700 pt-3">
+            <a href="/admin/account/" class="flex min-w-0 flex-1 items-center gap-2.5 no-underline">
+              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lime font-bold text-ink">{initials}</span>
+              <span class="flex min-w-0 flex-col">
+                <span class="truncate text-sm font-semibold text-white">{user.name}</span>
+                <span class="text-xs text-[#a3aab8]">{isAdmin ? 'Admin' : 'Staff'}</span>
+              </span>
+            </a>
+            <button type="button" data-sign-out aria-label="Sign out" title="Sign out" class="grid h-11 w-11 place-items-center rounded-xl text-[#c9ced8] hover:bg-white/8 hover:text-white">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON.signOut} />
+            </button>
           </div>
         </nav>
 

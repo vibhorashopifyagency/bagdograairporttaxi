@@ -37,6 +37,9 @@ function mac(bookingId: string): string {
   return out;
 }
 
+/** True when a token has the right shape; checked before anything reaches the database. */
+export const looksLikeTripToken = (token: string) => TOKEN_RE.test(token);
+
 /** "5RJ8VC-h3k9x2m4pq" for booking BAT-5RJ8VC. */
 export const tripToken = (b: { id: string; ref: string }) => `${b.ref.slice(4)}-${mac(b.id)}`;
 export const tripPath = (b: { id: string; ref: string }) => `/trip/${tripToken(b)}/`;
