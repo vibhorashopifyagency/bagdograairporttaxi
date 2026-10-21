@@ -55,9 +55,15 @@ chart, the booking form, the JSON-LD offers and llms.txt together.
 - Answer-first opening paragraph on every route, package and guide page, so
   answer engines can quote it. The homepage tells the trip as a six-chapter
   story (`src/components/JourneyStory.astro`) with the policies woven in.
-- `robots.txt` (generated) welcomes search and AI crawlers by name.
+- `robots.txt` (generated) allows everything, names every current search and
+  AI crawler in its own group (a crawler obeys only the group that names it)
+  and carries a `Content-Signal` line saying search, AI answers and AI
+  training are all welcome.
 - `/llms.txt` (also at `/.well-known/llms.txt`) and `/llms-full.txt`
-  generated from the same data as the pages.
+  generated from the same data as the pages: who the business is, the
+  questions assistants are asked most with the site's numbers, fare tables,
+  then every route, package, destination, guide answer and FAQ with its URL.
+  Google Search does not read llms.txt; ChatGPT, Claude and Perplexity do.
 - `/feed.xml`: RSS of the travel guides, linked from every page's `<head>`,
   plus `article:modified_time` on every page that has a date.
 - Sitemap (`/sitemap-index.xml`) with `lastmod` only where the site records a

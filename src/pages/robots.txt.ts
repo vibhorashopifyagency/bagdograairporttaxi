@@ -5,38 +5,44 @@ import { PRE_LAUNCH, SITE } from '../data/site';
  * robots.txt, generated so it can never drift from the PRE_LAUNCH switch.
  *
  * The old site's robots.txt refused crawlers (the 19 Oct 2026 research could
- * not even fetch the homepage). This one allows everything, and names the
- * search and AI crawlers explicitly so a later wildcard rule can't silently
- * shut them out. Nothing on this site is private: the booking form runs in
- * the browser and there is no admin area to hide.
+ * not even fetch the homepage). This one allows everything. Nothing on the
+ * site is private: the booking form runs in the browser and there is no admin
+ * area. The crawlers that matter for search and for AI answers are named in
+ * their own groups because, per Google's robots.txt rules, a crawler obeys
+ * only the most specific group that names it, so a later `*` rule can never
+ * silently shut one out. Google's AdsBot ignores `*` altogether.
+ *
+ * Content-Signal is the robots.txt extension (contentsignals.org, 2025) that
+ * states how crawled content may be used: in search results, as input to AI
+ * answers, and for training. All three are a yes here, on purpose: an AI
+ * assistant that has read this site quotes its fares and policies correctly.
  */
-const AI_AND_SEARCH_AGENTS = [
-  // Search engines
-  'Googlebot', 'Googlebot-Image', 'Bingbot', 'DuckDuckBot', 'Slurp', 'YandexBot', 'Applebot',
-  // Google Ads landing-page checks ignore `*`, so they are named
-  'AdsBot-Google', 'AdsBot-Google-Mobile',
-  // AI answer engines and assistants
-  'GPTBot', 'OAI-SearchBot', 'ChatGPT-User',
-  'ClaudeBot', 'Claude-User', 'Claude-SearchBot',
-  'PerplexityBot', 'Perplexity-User',
-  'Google-Extended', 'Applebot-Extended', 'Amazonbot', 'Meta-ExternalAgent',
-  'DuckAssistBot', 'cohere-ai', 'MistralAI-User', 'CCBot',
+const GROUPS: [string, string[]][] = [
+  ['Search engines', ['Googlebot', 'Googlebot-Image', 'Googlebot-Video', 'Bingbot', 'DuckDuckBot', 'Slurp', 'YandexBot', 'Baiduspider', 'Applebot', 'SeznamBot', 'Qwantbot']],
+  ['Google Ads landing-page checks (they ignore the * group, so they are named)', ['AdsBot-Google', 'AdsBot-Google-Mobile', 'Mediapartners-Google']],
+  ['Google crawlers that feed Gemini grounding and other Google products', ['Google-Extended', 'GoogleOther', 'Google-CloudVertexBot', 'Google-InspectionTool']],
+  ['OpenAI: ChatGPT search, browsing and training', ['OAI-SearchBot', 'ChatGPT-User', 'GPTBot']],
+  ['Anthropic: Claude search, browsing and training', ['Claude-SearchBot', 'Claude-User', 'ClaudeBot']],
+  ['Perplexity', ['PerplexityBot', 'Perplexity-User']],
+  ['Other assistants and answer engines', ['Applebot-Extended', 'Meta-ExternalAgent', 'Meta-ExternalFetcher', 'Amazonbot', 'DuckAssistBot', 'YouBot', 'cohere-ai', 'MistralAI-User', 'Bytespider', 'PetalBot', 'CCBot']],
 ];
 
 export const GET: APIRoute = () => {
   const body = PRE_LAUNCH
     ? `# ${SITE.name}: pre-launch build. Nothing here should be indexed yet.\nUser-agent: *\nDisallow: /\n`
     : [
-        `# ${SITE.name}: ${SITE.url}`,
-        '# Every page is public. AI assistants and answer engines are welcome.',
-        '# Plain-text summaries for language models: /llms.txt and /llms-full.txt',
+        `# robots.txt for ${SITE.name}: ${SITE.url}`,
+        '# Every page is public and may be crawled, indexed, quoted and used to answer questions.',
+        `# Summaries for language models: ${SITE.url}/llms.txt (index) and ${SITE.url}/llms-full.txt (full text).`,
+        `# Structured data (JSON-LD) is on every page; the travel-guide feed is ${SITE.url}/feed.xml.`,
+        '',
+        '# Content signals (contentsignals.org): search results yes, AI answers yes, AI training yes.',
+        'Content-Signal: search=yes, ai-input=yes, ai-train=yes',
         '',
         'User-agent: *',
         'Allow: /',
         '',
-        ...AI_AND_SEARCH_AGENTS.flatMap((ua) => [`User-agent: ${ua}`]),
-        'Allow: /',
-        '',
+        ...GROUPS.flatMap(([label, agents]) => [`# ${label}`, ...agents.map((ua) => `User-agent: ${ua}`), 'Allow: /', '']),
         `Sitemap: ${SITE.url}/sitemap-index.xml`,
         '',
       ].join('\n');
