@@ -65,6 +65,52 @@ const nav = [
         await fetch('/api/auth/sign-out/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
         location.href = '/admin/login/';
       });
+
+      document.addEventListener('click', (e) => {
+        const target = e.target as Element;
+
+        // Eye button on a password box: show or hide what was typed.
+        const toggle = target.closest<HTMLButtonElement>('[data-pw-toggle]');
+        if (toggle) {
+          const input = toggle.parentElement!.querySelector('input')!;
+          const show = input.type === 'password';
+          input.type = show ? 'text' : 'password';
+          toggle.setAttribute('aria-pressed', String(show));
+          toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+          input.focus();
+          return;
+        }
+
+        // "Download codes": saves recovery or backup codes as a text file.
+        const dl = target.closest<HTMLButtonElement>('[data-download-codes]');
+        if (dl) {
+          const codes: string[] = JSON.parse(dl.dataset.codes || '[]');
+          if (!codes.length) return;
+          const backup = dl.dataset.kind === 'backup';
+          const user = dl.dataset.username || '';
+          const text = [
+            `Bagdogra Airport Taxi admin: ${backup ? 'two-factor backup codes' : 'password recovery codes'}`,
+            `Username: ${user}`,
+            `Saved: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}`,
+            '',
+            backup
+              ? 'Each code works once, in place of the 6-digit code from your authenticator app.'
+              : `Each code works once, at ${location.origin}/admin/recover/, to set a new password.`,
+            '',
+            ...codes,
+            '',
+            'Keep this file safe: in a password manager, or printed. Do not keep it only on the phone or computer you sign in from.',
+            '',
+          ].join('\r\n');
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+          a.download = `bagdogra-admin-${backup ? 'backup' : 'recovery'}-codes-${user}.txt`;
+          document.body.append(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        }
+      });
     </script>
     <style is:global>
       .a-field { display: flex; flex-direction: column; gap: 0.375rem; font-weight: 600; font-size: 0.9rem; color: var(--color-body); }
@@ -86,6 +132,16 @@ const nav = [
         .a-table td { display: block; border: 0; padding: 0.2rem 0; }
         .a-table td[data-label]::before { content: attr(data-label); display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #5c6373; margin-top: 0.4rem; }
       }
+      .a-pw { position: relative; display: flex; }
+      .a-pw input { flex: 1 1 auto; min-width: 0; width: 100%; padding-right: 3.25rem; }
+      .a-pw-toggle {
+        position: absolute; right: 0.25rem; top: 50%; transform: translateY(-50%);
+        width: 2.75rem; height: 2.75rem; display: flex; align-items: center; justify-content: center;
+        border: 0; border-radius: 0.625rem; background: transparent; color: #5c6373;
+      }
+      .a-pw-toggle:hover { color: var(--color-ink); background: var(--color-mist); }
+      .a-pw-toggle [data-eye-off], .a-pw-toggle[aria-pressed='true'] [data-eye] { display: none; }
+      .a-pw-toggle[aria-pressed='true'] [data-eye-off] { display: block; }
       .a-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.05rem; }
     </style>
   </body>

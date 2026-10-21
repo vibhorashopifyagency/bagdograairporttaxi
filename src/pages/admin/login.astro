@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import PasswordField from '../../components/admin/PasswordField.astro';
 
 export const prerender = false;
 
@@ -18,7 +19,7 @@ const next = /^\/admin(\/|$)/.test(nextRaw) ? nextRaw : '/admin/';
 
       <div id="step-password" class="space-y-4">
         <label class="a-field">Username<input name="username" required autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
-        <label class="a-field">Password<input name="password" type="password" required autocomplete="current-password" /></label>
+        <PasswordField name="password" label="Password" autocomplete="current-password" />
       </div>
 
       <div id="step-code" class="space-y-4" hidden>

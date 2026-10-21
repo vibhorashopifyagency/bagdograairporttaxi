@@ -5,6 +5,7 @@
  * Better Auth issues a fresh session cookie for them.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import PasswordField from '../../components/admin/PasswordField.astro';
 import { audit, createRecoveryCodes, unusedRecoveryCodes } from '../../server/admin';
 import { getAuth } from '../../server/auth';
 import { ipHash } from '../../server/security';
@@ -37,9 +38,9 @@ const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id)
     <form id="pw" class="card space-y-4 p-5">
       <h2 class="font-[family-name:var(--font-display)] text-xl font-bold">Change password</h2>
       <p class="a-msg" data-msg hidden></p>
-      <label class="a-field">Current password<input name="current" type="password" required autocomplete="current-password" /></label>
-      <label class="a-field">New password <span class="font-normal text-muted">(at least 10 characters)</span><input name="next" type="password" required minlength="10" autocomplete="new-password" /></label>
-      <label class="a-field">New password again<input name="confirm" type="password" required minlength="10" autocomplete="new-password" /></label>
+      <PasswordField name="current" label="Current password" autocomplete="current-password" />
+      <PasswordField name="next" label="New password" hint="(at least 10 characters)" autocomplete="new-password" minlength={10} />
+      <PasswordField name="confirm" label="New password again" autocomplete="new-password" minlength={10} />
       <button class="btn-book" type="submit">Change password</button>
       <p class="text-xs text-muted">This signs you out on your other devices.</p>
     </form>
@@ -50,14 +51,14 @@ const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id)
       {me.twoFactorEnabled ? (
         <form id="tfa-off" class="space-y-4">
           <p class="a-msg a-msg-ok">On. Signing in asks for a code from your authenticator app.</p>
-          <label class="a-field">Password, to switch it off<input name="password" type="password" required autocomplete="current-password" /></label>
+          <PasswordField name="password" label="Password, to switch it off" autocomplete="current-password" />
           <button class="btn-ghost" type="submit">Switch off</button>
         </form>
       ) : (
         <>
           <p class="text-body">Adds a 6-digit code from an app such as Google Authenticator to every sign-in. {me.role === 'admin' ? 'Strongly recommended for the admin.' : ''}</p>
           <form id="tfa-start" class="space-y-4">
-            <label class="a-field">Your password<input name="password" type="password" required autocomplete="current-password" /></label>
+            <PasswordField name="password" label="Your password" autocomplete="current-password" />
             <button class="btn-book" type="submit">Set up two-factor login</button>
           </form>
           <form id="tfa-verify" class="space-y-4" hidden>
@@ -66,6 +67,7 @@ const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id)
             <p class="break-all font-mono text-sm" id="tfa-secret"></p>
             <p class="text-body">2. Save these backup codes. Each works once if your phone is lost.</p>
             <div class="a-codes" id="tfa-backup"></div>
+            <button type="button" class="btn-ghost" id="tfa-download" data-download-codes data-kind="backup" data-username={me.username}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>Download backup codes</button>
             <label class="a-field">3. Enter the 6-digit code the app shows<input name="code" inputmode="numeric" required autocomplete="one-time-code" /></label>
             <button class="btn-book" type="submit">Turn on</button>
           </form>
@@ -78,14 +80,15 @@ const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id)
       <p class="text-body">These let you set a new password if you forget it. You have <strong>{remaining}</strong> unused {remaining === 1 ? 'code' : 'codes'}.</p>
       {codes.length > 0 && (
         <>
-          <p class="a-msg a-msg-ok">Your new codes. Write them down now and keep them away from this device. The old codes no longer work.</p>
+          <p class="a-msg a-msg-ok">Your new codes. Download or write them down now and keep them away from this device. The old codes no longer work.</p>
           <div class="a-codes max-w-md">{codes.map((c) => <span class="rounded-lg bg-mist px-3 py-2">{c}</span>)}</div>
+          <button type="button" class="btn-ghost" data-download-codes data-kind="recovery" data-username={me.username} data-codes={JSON.stringify(codes)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>Download codes</button>
         </>
       )}
       {codesError && <p class="a-msg a-msg-error" role="alert">{codesError}</p>}
       <form method="post" class="flex flex-wrap items-end gap-3">
         <input type="hidden" name="intent" value="recovery-codes" />
-        <label class="a-field">Your password<input name="password" type="password" required autocomplete="current-password" class="w-64" /></label>
+        <PasswordField name="password" label="Your password" autocomplete="current-password" class="w-64" />
         <button class="btn-ghost" type="submit">Make new recovery codes</button>
       </form>
     </section>
@@ -126,6 +129,7 @@ const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id)
       document.getElementById('tfa-secret')!.textContent = `Key: ${new URL(totpURI).searchParams.get('secret') ?? ''}`;
       const box = document.getElementById('tfa-backup')!;
       box.replaceChildren(...backupCodes.map((c) => Object.assign(document.createElement('span'), { className: 'rounded-lg bg-mist px-3 py-2', textContent: c })));
+      document.getElementById('tfa-download')!.dataset.codes = JSON.stringify(backupCodes);
       start.hidden = true;
       verify!.hidden = false;
       say(tfa, '');

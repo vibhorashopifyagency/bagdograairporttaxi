@@ -5,6 +5,7 @@
  * for that token, so nobody else can claim the admin account first.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import PasswordField from '../../components/admin/PasswordField.astro';
 import { audit, checkNewAccount, countUsers, createAccount, createRecoveryCodes } from '../../server/admin';
 import { env } from '../../server/env';
 import { ipHash } from '../../server/security';
@@ -52,11 +53,14 @@ if (Astro.request.method === 'POST' && setupToken) {
         <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Admin account created</h1>
         <p>Your username is <strong>{createdUsername}</strong>.</p>
         <p class="a-msg a-msg-ok">
-          Write down these recovery codes and keep them somewhere safe, away from this device. Each one works once and lets you set a new password if you forget it. They will not be shown again.
+          Download or write down these recovery codes and keep them somewhere safe, away from this device. Each one works once and lets you set a new password if you forget it. They will not be shown again.
         </p>
         <div class="a-codes">{codes.map((c) => <span class="rounded-lg bg-mist px-3 py-2">{c}</span>)}</div>
         <p class="text-sm text-muted">Then remove SETUP_TOKEN from the Vercel environment variables. This page closes by itself now that an account exists.</p>
-        <a href="/admin/login/" class="btn-book">Go to sign in</a>
+        <div class="flex flex-wrap gap-3">
+          <button type="button" class="btn-ghost" data-download-codes data-kind="recovery" data-username={createdUsername} data-codes={JSON.stringify(codes)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>Download codes</button>
+          <a href="/admin/login/" class="btn-book">Go to sign in</a>
+        </div>
       </section>
     ) : !setupToken ? (
       <section class="card space-y-3 p-6">
@@ -71,8 +75,8 @@ if (Astro.request.method === 'POST' && setupToken) {
         <label class="a-field">Setup code<input name="token" required autocomplete="off" /></label>
         <label class="a-field">Your name<input name="name" required value={form.name} autocomplete="name" /></label>
         <label class="a-field">Username<input name="username" required value={form.username} autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-z0-9_.]{3,30}" /></label>
-        <label class="a-field">Password <span class="font-normal text-muted">(at least 10 characters)</span><input name="password" type="password" required minlength="10" autocomplete="new-password" /></label>
-        <label class="a-field">Password again<input name="confirm" type="password" required minlength="10" autocomplete="new-password" /></label>
+        <PasswordField name="password" label="Password" hint="(at least 10 characters)" autocomplete="new-password" minlength={10} />
+        <PasswordField name="confirm" label="Password again" autocomplete="new-password" minlength={10} />
         <button class="btn-book w-full" type="submit">Create admin account</button>
       </form>
     )}

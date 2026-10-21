@@ -1,6 +1,7 @@
 ---
 /** Set a new password with a one-time recovery code (no email needed). */
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import PasswordField from '../../components/admin/PasswordField.astro';
 import { recoverWithCode } from '../../server/admin';
 import { ipHash } from '../../server/security';
 
@@ -38,8 +39,8 @@ if (Astro.request.method === 'POST') {
         {error && <p class="a-msg a-msg-error" role="alert">{error}</p>}
         <label class="a-field">Username<input name="username" required value={username} autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
         <label class="a-field">Recovery code<input name="code" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-23456" /></label>
-        <label class="a-field">New password <span class="font-normal text-muted">(at least 10 characters)</span><input name="password" type="password" required minlength="10" autocomplete="new-password" /></label>
-        <label class="a-field">New password again<input name="confirm" type="password" required minlength="10" autocomplete="new-password" /></label>
+        <PasswordField name="password" label="New password" hint="(at least 10 characters)" autocomplete="new-password" minlength={10} />
+        <PasswordField name="confirm" label="New password again" autocomplete="new-password" minlength={10} />
         <button class="btn-book w-full" type="submit">Set new password</button>
         <p class="text-center text-sm"><a href="/admin/login/">Back to sign in</a></p>
       </form>

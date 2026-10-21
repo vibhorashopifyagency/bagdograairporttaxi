@@ -5,6 +5,7 @@
  * on or off for each staff member.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import PasswordField from '../../components/admin/PasswordField.astro';
 import { audit, checkNewAccount, createAccount, isAdmin } from '../../server/admin';
 import { getAuth } from '../../server/auth';
 import { getDb, schema } from '../../server/db';
@@ -126,7 +127,7 @@ const people = await db
             <form method="post" class="flex flex-wrap items-end gap-2">
               <input type="hidden" name="intent" value="password" />
               <input type="hidden" name="userId" value={p.id} />
-              <label class="a-field"><span class="text-sm">New password</span><input name="password" type="password" minlength="10" required autocomplete="new-password" class="w-56" /></label>
+              <PasswordField name="password" label="New password" labelClass="text-sm" autocomplete="new-password" minlength={10} class="w-56" />
               <button class="btn-ghost min-h-12 px-4 text-sm" type="submit">Set password</button>
             </form>
             {p.id !== me.id && (
@@ -146,7 +147,7 @@ const people = await db
       <input type="hidden" name="intent" value="create" />
       <label class="a-field">Name<input name="name" required value={draft.name} /></label>
       <label class="a-field">Username<input name="username" required value={draft.username} autocapitalize="none" spellcheck="false" pattern="[a-z0-9_.]{3,30}" /></label>
-      <label class="a-field">Password <span class="font-normal text-muted">(at least 10 characters)</span><input name="password" type="password" minlength="10" required autocomplete="new-password" /></label>
+      <PasswordField name="password" label="Password" hint="(at least 10 characters)" autocomplete="new-password" minlength={10} />
       <label class="a-field">Role
         <select name="role">
           <option value="staff" selected={draft.role === 'staff'}>Staff</option>
