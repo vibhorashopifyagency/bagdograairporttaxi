@@ -18,18 +18,22 @@ interface Props {
   draft: ItineraryData;
   place: string;
   sent: boolean;
+  /** True when a draft or a sent copy already exists. */
+  saved: boolean;
   tripUrl: string;
   previewUrl: string;
   pay: { total: number; paid: number; due: number; last: string };
   upiReady: boolean;
   templates: Template[];
   library: LibraryPhoto[];
+  /** The drivers list (active drivers, and this booking's driver). */
+  drivers: { id: string; name: string; phone: string; car: string; label: string }[];
   autoOpen?: boolean;
 }
-const { booking, draft, place, sent, tripUrl, previewUrl, pay, upiReady, templates, library, autoOpen = false } = Astro.props;
+const { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, drivers, autoOpen = false } = Astro.props;
 const first = firstName(draft.name) || 'the customer';
 const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
-const config = { booking, draft, place, sent, tripUrl, previewUrl, pay, upiReady, templates, library };
+const config = { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, drivers };
 const closeIcon = '<path d="M18 6 6 18M6 6l12 12"/>';
 const waIcon = '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.5 8.5 0 1 1 21 11.5z"/>';
 const photoIcon = '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>';
@@ -83,8 +87,14 @@ const field = 'a-field it-field';
             <label class={`${field} col-span-2`}>Flight or train<input data-k="flight" value={draft.flight} maxlength="60" /></label>
             <label class={field}>Car<input data-k="car" value={draft.car} maxlength="80" /></label>
             <label class={field}>Car number<input data-k="vehicleNumber" value={draft.vehicleNumber} maxlength="20" autocapitalize="characters" /></label>
-            <label class={field}>Driver<input data-k="driver" value={draft.driver} maxlength="60" /></label>
+            <label class={field}>Driver
+              <select data-driver-pick>
+                <option value="">No driver yet</option>
+                {drivers.map((d) => <option value={d.id} selected={draft.driverId === d.id}>{d.name}{d.car ? ` · ${d.car}` : ''}</option>)}
+              </select>
+            </label>
             <label class={field}>Driver’s phone<input data-k="driverPhone" type="tel" inputmode="tel" value={draft.driverPhone ? phoneLabel(draft.driverPhone) : ''} maxlength="24" /></label>
+            <p class="col-span-2 m-0 text-[13px] text-muted lg:col-span-4">Picking a driver here also puts them on the booking; “No driver yet” takes them off. <a href="/admin/drivers/" target="_blank" rel="noopener" class="font-semibold text-ink">Manage drivers</a></p>
           </div>
         </fieldset>
 
@@ -223,18 +233,21 @@ const field = 'a-field it-field';
     name: string; phone: string; title: string; start: string; end: string; time: string; pax: number;
     pickup: string; flight: string; car: string; vehicleNumber: string; driver: string; driverPhone: string;
     days: Day[]; includes: string[]; excludes: string[]; photos: string[]; message: string; showQr: boolean;
+    driverId?: string;
   };
   type Config = {
     booking: { id: string; ref: string };
     draft: Data;
     place: string;
     sent: boolean;
+    saved: boolean;
     tripUrl: string;
     previewUrl: string;
     pay: { total: number; paid: number; due: number; last: string };
     upiReady: boolean;
     templates: Template[];
     library: { key: string; title: string; place: string; alt: string }[];
+    drivers: { id: string; name: string; phone: string; car: string }[];
   };
 
   const root = document.querySelector<HTMLElement>('[data-itin]');
@@ -338,6 +351,19 @@ const field = 'a-field it-field';
       }),
     );
     $('[data-trip-edit]').addEventListener('click', () => $('[data-trip]').classList.toggle('is-editing'));
+
+    /* ---------- Driver: picked from the drivers list ---------- */
+    const pick = $<HTMLSelectElement>('[data-driver-pick]');
+    pick.addEventListener('change', () => {
+      const dr = cfg.drivers.find((x) => x.id === pick.value);
+      d.driverId = pick.value;
+      d.driver = dr?.name ?? '';
+      d.driverPhone = dr?.phone ?? '';
+      if (dr?.car) d.vehicleNumber = dr.car;
+      $<HTMLInputElement>('[data-k=driverPhone]').value = d.driverPhone;
+      $<HTMLInputElement>('[data-k=vehicleNumber]').value = d.vehicleNumber;
+      changed();
+    });
 
     /* ---------- Days ---------- */
     const daysList = $<HTMLOListElement>('[data-days]');
@@ -655,8 +681,15 @@ const field = 'a-field it-field';
       }),
     );
 
-    dialog.addEventListener('close', () => {
-      if (dirty) { clearTimeout(timer); post('save'); }
+    // Closing keeps a draft, even of a popup opened and closed unchanged, so
+    // it can be opened again from the booking or the Itineraries page. The
+    // page then reloads to show it.
+    dialog.addEventListener('close', async () => {
+      clearTimeout(timer);
+      const first = !cfg.saved && !sentOnce;
+      if (dirty || first) {
+        if ((await post('save')) && first) return location.reload();
+      }
       if (sentOnce !== cfg.sent) location.reload();
     });
 

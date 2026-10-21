@@ -1,20 +1,31 @@
 ---
 /**
  * Every itinerary, upcoming trips first: drafts not sent yet, and ones sent
- * (with how many updates). Each opens the booking, where the popup lives.
+ * (with how many updates). Open takes you to the booking with the popup
+ * open; Delete removes the itinerary after a confirmation.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { audit } from '../../../server/admin';
 import { TONE, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { ipHash } from '../../../server/security';
-import { tripPath } from '../../../server/trip';
+import { deleteItinerary, tripPath } from '../../../server/trip';
 import { dateRange } from '../../../lib/itinerary-text';
 import { asc, desc, eq, gte, lt } from 'drizzle-orm';
 
 export const prerender = false;
 
 const user = Astro.locals.user!;
+let deleted = '';
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const bookingId = String(f.get('bookingId') ?? '');
+  if (f.get('intent') === 'delete' && /^[0-9a-f-]{36}$/.test(bookingId)) {
+    await deleteItinerary(bookingId, { actorId: user.id, ipHash: ipHash(Astro.request) });
+    return Astro.redirect(`/admin/itineraries/?${Astro.url.searchParams.get('show') === 'past' ? 'show=past&' : ''}deleted=1`, 303);
+  }
+}
+if (Astro.url.searchParams.get('deleted')) deleted = 'Itinerary deleted. It is noted on the booking’s timeline.';
 const showPast = Astro.url.searchParams.get('show') === 'past';
 const today = todayIST();
 const t = schema.itineraries;
@@ -43,6 +54,8 @@ const origin = Astro.url.origin;
       <a href="/admin/bookings/?pick=itinerary" class="btn-book">Send a new one</a>
     </div>
 
+    {deleted && <p class="a-msg a-msg-ok m-0" role="status">{deleted}</p>}
+
     <nav aria-label="Which trips" class="flex gap-1 self-start rounded-xl border border-line bg-white p-1">
       <a href="/admin/itineraries/" aria-current={showPast ? undefined : 'page'} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'font-medium text-body' : 'bg-ink font-semibold text-white']}>Upcoming</a>
       <a href="/admin/itineraries/?show=past" aria-current={showPast ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showPast ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>Past trips</a>
@@ -68,9 +81,10 @@ const origin = Astro.url.origin;
                 <a href={`/admin/bookings/${r.ref}/?do=itinerary`} class="truncate font-semibold text-ink no-underline hover:underline">{r.draft.name} · {r.draft.title}</a>
                 <span class="text-sm text-body">{dateRange(r.draft.start, r.draft.end)} · {r.draft.days.length} {r.draft.days.length === 1 ? 'day' : 'days'}</span>
                 <span class="text-[13px] text-muted">{r.sentAt ? `Last sent ${atFmt.format(r.sentAt)}${r.by ? ` by ${r.by}` : ''}` : `Saved ${atFmt.format(r.updatedAt)}`}</span>
-                <span class="mt-1 flex flex-wrap gap-3 text-sm font-semibold">
-                  <a href={`/admin/bookings/${r.ref}/?do=itinerary`} class="text-ink">{r.sentAt ? 'Edit and send update' : 'Finish and send'}</a>
-                  <a href={r.sentAt ? new URL(tripPath(r), origin).href : `/admin/bookings/${r.ref}/trip/`} target="_blank" rel="noopener" class="text-ink">{r.sentAt ? 'Customer’s page' : 'Preview'}</a>
+                <span class="mt-2 flex flex-wrap gap-2">
+                  <a href={`/admin/bookings/${r.ref}/?do=itinerary`} class="btn-book min-h-10 px-4 py-1.5 text-sm">Open</a>
+                  <a href={r.sentAt ? new URL(tripPath(r), origin).href : `/admin/bookings/${r.ref}/trip/`} target="_blank" rel="noopener" class="btn-ghost min-h-10 px-4 py-1.5 text-sm">{r.sentAt ? 'Customer’s page' : 'Preview'}</a>
+                  <button type="button" data-open="dlg-delete" data-booking={r.id} data-what={`${r.draft.title} for ${r.draft.name} (${r.ref})`} data-sent={r.sentAt ? '1' : ''} class="btn-ghost min-h-10 px-4 py-1.5 text-sm text-[#b42318] hover:border-[#b42318] hover:text-[#b42318]">Delete</button>
                 </span>
               </div>
             </li>
@@ -79,4 +93,39 @@ const origin = Astro.url.origin;
       </ul>
     )}
   </div>
+
+  <dialog id="dlg-delete" class="a-dialog a-dialog-sm" aria-labelledby="dlg-delete-h">
+    <form method="post" class="a-dialog-body">
+      <input type="hidden" name="intent" value="delete" />
+      <input type="hidden" name="bookingId" value="" data-delete-id />
+      <header class="a-dialog-head">
+        <h2 id="dlg-delete-h" class="m-0 font-display text-xl font-bold">Delete this itinerary?</h2>
+        <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+      </header>
+      <div class="a-dialog-main flex flex-col gap-3 text-body">
+        <p class="m-0"><strong class="text-ink" data-delete-what></strong>: the day-by-day plan, photos and message are removed. This cannot be undone.</p>
+        <p class="m-0" data-delete-sent>It was sent to the customer. Their link keeps working but shows only the booking and payment, so tell them if they are expecting the plan.</p>
+        <p class="m-0 text-sm text-muted">The booking, its payments and its timeline stay.</p>
+      </div>
+      <footer class="a-dialog-foot">
+        <button type="button" data-close class="btn-ghost">Keep it</button>
+        <button type="submit" class="btn-book bg-[#b42318] hover:bg-[#8f1d14]">Delete itinerary</button>
+      </footer>
+    </form>
+  </dialog>
 </AdminLayout>
+
+<script>
+  import { openDialogs } from '../../../lib/admin-client';
+
+  openDialogs();
+  // Carry the chosen itinerary into the confirmation.
+  document.querySelectorAll<HTMLButtonElement>('[data-open=dlg-delete]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const dlg = document.getElementById('dlg-delete')!;
+      dlg.querySelector<HTMLInputElement>('[data-delete-id]')!.value = b.dataset.booking!;
+      dlg.querySelector<HTMLElement>('[data-delete-what]')!.textContent = b.dataset.what!;
+      dlg.querySelector<HTMLElement>('[data-delete-sent]')!.hidden = !b.dataset.sent;
+    }),
+  );
+</script>

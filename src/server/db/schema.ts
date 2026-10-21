@@ -159,6 +159,30 @@ export const customers = pgTable('customers', {
   updatedAt: updatedAt(),
 });
 
+/**
+ * The office's drivers. We pay them for each completed trip: a share of the
+ * agreed fare (`payType` 'percent', `payValue` 25 = 25%) or a fixed amount
+ * ('fixed', `payValue` in rupees). `payValue` is null until the admin sets
+ * it. Drivers never collect money from customers. A driver who has driven
+ * trips is never deleted, only switched off (`active` false), so the
+ * accounts stay complete.
+ */
+export const drivers = pgTable('drivers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  /** Digits only with the country code, like customers.phone. */
+  phone: text('phone'),
+  vehicleNumber: text('vehicle_number'),
+  /** Which kind of car they usually drive: a key from src/data/vehicles.ts, or null. */
+  vehicle: text('vehicle'),
+  payType: text('pay_type').$type<'percent' | 'fixed'>().notNull().default('percent'),
+  payValue: integer('pay_value'),
+  notes: text('notes'),
+  active: boolean('active').notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 export const BOOKING_STATUSES = [
   'new',
   'contacted',
@@ -208,6 +232,10 @@ export const bookings = pgTable(
 
     status: text('status').$type<BookingStatus>().notNull().default('new'),
     handledBy: text('handled_by').references(() => user.id, { onDelete: 'set null' }),
+    /** The driver from the drivers list. The name, phone and car number below are copied from it at assignment, so old trips keep what was true then. */
+    driverId: uuid('driver_id').references(() => drivers.id, { onDelete: 'set null' }),
+    /** What the driver earns for this trip, in rupees. Worked out from their pay when assigned; staff may change it. */
+    driverPay: integer('driver_pay'),
     driverName: text('driver_name'),
     driverPhone: text('driver_phone'),
     vehicleNumber: text('vehicle_number'),
@@ -231,6 +259,7 @@ export const bookings = pgTable(
     index('bookings_customer_idx').on(t.customerId),
     index('bookings_created_idx').on(t.createdAt),
     index('bookings_ip_created_idx').on(t.ipHash, t.createdAt),
+    index('bookings_driver_idx').on(t.driverId, t.pickupDate),
   ],
 );
 
@@ -296,6 +325,8 @@ export type ItineraryData = {
   flight: string;
   car: string;
   vehicleNumber: string;
+  /** The driver picked from the drivers list, or '' for none. Picking one assigns them to the booking. */
+  driverId?: string;
   driver: string;
   driverPhone: string;
   days: ItineraryDay[];
@@ -328,6 +359,32 @@ export const itineraries = pgTable('itineraries', {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/**
+ * Money paid to a driver. Like customer payments, rows are never edited or
+ * deleted: a mistake is undone by a 'reversal' row (negative amount) that
+ * points at the original. A driver's balance is what their completed trips
+ * earned minus the sum of `amount`.
+ */
+export const driverPayouts = pgTable(
+  'driver_payouts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    driverId: uuid('driver_id')
+      .notNull()
+      .references(() => drivers.id, { onDelete: 'restrict' }),
+    kind: text('kind').$type<'payout' | 'reversal'>().notNull(),
+    amount: integer('amount').notNull(),
+    method: text('method').$type<'upi' | 'cash' | 'bank'>().notNull(),
+    paidOn: date('paid_on').notNull(),
+    reference: text('reference'),
+    note: text('note'),
+    reversesPayoutId: uuid('reverses_payout_id'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('driver_payouts_driver_idx').on(t.driverId, t.paidOn)],
+);
 
 /**
  * Who signed in, and who looked at or changed customer data. Required by the

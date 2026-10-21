@@ -155,11 +155,23 @@ A "Send itinerary" button on every booking, and in the quick actions, opens a po
 - [x] On send, create a private itinerary page for that booking: branded, with all the text and images, and easy to save as a PDF. Its link cannot be guessed and it is hidden from search engines. *(/trip/ plus the reference and a 10-letter code signed with the site's secret. Never cached; noindex.)*
 - [x] Open a WhatsApp chat to the customer's number with the message and the link already filled in. The sender taps Send once. WhatsApp shows a preview card with the first photo.
 - [x] On a phone, a "Share with photos" button also sends the actual photos and text through the phone's share sheet into the same chat. *(The share sheet cannot pick the chat by itself, so the sender chooses the customer in WhatsApp.)*
-- [x] If the itinerary is edited after sending, the same link shows the new version, and a "Send update" button tells the customer. *(Edits stay a draft until Send update, so the customer never sees a half-finished change.)*
+- [x] If the itinerary is edited after sending, the same link shows the new version, and a "Send update" button tells the customer.
+- [x] Open an itinerary again later, and delete one. *(Closing the popup keeps a draft; "Open itinerary" on the booking and "Open" on the Itineraries page reopen it. Delete asks first and is noted on the booking's timeline; the customer's link then shows only the booking and payment.)* *(Edits stay a draft until Send update, so the customer never sees a half-finished change.)*
 
 **Records**
 - [x] Log every itinerary sent on the booking's timeline, with who sent it, when, and a copy of what was sent. *(The last version sent is kept in full; earlier versions are counted, not kept.)*
 - [ ] Remove itinerary pages along with the customer's details at 24 months, or earlier if the admin chooses.
+
+## Phase 3d: drivers and what we pay them
+
+Asked for by the owner on 21 October 2026. The office pays its drivers for each trip: a share of the agreed fare or a fixed amount, set per driver. Drivers never collect money from customers; the admin or the team does.
+
+- [x] A Drivers page to add, change and remove drivers: name, phone, car number, usual car, pay and notes. *(/admin/drivers/. A driver with trips or payouts is switched off rather than deleted, so the accounts stay complete, and can be put back.)*
+- [x] Pick the driver from the list on a booking (Edit trip and driver), with "Add a new driver" in the same list. *(Drivers typed on bookings before the list existed were turned into list entries by the migration, with their pay not set.)*
+- [x] Pick or take off the driver in the itinerary popup; it changes the booking too.
+- [x] What each trip earns its driver, worked out from their pay when they are put on the booking and shown on it. Only the admin sets a driver's pay or changes a trip's amount.
+- [x] A running account per driver: each completed trip adds what it earned, each payout (UPI, cash or bank transfer) takes it off, and the balance owed is always shown. Payouts are recorded by the admin, or by staff with "can record payments"; only the admin reverses one, and both entries stay.
+- [ ] Bring the public website in line with "drivers never collect money": the FAQ, the Terms, the booking page summary ("Pay driver after trip") and llms.txt still tell customers to pay the balance to the driver. *(Waiting for the owner to say when and how customers pay the balance.)*
 
 ## Phase 4: move content into the database
 

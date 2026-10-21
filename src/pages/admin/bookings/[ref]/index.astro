@@ -10,7 +10,7 @@ import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import ItineraryDialog from '../../../../components/admin/ItineraryDialog.astro';
 import { vehicleByKey } from '../../../../data/vehicles';
 import { audit, isAdmin } from '../../../../server/admin';
-import { REF_RE, normalizePhone } from '../../../../server/bookings';
+import { REF_RE } from '../../../../server/bookings';
 import { STATUS_LABEL, TONE, addDays, describeEvent, inr, isDay, todayIST, waText } from '../../../../server/dashboard';
 import { getDb, schema } from '../../../../server/db';
 import { BOOKING_STATUSES } from '../../../../server/db/schema';
@@ -27,7 +27,9 @@ import {
   type PaymentForm,
 } from '../../../../server/payments';
 import { ipHash } from '../../../../server/security';
-import { allTemplates, itineraryFromBooking, tripPath, tripPlace, LIBRARY } from '../../../../server/trip';
+import { allTemplates, deleteItinerary, itineraryFromBooking, tripPath, tripPlace, LIBRARY } from '../../../../server/trip';
+import DriverFields from '../../../../components/admin/DriverFields.astro';
+import { addDriver, checkDriver, driverColumns, getDriver, listDrivers, payLabel, pickerList, type DriverForm } from '../../../../server/drivers';
 import { firstName, phoneLabel } from '../../../../lib/itinerary-text';
 import { asc, count, eq, sql } from 'drizzle-orm';
 
@@ -57,13 +59,15 @@ const edit = {
   flight: booking.flight ?? '',
   pax: String(booking.pax),
   dropAddress: booking.dropAddress ?? '',
-  driverName: booking.driverName ?? '',
-  driverPhone: booking.driverPhone ?? '',
+  driverId: booking.driverId ?? '',
   vehicleNumber: booking.vehicleNumber ?? '',
+  driverPay: booking.driverPay === null ? '' : String(booking.driverPay),
   fareTotal: String(booking.fareTotal),
   notes: booking.notes ?? '',
   handledBy: booking.handledBy ?? '',
 };
+/** "Add a new driver" in the edit popup. */
+let newDriver: DriverForm = { name: '', phone: '', vehicleNumber: '', vehicle: booking.vehicle, payType: 'percent', payValue: '', notes: '' };
 
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
@@ -83,6 +87,9 @@ if (Astro.request.method === 'POST') {
       else return Astro.redirect(`${here}?done=${intent === 'payment' ? (res.summary.state === 'full' ? 'paid-full' : 'paid') : 'refund'}`, 303);
     }
     open = intent;
+  } else if (intent === 'itinerary-delete') {
+    await deleteItinerary(booking.id, ctx);
+    return Astro.redirect(`${here}?done=itinerary-deleted`, 303);
   } else if (intent === 'reverse') {
     if (!admin) error = 'Only the admin can reverse a payment.';
     else {
@@ -92,25 +99,35 @@ if (Astro.request.method === 'POST') {
     }
   } else if (intent === 'edit') {
     for (const k of Object.keys(edit) as (keyof typeof edit)[]) edit[k] = str(k);
+    if (edit.driverId === 'new') newDriver = Object.fromEntries(Object.keys(newDriver).map((k) => [k, str(`new_${k}`)])) as DriverForm;
     const pax = Number(edit.pax);
     const fare = Number(edit.fareTotal.replace(/[^\d]/g, ''));
-    const driverPhone = edit.driverPhone ? normalizePhone(edit.driverPhone) : '';
+    const payRaw = edit.driverPay.replace(/[^\d]/g, '');
+    const checkedNew = edit.driverId === 'new' ? checkDriver(newDriver, admin) : null;
+    const picked = edit.driverId && edit.driverId !== 'new' ? await getDriver(edit.driverId) : null;
     if (!isDay(edit.pickupDate) || edit.pickupDate < addDays(today, -400) || edit.pickupDate > addDays(today, 400)) error = 'Check the pickup date.';
     else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(edit.pickupTime)) error = 'Check the pickup time.';
     else if (!Number.isInteger(pax) || pax < 1 || pax > 50) error = 'Travellers must be 1 to 50.';
     else if (!edit.fareTotal || !Number.isInteger(fare) || fare > 10_000_000) error = 'Check the agreed fare.';
-    else if (driverPhone === null) error = 'Check the driver’s phone number.';
-    else if (edit.flight.length > 40 || edit.dropAddress.length > 200 || edit.driverName.length > 60 || edit.vehicleNumber.length > 20 || edit.notes.length > 1000) error = 'One of the fields is too long.';
+    else if (checkedNew && 'error' in checkedNew) error = `New driver: ${checkedNew.error}`;
+    else if (edit.driverId && edit.driverId !== 'new' && !picked) error = 'That driver is no longer on the list. Pick another.';
+    else if (admin && payRaw && Number(payRaw) > fare) error = 'The driver’s pay is more than the fare. Check it.';
+    else if (edit.flight.length > 40 || edit.dropAddress.length > 200 || edit.vehicleNumber.length > 20 || edit.notes.length > 1000) error = 'One of the fields is too long.';
     else {
+      const driver = checkedNew && 'row' in checkedNew ? await addDriver(checkedNew.row, ctx) : picked;
+      const car = edit.vehicleNumber.trim().toUpperCase().replace(/\s+/g, ' ');
+      // The admin's typed amount wins, and empty means "work it out from the driver's pay".
+      // Staff cannot set it: it is worked out, or kept when neither driver nor fare changed.
+      const sameTrip = driver?.id === booking.driverId && fare === booking.fareTotal;
+      const pay = admin ? (payRaw ? Number(payRaw) : undefined) : sameTrip ? booking.driverPay : undefined;
+      const assigned = driverColumns({ ...booking, fareTotal: fare }, driver, { vehicleNumber: car || (driver?.vehicleNumber ?? null), pay });
       const next = {
         pickupDate: edit.pickupDate,
         pickupTime: edit.pickupTime,
         flight: edit.flight || null,
         pax,
         dropAddress: edit.dropAddress || null,
-        driverName: edit.driverName || null,
-        driverPhone: driverPhone || null,
-        vehicleNumber: edit.vehicleNumber.toUpperCase() || null,
+        ...assigned.cols,
         fareTotal: fare,
         notes: edit.notes || null,
         handledBy: edit.handledBy || null,
@@ -118,15 +135,15 @@ if (Astro.request.method === 'POST') {
       const changes: Record<string, [unknown, unknown]> = {};
       for (const [k, v] of Object.entries(next)) {
         const was = booking[k as keyof typeof next];
-        if ((was ?? null) !== v) changes[k] = [was ?? null, v];
+        if ((was ?? null) !== v && k !== 'driverId') changes[k] = [was ?? null, v];
       }
       if (Object.keys(changes).length) {
-        // Naming a driver on a confirmed trip moves it along, as the board expects.
-        const promote = booking.status === 'confirmed' && !booking.driverName && next.driverName;
+        // Giving a confirmed trip a driver moves it along, as the board expects; taking the driver off moves it back.
+        const status = assigned.status;
         await db.transaction(async (tx) => {
-          await tx.update(b).set({ ...next, ...(promote ? { status: 'driver_assigned' as const } : {}) }).where(eq(b.id, booking.id));
+          await tx.update(b).set({ ...next, ...(status ? { status } : {}) }).where(eq(b.id, booking.id));
           await tx.insert(schema.bookingEvents).values({ bookingId: booking.id, actorId: user.id, type: 'edited', data: { changes } });
-          if (promote) await tx.insert(schema.bookingEvents).values({ bookingId: booking.id, actorId: user.id, type: 'status', data: { from: 'confirmed', to: 'driver_assigned' } });
+          if (status) await tx.insert(schema.bookingEvents).values({ bookingId: booking.id, actorId: user.id, type: 'status', data: { from: booking.status, to: status } });
         });
         await audit({ actorId: user.id, action: 'booking_edited', entity: 'booking', entityId: booking.id, detail: { ref: booking.ref, fields: Object.keys(changes) }, ipHash: ctx.ipHash });
       }
@@ -137,7 +154,7 @@ if (Astro.request.method === 'POST') {
 }
 
 const e = schema.bookingEvents;
-const [payments, events, [itinerary], upi, team, templates] = await Promise.all([
+const [payments, events, [itinerary], upi, team, templates, driverRows] = await Promise.all([
   paymentsFor(booking.id),
   db
     .select({ at: e.at, type: e.type, data: e.data, actor: schema.user.name })
@@ -153,7 +170,11 @@ const [payments, events, [itinerary], upi, team, templates] = await Promise.all(
   getUpi(),
   db.select({ id: schema.user.id, name: schema.user.name }).from(schema.user).where(sql`coalesce(${schema.user.banned}, false) = false`).orderBy(asc(schema.user.name)),
   allTemplates(),
+  listDrivers(),
 ]);
+/** The pick list: active drivers, plus this booking's driver if they have been switched off since. */
+const pickable = pickerList(driverRows.filter((d) => d.active || d.id === booking.driverId));
+const currentDriver = driverRows.find((d) => d.id === booking.driverId) ?? null;
 const customerBookings = booking.customerId
   ? ((await db.select({ n: count() }).from(b).where(eq(b.customerId, booking.customerId)))[0]?.n ?? 0)
   : 0;
@@ -169,7 +190,14 @@ const first = firstName(booking.customerName ?? '');
 const removed = !booking.customerPhone;
 const handler = team.find((t) => t.id === booking.handledBy)?.name;
 const tripUrl = new URL(tripPath(booking), Astro.url.origin).href;
-const draft = itinerary?.draft ?? itineraryFromBooking(booking);
+// The booking says who drives; the itinerary always opens with that driver.
+const draft = {
+  ...(itinerary?.draft ?? itineraryFromBooking(booking)),
+  driverId: booking.driverId ?? '',
+  driver: booking.driverName ?? '',
+  driverPhone: booking.driverPhone ?? '',
+  ...(booking.driverId && booking.vehicleNumber ? { vehicleNumber: booking.vehicleNumber } : {}),
+};
 const place = tripPlace(booking);
 
 const dayFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -184,6 +212,7 @@ const doneText: Record<string, string> = {
   refund: 'Refund recorded.',
   reversed: 'Payment reversed. Both entries stay on the record.',
   edited: 'Saved.',
+  'itinerary-deleted': 'Itinerary deleted. The customer’s link now shows only the booking and payment. Send itinerary starts a fresh one.',
 };
 
 const callIcon =
@@ -283,7 +312,12 @@ const facts: [string, string][] = [
               <span class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-ink font-bold text-lime">{booking.driverName[0]!.toUpperCase()}</span>
               <span class="flex min-w-0 flex-1 flex-col">
                 <span class="text-xs text-muted">Driver</span>
-                <span class="font-semibold">{booking.driverName}{booking.vehicleNumber ? ` · ${booking.vehicleNumber}` : ''}</span>
+                {booking.driverId ? (
+                  <a href={`/admin/drivers/${booking.driverId}/`} class="font-semibold text-ink no-underline hover:underline">{booking.driverName}{booking.vehicleNumber ? ` · ${booking.vehicleNumber}` : ''}</a>
+                ) : (
+                  <span class="font-semibold">{booking.driverName}{booking.vehicleNumber ? ` · ${booking.vehicleNumber}` : ''}</span>
+                )}
+                <span class="text-[13px] text-muted">{booking.driverPay === null ? 'Pay for this trip not set' : `Earns ${inr(booking.driverPay)} for this trip${currentDriver ? ` (${payLabel(currentDriver)})` : ''}`}</span>
               </span>
               {booking.driverPhone && (
                 <a href={`tel:+${booking.driverPhone}`} class="a-icon-btn" aria-label={`Call ${booking.driverName}`}>
@@ -292,7 +326,7 @@ const facts: [string, string][] = [
               )}
             </div>
           ) : (
-            <button type="button" data-open="dlg-edit" class="flex min-h-12 items-center gap-2 rounded-2xl border-0 bg-[#fde8e7] px-4 text-left font-semibold text-[#b42318]">
+            <button type="button" data-open="dlg-edit" data-focus="driverId" class="flex min-h-12 items-center gap-2 rounded-2xl border-0 bg-[#fde8e7] px-4 text-left font-semibold text-[#b42318]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 17h14M6 17l1.5-6h9L18 17M8 21v-4M16 21v-4" /></svg>
               No driver assigned yet. Assign one.
             </button>
@@ -324,8 +358,12 @@ const facts: [string, string][] = [
             </span>
           </div>
           <div class="flex flex-wrap gap-2">
+            <button type="button" data-open="dlg-itin" class="btn-book min-h-11 px-4 py-2 text-sm" disabled={removed}>{itinerary ? 'Open itinerary' : 'Start itinerary'}</button>
             <a href={`${here}trip/`} target="_blank" rel="noopener" class="btn-ghost min-h-11 px-4 py-2 text-sm">Preview page</a>
             <button type="button" data-copy={tripUrl} class="btn-ghost min-h-11 px-4 py-2 text-sm">Copy link</button>
+            {itinerary && (
+              <button type="button" data-open="dlg-itin-delete" class="btn-ghost min-h-11 px-4 py-2 text-sm text-[#b42318] hover:border-[#b42318] hover:text-[#b42318]">Delete</button>
+            )}
           </div>
         </section>
 
@@ -444,10 +482,29 @@ const facts: [string, string][] = [
         <label class="a-field">Flight or train<input name="flight" maxlength="40" value={edit.flight} autocapitalize="characters" /></label>
         <label class="a-field">Travellers<input name="pax" type="number" min="1" max="50" required value={edit.pax} /></label>
         <label class="a-field sm:col-span-2">Pickup or drop address<input name="dropAddress" maxlength="200" value={edit.dropAddress} /></label>
-        <label class="a-field">Driver’s name<input name="driverName" maxlength="60" value={edit.driverName} autocomplete="off" /></label>
-        <label class="a-field">Driver’s phone<input name="driverPhone" type="tel" inputmode="tel" value={edit.driverPhone ? phoneLabel(edit.driverPhone.replace(/\D/g, '')) : ''} autocomplete="off" /></label>
-        <label class="a-field">Car number<input name="vehicleNumber" maxlength="20" value={edit.vehicleNumber} placeholder="WB 73 F 5560" autocapitalize="characters" /></label>
-        <label class="a-field">Agreed fare, ₹<input name="fareTotal" inputmode="numeric" required value={edit.fareTotal} /></label>
+        <div class="flex flex-col gap-3 rounded-2xl bg-mist p-4 sm:col-span-2" data-driver-box data-drivers={JSON.stringify(pickable)}>
+          <div class="flex items-baseline justify-between gap-3">
+            <span class="font-display text-lg font-bold">Driver</span>
+            <a href="/admin/drivers/" target="_blank" rel="noopener" class="text-sm font-semibold text-ink">Manage drivers</a>
+          </div>
+          <label class="a-field"><span class="sr-only">Driver</span>
+            <select name="driverId" data-driver-select>
+              <option value="">No driver yet</option>
+              {pickable.map((d) => <option value={d.id} selected={edit.driverId === d.id}>{d.label}</option>)}
+              <option value="new" selected={edit.driverId === 'new'}>+ Add a new driver…</option>
+            </select>
+          </label>
+          <div class="rounded-2xl bg-white p-4" data-new-driver hidden={edit.driverId !== 'new'}>
+            <p class="m-0 mb-3 text-sm text-muted">Saved to the drivers list as well, so next time you just pick them.</p>
+            <DriverFields f={newDriver} canSetPay={admin} idp="newdrv" prefix="new_" />
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="a-field">Car number for this trip<input name="vehicleNumber" maxlength="20" value={edit.vehicleNumber} placeholder="WB 73 F 5560" autocapitalize="characters" autocomplete="off" data-driver-car /></label>
+            <label class="a-field"><span>Driver earns for this trip, ₹ <span class="font-normal text-muted" data-pay-hint></span></span><input name="driverPay" inputmode="numeric" value={edit.driverPay} autocomplete="off" data-driver-pay readonly={!admin} /></label>
+            {!admin && <p class="m-0 text-sm text-muted sm:col-span-2">Worked out from the driver’s pay. Only the admin can change it.</p>}
+          </div>
+        </div>
+        <label class="a-field">Agreed fare, ₹<input name="fareTotal" inputmode="numeric" required value={edit.fareTotal} data-fare /></label>
         <label class="a-field sm:col-span-2">Handled by
           <select name="handledBy">
             <option value="">Nobody yet</option>
@@ -534,6 +591,31 @@ const facts: [string, string][] = [
     </dialog>
   )}
 
+  {itinerary && (
+    <dialog id="dlg-itin-delete" class="a-dialog a-dialog-sm" aria-labelledby="dlg-itin-delete-h">
+      <form method="post" class="a-dialog-body">
+        <input type="hidden" name="intent" value="itinerary-delete" />
+        <header class="a-dialog-head">
+          <h2 id="dlg-itin-delete-h" class="m-0 font-display text-xl font-bold">Delete this itinerary?</h2>
+          <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
+        </header>
+        <div class="a-dialog-main flex flex-col gap-3 text-body">
+          <p class="m-0"><strong class="text-ink">{itinerary.draft.title}</strong> for {itinerary.draft.name}: the day-by-day plan, photos and message are removed. This cannot be undone.</p>
+          {itinerary.sentAt ? (
+            <p class="m-0">It was sent to the customer. Their link keeps working but shows only the booking and payment, so tell them if they are expecting the plan.</p>
+          ) : (
+            <p class="m-0">It was never sent, so the customer sees no change.</p>
+          )}
+          <p class="m-0 text-sm text-muted">The booking, its payments and its timeline stay. The deletion is noted on the timeline.</p>
+        </div>
+        <footer class="a-dialog-foot">
+          <button type="button" data-close class="btn-ghost">Keep it</button>
+          <button type="submit" class="btn-book bg-[#b42318] hover:bg-[#8f1d14]">Delete itinerary</button>
+        </footer>
+      </form>
+    </dialog>
+  )}
+
   <dialog id="dlg-qr" class="a-dialog a-dialog-sm" aria-labelledby="dlg-qr-h" data-autoopen={open === 'qr' && !removed ? '' : undefined}>
     <div class="a-dialog-body" data-qr data-upi={upi ? JSON.stringify(upi) : ''} data-ref={booking.ref} data-booking={booking.id} data-phone={booking.customerPhone ?? ''} data-link={tripUrl} data-first={first} data-route={route}>
       <header class="a-dialog-head">
@@ -587,22 +669,24 @@ const facts: [string, string][] = [
       draft={draft}
       place={place}
       sent={Boolean(itinerary?.sentAt)}
+      saved={Boolean(itinerary)}
       tripUrl={tripUrl}
       previewUrl={`${here}trip/`}
       pay={{ total: booking.fareTotal, paid: Math.max(0, pay.paid), due: pay.due, last: lastPayment ? `${METHOD_LABEL[lastPayment.method]}, ${dateFmt.format(new Date(`${lastPayment.receivedOn}T00:00:00Z`)).replace(/ \d{4}$/, '')}` : '' }}
       upiReady={Boolean(upi)}
       templates={templates}
       library={LIBRARY}
+      drivers={pickable}
       autoOpen={open === 'itinerary'}
     />
   )}
 </AdminLayout>
 
 <script>
-  import { renderSVG } from 'uqr';
-  import { drawQrCard, inr, logEvent, openDialogs, upiLink } from '../../../../lib/admin-client';
+  import { drawQrCard, inr, loadQr, logEvent, openDialogs, upiLink, wirePayFields } from '../../../../lib/admin-client';
 
   openDialogs();
+  wirePayFields();
 
   // Status menu: saves on change, as on the bookings list.
   const sel = document.querySelector<HTMLSelectElement>('select[data-status]');
@@ -636,6 +720,55 @@ const facts: [string, string][] = [
     sync();
     form.querySelectorAll<HTMLButtonElement>('[data-fill]').forEach((b) => b.addEventListener('click', () => { amount.value = b.dataset.fill!; amount.focus(); }));
   });
+
+  // Driver: picking one fills the car number and what the trip earns them;
+  // "Add a new driver" shows the fields for one. A pay typed by hand stays.
+  const driverBox = document.querySelector<HTMLElement>('[data-driver-box]');
+  if (driverBox) {
+    type Pick = { id: string; car: string; payType: 'percent' | 'fixed'; payValue: number | null };
+    const known = JSON.parse(driverBox.dataset.drivers || '[]') as Pick[];
+    const form = driverBox.closest('form')!;
+    const select = driverBox.querySelector<HTMLSelectElement>('[data-driver-select]')!;
+    const newBox = driverBox.querySelector<HTMLElement>('[data-new-driver]')!;
+    const car = driverBox.querySelector<HTMLInputElement>('[data-driver-car]')!;
+    const pay = driverBox.querySelector<HTMLInputElement>('[data-driver-pay]')!;
+    const hint = driverBox.querySelector<HTMLElement>('[data-pay-hint]')!;
+    const fare = form.querySelector<HTMLInputElement>('[data-fare]')!;
+    let typed = false;
+    const rule = (): { payType: string; payValue: number | null } | null => {
+      if (select.value === 'new') {
+        const v = (form.elements.namedItem('new_payValue') as HTMLInputElement | null)?.value.replace(/\D/g, '');
+        const t = form.querySelector<HTMLInputElement>('input[name=new_payType]:checked')?.value ?? 'percent';
+        return { payType: t, payValue: v ? Number(v) : null };
+      }
+      return known.find((d) => d.id === select.value) ?? null;
+    };
+    const refresh = () => {
+      const r = rule();
+      const f = Number(fare.value.replace(/\D/g, '')) || 0;
+      hint.textContent = !select.value ? '' : !r || r.payValue === null ? '(pay not set)' : r.payType === 'percent' ? `(${r.payValue}% of the fare)` : `(₹${r.payValue.toLocaleString('en-IN')} a trip)`;
+      if (typed) return;
+      pay.value = !r || r.payValue === null ? '' : String(r.payType === 'percent' ? Math.round((f * r.payValue) / 100) : r.payValue);
+    };
+    select.addEventListener('change', () => {
+      newBox.hidden = select.value !== 'new';
+      const d = known.find((x) => x.id === select.value);
+      if (d) car.value = d.car;
+      typed = false;
+      refresh();
+      if (select.value === 'new') newBox.querySelector<HTMLInputElement>('input')?.focus();
+    });
+    newBox.addEventListener('input', (e) => {
+      if ((e.target as HTMLInputElement).name === 'new_vehicleNumber') car.value = (e.target as HTMLInputElement).value;
+      refresh();
+    });
+    newBox.addEventListener('change', refresh);
+    fare.addEventListener('input', refresh);
+    pay.addEventListener('input', () => (typed = true));
+    // Keep a pay set by hand earlier; otherwise show what the driver's pay works out to.
+    typed = pay.value !== '';
+    refresh();
+  }
 
   // Reverse: carry the chosen payment into the popup.
   document.querySelectorAll<HTMLButtonElement>('[data-payment]').forEach((b) =>
@@ -672,12 +805,13 @@ const facts: [string, string][] = [
     const send = qr.querySelector<HTMLAnchorElement>('[data-qr-send]')!;
     const share = qr.querySelector<HTMLButtonElement>('[data-qr-share]')!;
     let edited = false;
+    let renderSVG: ((text: string, options?: { border?: number }) => string) | null = null;
     const amount = () => Number(amountEl.value.replace(/\D/g, '')) || 0;
     const defaultText = (n: number) =>
       `Namaste ${first} ji, for your booking ${ref} (${route}), please pay ${inr(n)} by UPI.\n\nUPI ID: ${upi.id} (${upi.payee})\nOr scan the QR code on this page: ${link}?amount=${n}\n\nShare the payment screenshot here and we will confirm it. Team Bagdogra Airport Taxi`;
     const update = () => {
       const n = amount();
-      box.innerHTML = n > 0 ? renderSVG(upiLink(upi, n, ref), { border: 1 }) : '';
+      if (renderSVG) box.innerHTML = n > 0 ? renderSVG(upiLink(upi, n, ref), { border: 1 }) : '';
       if (!edited) textEl.value = defaultText(n);
       send.href = `https://wa.me/${phone}?text=${encodeURIComponent(textEl.value)}`;
     };
@@ -685,6 +819,12 @@ const facts: [string, string][] = [
     textEl.addEventListener('input', () => { edited = true; update(); });
     qr.querySelectorAll<HTMLButtonElement>('[data-qr-fill]').forEach((b) => b.addEventListener('click', () => { amountEl.value = b.dataset.qrFill!; edited = false; update(); }));
     update();
+    loadQr()
+      .then((m) => {
+        renderSVG = m.renderSVG;
+        update();
+      })
+      .catch(() => (box.textContent = 'The QR picture did not load. Reload the page. The WhatsApp message still works.'));
     send.addEventListener('click', () => logEvent(booking, 'qr_sent', amount()));
 
     // The share sheet can carry the QR picture into WhatsApp on a phone.

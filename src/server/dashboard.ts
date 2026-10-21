@@ -105,7 +105,7 @@ async function paidFor(ids: string[]): Promise<Map<string, number>> {
 export function payState(total: number, advance: number, paid: number): { label: string; tone: Tone } {
   const due = total - paid;
   if (paid >= total) return { label: 'Fully paid', tone: 'lime' };
-  if (paid > 0 && paid >= advance) return { label: `Advance paid · ${inr(due)} to driver`, tone: 'lime' };
+  if (paid > 0 && paid >= advance) return { label: `Advance paid · ${inr(due)} to collect`, tone: 'lime' };
   if (paid > 0) return { label: `${inr(paid)} paid · ${inr(due)} due`, tone: 'amber' };
   return { label: 'No payment recorded', tone: 'amber' };
 }
@@ -383,6 +383,8 @@ export function describeEvent(type: string, data: Record<string, unknown> | null
       return { text: `${data?.kind === 'refund' ? 'Refund' : 'Payment'} of ${amount.replace('-', '')} reversed: ${String(data?.reason ?? '')}`, tone: 'red' };
     case 'itinerary_sent':
       return { text: Number(data?.count ?? 1) > 1 ? 'Sent an updated itinerary' : 'Sent the itinerary on WhatsApp', tone: 'lime' };
+    case 'itinerary_deleted':
+      return { text: `Deleted the itinerary${Number(data?.sentCount ?? 0) > 0 ? ' (the customer’s link now shows only the booking)' : ' (it was a draft)'}`, tone: 'red' };
     case 'qr_sent':
       return { text: `Sent the UPI QR code${amount ? ` for ${amount}` : ''}`, tone: 'grey' };
     default:

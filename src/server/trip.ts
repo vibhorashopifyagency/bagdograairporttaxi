@@ -8,7 +8,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'astro/zod';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { GALLERY } from '../data/gallery';
 import { packageBySlug } from '../data/packages';
 import { routeBySlug } from '../data/routes';
@@ -16,6 +16,7 @@ import { POLICY } from '../data/site';
 import { vehicleByKey } from '../data/vehicles';
 import { BUILT_IN_TEMPLATES, firstName, plusDays, withArticle, type Template, type TemplateValues } from '../lib/itinerary-text';
 import { PHOTOS, packagePhoto, routePhoto, type PhotoKey } from '../lib/photos';
+import { audit } from './admin';
 import { normalizePhone } from './bookings';
 import { isDay } from './dashboard';
 import { getDb, schema } from './db';
@@ -192,6 +193,7 @@ export const itinerarySchema = z.object({
   flight: line(60),
   car: line(80),
   vehicleNumber: line(20),
+  driverId: z.union([z.literal(''), z.uuid()]).optional(),
   driver: line(60),
   driverPhone: line(24),
   days: z
@@ -230,6 +232,28 @@ export function cleanItinerary(input: unknown): { error: string } | { data: Itin
       photos: d.photos.filter((k, i, all) => isPhotoKey(k) && all.indexOf(k) === i),
     },
   };
+}
+
+/* ---------------- Deleting ---------------- */
+
+/**
+ * Removes a booking's itinerary, draft and sent copy alike. The customer's
+ * link keeps working but shows only the booking and payment, and the next
+ * "Send itinerary" starts again from the booking. Noted on the timeline.
+ */
+export async function deleteItinerary(bookingId: string, ctx: { actorId: string; ipHash: string }): Promise<boolean> {
+  const db = getDb();
+  const removed = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(schema.itineraries)
+      .where(eq(schema.itineraries.bookingId, bookingId))
+      .returning({ sentCount: schema.itineraries.sentCount, title: sql<string>`${schema.itineraries.draft}->>'title'` });
+    if (!row) return null;
+    await tx.insert(schema.bookingEvents).values({ bookingId, actorId: ctx.actorId, type: 'itinerary_deleted', data: { sentCount: row.sentCount, title: row.title } });
+    return row;
+  });
+  if (removed) await audit({ actorId: ctx.actorId, action: 'itinerary_deleted', entity: 'booking', entityId: bookingId, detail: { sentCount: removed.sentCount }, ipHash: ctx.ipHash });
+  return Boolean(removed);
 }
 
 /* ---------------- Message templates ---------------- */

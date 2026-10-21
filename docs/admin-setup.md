@@ -34,9 +34,10 @@ private trip page at `/trip/...`. Website editing comes next. The plan is in
 5. **Create the admin.** Open `https://bagdograairporttaxi.com/admin/setup/`, enter the `SETUP_TOKEN`, choose a username and password. Write down the 8 recovery codes it shows: they are the only way back in without the password. Then delete `SETUP_TOKEN` from Vercel. The page closes for good once an account exists.
 6. **Two-factor.** Sign in, open My account and set up two-factor login with Google Authenticator or a similar app. Keep its backup codes with the recovery codes.
 7. **Staff.** Open Team, add the staff member with a username and a password, and give them the password in person. Switch on "can record payments" only if they should.
-8. **UPI.** Open Payments and enter the office UPI ID (it is on the printed QR code, or in the bank or PhonePe Business app) and the name customers should see. Scan the QR code it shows with your own phone and check the payee before sending one to a customer.
-9. **Booking emails.** In Resend, add the domain `bagdograairporttaxi.com` and the DNS records it lists at the domain registrar. Until then bookings are still saved and WhatsApp still opens; only the backup email is skipped.
-10. **Test.** Make a booking on `/book/`, press Confirm on WhatsApp, and check it appears at `/admin/` with the same `BAT-` reference as the WhatsApp message.
+8. **Drivers.** Open Drivers and add each driver with their phone, car number and pay (a share of the fare or a fixed amount a trip). Drivers already typed on bookings are on the list with their pay not set: set it for each.
+9. **UPI.** Open Payments and enter the office UPI ID (it is on the printed QR code, or in the bank or PhonePe Business app) and the name customers should see. Scan the QR code it shows with your own phone and check the payee before sending one to a customer.
+10. **Booking emails.** In Resend, add the domain `bagdograairporttaxi.com` and the DNS records it lists at the domain registrar. Until then bookings are still saved and WhatsApp still opens; only the backup email is skipped.
+11. **Test.** Make a booking on `/book/`, press Confirm on WhatsApp, and check it appears at `/admin/` with the same `BAT-` reference as the WhatsApp message.
 
 Check on the first deploy that the old `.php` redirects in `vercel.json` and the security headers still apply now that the site uses the Vercel adapter, for example that `/about.php` redirects to `/about/`.
 

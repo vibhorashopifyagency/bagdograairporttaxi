@@ -4,6 +4,7 @@ import { eq, sql } from 'drizzle-orm';
 import { audit } from '../../../server/admin';
 import { getDb, schema } from '../../../server/db';
 import { ipHash } from '../../../server/security';
+import { assignDriver } from '../../../server/drivers';
 import { cleanItinerary } from '../../../server/trip';
 
 export const prerender = false;
@@ -33,10 +34,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   const data = clean.data;
 
   const db = getDb();
+  const b = schema.bookings;
   const [booking] = await db
-    .select({ id: schema.bookings.id, ref: schema.bookings.ref, gone: schema.bookings.personalDataRemovedAt })
-    .from(schema.bookings)
-    .where(eq(schema.bookings.id, id));
+    .select({ id: b.id, ref: b.ref, gone: b.personalDataRemovedAt, status: b.status, fareTotal: b.fareTotal, driverId: b.driverId, driverName: b.driverName, driverPhone: b.driverPhone, vehicleNumber: b.vehicleNumber, driverPay: b.driverPay })
+    .from(b)
+    .where(eq(b.id, id));
   if (!booking) return json(404, { ok: false, error: 'That booking no longer exists.' });
   if (booking.gone) return json(409, { ok: false, error: 'This booking’s personal details have been removed.' });
 
@@ -72,6 +74,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     }
     return saved!;
   });
+  // Picking a driver in the popup puts them on the booking (or takes them off).
+  if (data.driverId !== undefined && (data.driverId || null) !== booking.driverId) {
+    await assignDriver(booking, data.driverId || null, { actorId: user.id, ipHash: ipHash(request) });
+  }
   if (send) await audit({ actorId: user.id, action: 'itinerary_sent', entity: 'booking', entityId: id, detail: { ref: booking.ref, count: row.sentCount }, ipHash: ipHash(request) });
   return json(200, { ok: true, sentCount: row.sentCount, savedAt: now.toISOString() });
 };

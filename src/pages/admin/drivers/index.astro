@@ -1,0 +1,157 @@
+---
+/**
+ * The drivers list: add, change and remove drivers, see what each is owed.
+ * Drivers picked here are what the booking and itinerary popups offer.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import DriverFields from '../../../components/admin/DriverFields.astro';
+import { audit, isAdmin } from '../../../server/admin';
+import { inr, inrShort, todayIST } from '../../../server/dashboard';
+import { getDb, schema } from '../../../server/db';
+import { accounts, addDriver, checkDriver, listDrivers, payLabel, type DriverForm } from '../../../server/drivers';
+import { ipHash } from '../../../server/security';
+import { phoneLabel } from '../../../lib/itinerary-text';
+import { vehicleByKey } from '../../../data/vehicles';
+import { gte, sql } from 'drizzle-orm';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const admin = isAdmin(user);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+let error = '';
+let form: DriverForm = { name: '', phone: '', vehicleNumber: '', vehicle: '', payType: 'percent', payValue: '', notes: '' };
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  if (f.get('intent') === 'add') {
+    form = Object.fromEntries(Object.keys(form).map((k) => [k, String(f.get(k) ?? '')])) as DriverForm;
+    const checked = checkDriver(form, admin);
+    if ('error' in checked) error = checked.error;
+    else {
+      const d = await addDriver(checked.row, ctx);
+      return Astro.redirect(`/admin/drivers/${d.id}/?done=added`, 303);
+    }
+  }
+}
+
+const showOff = Astro.url.searchParams.get('show') === 'off';
+const all = await listDrivers();
+const list = all.filter((d) => d.active !== showOff);
+const monthStart = `${todayIST().slice(0, 8)}01`;
+const [acc, [paidMonth]] = await Promise.all([
+  accounts(),
+  getDb().select({ sum: sql<string>`coalesce(sum(${schema.driverPayouts.amount}), 0)` }).from(schema.driverPayouts).where(gte(schema.driverPayouts.paidOn, monthStart)),
+]);
+await audit({ actorId: user.id, action: 'view_drivers', entity: 'drivers', detail: { count: list.length }, ipHash: ctx.ipHash });
+
+const owed = [...acc.values()].reduce((s, a) => s + Math.max(0, a.balance), 0);
+const monthTrips = [...acc.values()].reduce((s, a) => s + a.monthTrips, 0);
+const unpriced = all.filter((d) => d.active && d.payValue === null).length;
+const monthName = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', month: 'long' }).format(new Date(`${todayIST()}T00:00:00Z`));
+const stats = [
+  { label: 'Owed to drivers now', value: inrShort(owed), sub: 'completed trips not paid out yet' },
+  { label: `Paid out in ${monthName}`, value: inrShort(Number(paidMonth?.sum ?? 0)), sub: 'UPI, cash and bank transfers' },
+  { label: `Trips in ${monthName}`, value: String(monthTrips), sub: `${all.filter((d) => d.active).length} active drivers` },
+];
+const callIcon =
+  '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>';
+---
+
+<AdminLayout title="Drivers">
+  <div class="flex flex-col gap-5 lg:gap-6">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Drivers</h1>
+        <p class="m-0 mt-1 text-sm text-muted">Everyone who drives for us, what each trip earns them and what they are owed. Pick them on a booking or in an itinerary.</p>
+      </div>
+      <button type="button" data-open="dlg-add" class="btn-book">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+        Add driver
+      </button>
+    </div>
+
+    <section class="grid gap-3 sm:grid-cols-3" aria-label="Totals">
+      {stats.map((x, i) => (
+        <div class:list={['flex flex-col gap-1 rounded-[20px] p-5', i === 0 ? 'bg-ink text-white' : 'a-card']}>
+          <span class:list={['text-sm', i === 0 ? 'text-[#c9ced8]' : 'text-muted']}>{x.label}</span>
+          <span class:list={['font-display text-[32px] leading-tight font-bold', i === 0 && 'text-lime']}>{x.value}</span>
+          <span class:list={['text-[13px]', i === 0 ? 'text-[#c9ced8]' : 'text-muted']}>{x.sub}</span>
+        </div>
+      ))}
+    </section>
+
+    {Astro.url.searchParams.get('done') === 'deleted' && <p class="a-msg a-msg-ok m-0" role="status">Driver deleted.</p>}
+    {admin && unpriced > 0 && (
+      <p class="a-msg m-0 bg-[#fff4d6] text-[#8a5300]">{unpriced} {unpriced === 1 ? 'driver has' : 'drivers have'} no pay set, so their trips count as ₹0. Open each one and set their pay.</p>
+    )}
+
+    <nav aria-label="Which drivers" class="flex gap-1 self-start rounded-xl border border-line bg-white p-1">
+      <a href="/admin/drivers/" aria-current={showOff ? undefined : 'page'} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showOff ? 'font-medium text-body' : 'bg-ink font-semibold text-white']}>Active · {all.filter((d) => d.active).length}</a>
+      <a href="/admin/drivers/?show=off" aria-current={showOff ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showOff ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>Switched off · {all.filter((d) => !d.active).length}</a>
+    </nav>
+
+    {list.length === 0 ? (
+      <div class="a-card p-8 text-body">
+        <p class="m-0 font-display text-xl font-bold text-ink">{showOff ? 'No switched-off drivers.' : 'No drivers yet.'}</p>
+        {!showOff && <p class="m-0 mt-1">Add your drivers once, with their phone, car number and pay. After that you just pick them on each booking.</p>}
+      </div>
+    ) : (
+      <ul class="m-0 grid list-none gap-3 p-0 md:grid-cols-2 2xl:grid-cols-3">
+        {list.map((d) => {
+          const a = acc.get(d.id);
+          return (
+            <li class="a-card flex flex-col gap-3 p-4 lg:p-5">
+              <div class="flex items-center gap-3">
+                <span class="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-ink font-bold text-lime">{d.name[0]!.toUpperCase()}</span>
+                <a href={`/admin/drivers/${d.id}/`} class="flex min-w-0 flex-1 flex-col text-ink no-underline">
+                  <span class="truncate text-[17px] font-bold hover:underline">{d.name}</span>
+                  <span class="truncate text-sm text-muted">{[d.vehicleNumber, d.vehicle && vehicleByKey(d.vehicle)?.name].filter(Boolean).join(' · ') || 'No car number'}</span>
+                </a>
+                {d.phone && (
+                  <a href={`tel:+${d.phone}`} class="a-icon-btn" aria-label={`Call ${d.name}`}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={callIcon} />
+                  </a>
+                )}
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class:list={['a-badge', d.payValue === null ? 'bg-[#fff4d6] text-[#8a5300]' : 'bg-lime-50 text-[#3f6200]']}>{payLabel(d)}</span>
+                {d.phone && <span class="text-sm text-muted">{phoneLabel(d.phone)}</span>}
+              </div>
+              <dl class="m-0 grid grid-cols-3 gap-2 rounded-2xl bg-[#f7f8fa] p-3 text-sm">
+                <div class="flex flex-col-reverse"><dt class="text-muted">trips this month</dt><dd class="m-0 text-lg font-bold">{a?.monthTrips ?? 0}</dd></div>
+                <div class="flex flex-col-reverse"><dt class="text-muted">coming up</dt><dd class="m-0 text-lg font-bold">{a?.upcoming ?? 0}</dd></div>
+                <div class="flex flex-col-reverse"><dt class="text-muted">{(a?.balance ?? 0) < 0 ? 'paid ahead' : 'owed now'}</dt><dd class:list={['m-0 text-lg font-bold', (a?.balance ?? 0) > 0 && 'text-[#b42318]']}>{inr(Math.abs(a?.balance ?? 0))}</dd></div>
+              </dl>
+              <a href={`/admin/drivers/${d.id}/`} class="btn-ghost min-h-10 self-start px-4 py-1.5 text-sm">Open account</a>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </div>
+
+  <dialog id="dlg-add" class="a-dialog" aria-labelledby="dlg-add-h" data-autoopen={error || Astro.url.searchParams.get('do') === 'add' ? '' : undefined}>
+    <form method="post" class="a-dialog-body" data-pay-form>
+      <input type="hidden" name="intent" value="add" />
+      <header class="a-dialog-head">
+        <h2 id="dlg-add-h" class="m-0 font-display text-xl font-bold">Add a driver</h2>
+        <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+      </header>
+      <div class="a-dialog-main flex flex-col gap-4">
+        {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+        <DriverFields f={form} canSetPay={admin} idp="add" />
+      </div>
+      <footer class="a-dialog-foot">
+        <button type="button" data-close class="btn-ghost">Cancel</button>
+        <button type="submit" class="btn-book">Add driver</button>
+      </footer>
+    </form>
+  </dialog>
+</AdminLayout>
+
+<script>
+  import { openDialogs, wirePayFields } from '../../../lib/admin-client';
+  openDialogs();
+  wirePayFields();
+</script>

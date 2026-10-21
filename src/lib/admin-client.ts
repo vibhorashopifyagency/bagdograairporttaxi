@@ -2,7 +2,6 @@
  * Browser helpers for the admin popups. Imported only from <script> tags in
  * /admin/ pages; nothing here runs on the server.
  */
-import { encode } from 'uqr';
 export { upiLink } from './upi';
 
 export const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
@@ -17,7 +16,10 @@ export function openDialogs(): void {
     const t = e.target as Element;
     const opener = t.closest<HTMLElement>('[data-open]');
     if (opener && !(opener as HTMLButtonElement).disabled) {
-      (document.getElementById(opener.dataset.open!) as HTMLDialogElement | null)?.showModal();
+      const dlg = document.getElementById(opener.dataset.open!) as HTMLDialogElement | null;
+      dlg?.showModal();
+      // data-focus="fieldName" puts the cursor straight into that box.
+      if (opener.dataset.focus) dlg?.querySelector<HTMLInputElement>(`[name="${opener.dataset.focus}"]`)?.focus();
       return;
     }
     const closer = t.closest('[data-close]');
@@ -34,6 +36,19 @@ export function openDialogs(): void {
   }
 }
 
+/** Driver forms: the pay box says "% of the fare" or "₹ a trip" to match the choice. */
+export function wirePayFields(): void {
+  document.querySelectorAll<HTMLElement>('[data-driver-fields]').forEach((box) => {
+    const unit = box.querySelector<HTMLElement>('[data-pay-unit]');
+    const input = box.querySelector<HTMLInputElement>('input[name$=payValue]');
+    box.addEventListener('change', () => {
+      const fixed = box.querySelector<HTMLInputElement>('input[name$=payType]:checked')?.value === 'fixed';
+      if (unit) unit.textContent = fixed ? '₹ a trip' : '% of the fare';
+      if (input) input.placeholder = fixed ? '800' : '25';
+    });
+  });
+}
+
 /** Notes on the booking's timeline that something was sent. Never blocks. */
 export function logEvent(bookingId: string, type: 'qr_sent', amount?: number): void {
   fetch('/admin/api/booking-log/', {
@@ -45,11 +60,19 @@ export function logEvent(bookingId: string, type: 'qr_sent', amount?: number): v
 }
 
 /**
+ * The QR code library, loaded only when a QR code is drawn. Nothing else on
+ * a page waits for it, so the buttons and popups keep working even if it
+ * fails to load.
+ */
+export const loadQr = () => import('uqr');
+
+/**
  * A picture of the QR code with the amount and UPI ID under it, for the
  * phone's share sheet: WhatsApp receives it as a photo the customer can scan
  * from another phone or save and open in their UPI app.
  */
-export function drawQrCard(input: { text: string; amount: number; ref: string; upi: { id: string; payee: string } }): Promise<Blob> {
+export async function drawQrCard(input: { text: string; amount: number; ref: string; upi: { id: string; payee: string } }): Promise<Blob> {
+  const { encode } = await loadQr();
   const qr = encode(input.text, { ecc: 'M', border: 0 });
   const W = 720;
   const cell = Math.floor(520 / qr.size);
