@@ -22,11 +22,19 @@
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",
+    "@astrojs/vercel": "^11.0.16",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.2.4",
+    "better-auth": "^1.7.12",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
+    "@electric-sql/pglite-socket": "^0.2.13",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
     "sharp": "^0.35.3"
   }
 }

@@ -28,7 +28,8 @@ const GROUPS: [string, string[]][] = [
 ];
 
 export const GET: APIRoute = () => {
-  const body = PRE_LAUNCH
+  // The dev server always shows the launch version so it can be reviewed.
+  const body = PRE_LAUNCH && !import.meta.env.DEV
     ? `# ${SITE.name}: pre-launch build. Nothing here should be indexed yet.\nUser-agent: *\nDisallow: /\n`
     : [
         `# robots.txt for ${SITE.name}: ${SITE.url}`,

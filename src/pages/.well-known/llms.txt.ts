@@ -7,6 +7,6 @@ import { llmsIndex } from '../../lib/llms';
  * tools look for first. One source (src/lib/llms.ts), two addresses.
  */
 export const GET: APIRoute = () =>
-  new Response(PRE_LAUNCH ? `# ${SITE.name}\n\n> Not published yet.\n` : llmsIndex(), {
+  new Response(PRE_LAUNCH && !import.meta.env.DEV ? `# ${SITE.name}\n\n> Not published yet.\n` : llmsIndex(), {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
   });
