@@ -1,3 +1,4 @@
+import { overlayList } from './published';
 import type { Faq } from './routes';
 
 export interface Destination {
@@ -18,7 +19,8 @@ export interface Destination {
   geo: { lat: number; lng: number };
 }
 
-export const DESTINATIONS: Destination[] = [
+/** The starting copy: a destination changed, added or removed in the dashboard replaces it (see ./published.ts). */
+export const DESTINATIONS_START: Destination[] = [
   {
     slug: 'darjeeling',
     name: 'Darjeeling',
@@ -328,5 +330,7 @@ export const DESTINATIONS: Destination[] = [
     geo: { lat: 26.8516, lng: 89.3884 },
   },
 ];
+
+export const DESTINATIONS = overlayList('destination', DESTINATIONS_START, (d) => d.slug);
 
 export const destinationBySlug = (slug: string) => DESTINATIONS.find((d) => d.slug === slug);

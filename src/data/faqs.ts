@@ -1,9 +1,12 @@
+import { overlayWhole } from './published';
 import type { Faq } from './routes';
 import { POLICY } from './site';
 
 /** Site-wide questions, answered first in one or two sentences. Used on the
- * homepage, /faq/ and in llms-full.txt. */
-export const GENERAL_FAQS: Faq[] = [
+ * homepage, /faq/ and in llms-full.txt. This is the starting copy; once the
+ * list is edited in the dashboard, the dashboard's list is used instead (see
+ * ./published.ts), and its answers no longer follow POLICY by themselves. */
+export const GENERAL_FAQS_START: Faq[] = [
   {
     q: 'How do I book a taxi from Bagdogra Airport?',
     a: 'Choose your route and car on our booking page, pay a ' +
@@ -38,3 +41,5 @@ export const GENERAL_FAQS: Faq[] = [
     a: 'Yes. We pick up from Bagdogra Airport, NJP station, Siliguri Junction and any hotel or home in Siliguri, at the same fares.',
   },
 ];
+
+export const GENERAL_FAQS = overlayWhole('faq', GENERAL_FAQS_START);

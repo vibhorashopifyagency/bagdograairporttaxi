@@ -12,3 +12,5 @@ lighthouse/
 backups/
 # Pictures uploaded in development (src/server/files.ts)
 .local-files/
+# Website edits published in the dashboard, pulled before each build (scripts/content-pull.mjs)
+.content/

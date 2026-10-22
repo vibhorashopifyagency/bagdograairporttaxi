@@ -1,9 +1,12 @@
+import { overlayList } from './published';
+
 /** Guide pages. The bodies live in src/pages/guides/<slug>.astro; this list
  * feeds the index, llms.txt and each page's metadata. `published` is the day
  * the guide first went up and never moves; `updated` is the day its facts
  * last changed (and feeds the sitemap lastmod), so bump it only for a real
- * change. */
-export const GUIDES = [
+ * change. The dashboard can change a guide's title, description and summary
+ * (see ./published.ts) but not add or remove one, since each has its own page. */
+export const GUIDES_START = [
   {
     slug: 'sikkim-permit-guide',
     title: 'Sikkim permit guide: who needs one, where and how',
@@ -55,5 +58,7 @@ export const GUIDES = [
     updatedLabel: '19 October 2026',
   },
 ] as const;
+
+export const GUIDES = overlayList('guide', GUIDES_START, (g) => g.slug, { fixed: true });
 
 export const guideBySlug = (slug: string) => GUIDES.find((g) => g.slug === slug)!;

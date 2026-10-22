@@ -34,6 +34,8 @@ const TABLES = [
   'driver_payouts',
   'audit_log',
   'settings',
+  'content_items',
+  'content_versions',
 ];
 
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;

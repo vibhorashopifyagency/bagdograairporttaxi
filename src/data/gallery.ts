@@ -9,6 +9,7 @@
  * the key here.
  */
 import type { PhotoKey } from '../lib/photos';
+import { overlayWhole } from './published';
 
 export type GalleryCategory = 'Darjeeling hills' | 'Sikkim' | 'Dooars and Bhutan' | 'On the road' | 'Our cars';
 
@@ -24,7 +25,8 @@ export interface GalleryItem {
 
 export const GALLERY_CATEGORIES: GalleryCategory[] = ['Darjeeling hills', 'Sikkim', 'Dooars and Bhutan', 'On the road', 'Our cars'];
 
-export const GALLERY: GalleryItem[] = [
+/** The starting copy; once the gallery is edited in the dashboard, its list is used instead (see ./published.ts). */
+export const GALLERY_START: GalleryItem[] = [
   { photo: 'hero', title: 'Kanchenjunga at dawn', place: 'Darjeeling tea gardens', category: 'Darjeeling hills', href: '/destinations/darjeeling/', cta: 'Darjeeling guide and taxi fare' },
   { photo: 'toy-train', title: 'The toy train', place: 'Darjeeling Himalayan Railway', category: 'Darjeeling hills', href: '/destinations/darjeeling/', cta: 'Darjeeling guide and taxi fare' },
   { photo: 'tea-worker', title: 'Plucking first flush', place: 'A Darjeeling tea estate', category: 'Darjeeling hills', href: '/tour-packages/darjeeling-tour-package/', cta: 'Darjeeling tour package' },
@@ -53,3 +55,5 @@ export const GALLERY: GalleryItem[] = [
   { photo: 'car-sedan', title: 'Sedan', place: 'Dzire or Etios, four seats', category: 'Our cars', href: '/book/?vehicle=sedan', cta: 'Book a sedan' },
   { photo: 'car-traveller', title: 'Tempo Traveller', place: 'Twelve seats for groups', category: 'Our cars', href: '/book/?vehicle=traveller', cta: 'Book a Tempo Traveller' },
 ];
+
+export const GALLERY = overlayWhole('gallery', GALLERY_START);

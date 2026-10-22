@@ -10,17 +10,50 @@
  * Anything marked TODO(pre-launch) is a placeholder the owner must replace.
  * `scripts/verify-build.mjs` refuses a build with PRE_LAUNCH = false while any
  * placeholder is still in the built HTML.
+ *
+ * The values below are the starting copy. Once the admin changes business
+ * details, policies or the pre-launch switch in the dashboard, the
+ * dashboard's version is what the site shows (see ./published.ts).
  */
+import { overlayOne, publishedRecord } from './published';
 
 /**
  * While true, every page is `noindex, nofollow`, robots.txt answers
  * `Disallow: /`, and llms.txt says nothing. Flip to false only when the
  * placeholders below are real and the fares are confirmed.
  */
-export const PRE_LAUNCH = true;
+export const LAUNCH_START = { preLaunch: true };
+export const PRE_LAUNCH: boolean = overlayOne('site', LAUNCH_START, 'launch').preLaunch;
 
-export const SITE = {
-  url: 'https://bagdograairporttaxi.com',
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/** '2026-10' as 'October 2026'. */
+const monthLabel = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+/** '2026-10-22' as '22 October 2026'. */
+const dayLabel = (ymd: string) => `${Number(ymd.slice(8, 10))} ${monthLabel(ymd)}`;
+
+/**
+ * When the content last changed. Bump these here for a change made in code;
+ * a publish in the dashboard moves them on by itself (src/server/content.ts).
+ * Whichever is later wins, and the labels follow.
+ */
+export const UPDATED_START = {
+  // Shown next to every fare. Update it whenever FARES change.
+  faresUpdated: '2026-10',
+  // The homepage's dateModified (JSON-LD and the key-facts footnote). Bump it
+  // whenever a fare, a policy or a key fact changes.
+  contentUpdated: '2026-10-22',
+  // The destination guides' dateModified and sitemap lastmod. Bump it when a
+  // destination's facts change.
+  destinationsUpdated: '2026-10-19',
+};
+const fromDashboard = publishedRecord('site', 'dates') ?? {};
+const later = (code: string, dashboard: unknown) =>
+  typeof dashboard === 'string' && dashboard.length === code.length && dashboard > code ? dashboard : code;
+const faresUpdated = later(UPDATED_START.faresUpdated, fromDashboard.faresUpdated);
+const contentUpdated = later(UPDATED_START.contentUpdated, fromDashboard.contentUpdated);
+
+/** The site's name and the homepage's search title and description. */
+export const SITE_TEXT_START = {
   name: 'Bagdogra Airport Taxi',
   // Leads with the keyword and the price, the pattern the research found
   // working best in this market (sikkimtravellers.com).
@@ -29,21 +62,24 @@ export const SITE = {
   // Under 160 characters: the price, the places, the proof, then the action.
   description:
     'Fixed-fare taxi from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling and the Dooars from ₹600. Verified drivers, flight tracking, free cancellation.',
+};
+const SITE_TEXT = overlayOne('site', SITE_TEXT_START);
+
+export const SITE = {
+  url: 'https://bagdograairporttaxi.com',
+  name: SITE_TEXT.name,
+  title: SITE_TEXT.title,
+  description: SITE_TEXT.description,
   locale: 'en-IN',
   lang: 'en',
-  // Shown next to every fare. Update it whenever FARES change.
-  faresUpdated: '2026-10',
-  faresUpdatedLabel: 'October 2026',
-  // The homepage's dateModified (JSON-LD and the key-facts footnote). Bump it
-  // whenever a fare, a policy or a key fact changes.
-  contentUpdated: '2026-10-22',
-  contentUpdatedLabel: '22 October 2026',
-  // The destination guides' dateModified and sitemap lastmod. Bump it when a
-  // destination's facts change.
-  destinationsUpdated: '2026-10-19',
+  faresUpdated,
+  faresUpdatedLabel: monthLabel(faresUpdated),
+  contentUpdated,
+  contentUpdatedLabel: dayLabel(contentUpdated),
+  destinationsUpdated: later(UPDATED_START.destinationsUpdated, fromDashboard.destinationsUpdated),
 } as const;
 
-export const BUSINESS = {
+export const BUSINESS_START = {
   legalName: 'Jai Jawan Travels', // From the logo and the current site ("a unit of Jai Jawan Travels"). TODO(pre-launch): confirm the registered name
   tagline: 'Your journey, our responsibility', // The owner's own line, from the Google Business Profile post of 18 Oct 2026
   placeId: 'ChIJgebDZQJH5DkR9JC1zX1LUU0', // Google Place ID of the listing (derived from its Maps feature ID)
@@ -78,9 +114,10 @@ export const BUSINESS = {
     // TODO(pre-launch): tourism department / IATO / TAAI / Sikkim Tourism registrations
   ] as { name: string; id?: string }[],
 };
+export const BUSINESS = overlayOne('business', BUSINESS_START);
 
 /** The promises shown beside every Book button. Keep them true. */
-export const POLICY = {
+export const POLICY_START = {
   advancePercent: 20,
   freeWaitMinutes: 60,
   freeCancelHours: 24,
@@ -90,6 +127,7 @@ export const POLICY = {
   nightChargeTo: '06:00',
   nightCharge: 300,
 };
+export const POLICY = overlayOne('policy', POLICY_START);
 
 /*
  * Payments: there is no payment gateway (owner, 21 Oct 2026). The advance is

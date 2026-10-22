@@ -16,6 +16,7 @@ next. The plan is in `docs/admin-cms-todo.md`.
 - Data lives in Neon Postgres. The schema is `src/server/db/schema.ts`; migrations are in `drizzle/`.
 - Logins use Better Auth (`src/server/auth.ts`): username and password, roles `admin` and `staff`, optional two-factor.
 - Each booking gets a reference such as `BAT-7K2Q9M`. It goes in the WhatsApp message and is saved by `POST /api/bookings/`.
+- Website content (fares, routes, packages, destinations, cars, business details, policies, FAQs, gallery, guide titles) starts as the code in `src/data/`. What the admin changes in the dashboard is kept in the `content_items` table, with every published version in `content_versions`. Before each build `scripts/content-pull.mjs` copies what is published into `.content/published.json` (ignored by git), and `src/data/published.ts` lays it over the code, so public pages stay static. Publishing in the dashboard starts a new deploy through `VERCEL_DEPLOY_HOOK_URL`, and the change is live when that deploy finishes, usually within a minute or two. A build whose database cannot be read fails, so a deploy never goes out without the admin's edits; Vercel keeps the last good one. An item the admin has edited no longer follows the code: changing it in `src/data/` does nothing on the live site, and the build log says so (`[content] ... the dashboard's version stays live`).
 - `/trip/<code>/` is the customer's own page for a booking (itinerary, driver, what is paid, the UPI QR code). It runs on the server too, needs no login, is never cached or indexed, and its link is signed with `BETTER_AUTH_SECRET`: changing that secret breaks every trip link already sent. The office QR code picture is served beside it from `/trip/qr/<hash>.png` (or `.jpg`), straight from the database; that address may be cached, because a new picture gets a new address.
 
 ## Going live on Vercel (one time)
@@ -34,8 +35,9 @@ next. The plan is in `docs/admin-cms-todo.md`.
    | `MAIL_FROM` | `Bagdogra Airport Taxi <bookings@bagdograairporttaxi.com>` | All |
    | `BOOKING_EMAIL_TO` | optional, defaults to the email shown on the site | All |
    | `CRON_SECRET` | output of `openssl rand -hex 32` | Production |
+   | `VERCEL_DEPLOY_HOOK_URL` | Project Settings, Git, Deploy Hooks: create one named "Publish" for the `main` branch and paste its URL | Production |
 
-4. **Deploy.** The build runs the database migrations by itself before the site goes live.
+4. **Deploy.** The build runs the database migrations by itself before the site goes live, then copies in the website edits published in the dashboard. Keep the deploy hook URL private: anyone with it can start a deploy (it cannot change the site's content).
 5. **Create the admin.** Open `https://bagdograairporttaxi.com/admin/setup/`, enter the `SETUP_TOKEN`, choose a username and password. Write down the 8 recovery codes it shows: they are the only way back in without the password. Then delete `SETUP_TOKEN` from Vercel. The page closes for good once an account exists.
 6. **Two-factor.** Sign in, open My account and set up two-factor login with Google Authenticator or a similar app. Keep its backup codes with the recovery codes.
 7. **Staff.** Open Team, add the staff member with a username and a password, and give them the password in person. Switch on "can record payments" only if they should.
@@ -79,6 +81,8 @@ npm run db:migrate
 npm run dev                   # then open http://localhost:4321/admin/setup/
 npm run db:seed               # optional: made-up bookings, customers and payments around today's date
 ```
+
+Website edits published from the dashboard in development are copied straight into `.content/published.json` (Publish runs `npm run content:pull`), and the dev server shows them. Delete `.content/` to see the site as the code alone has it. `npm run build` pulls from the database in `.env` too.
 
 Uploaded pictures (payment screenshots, itinerary photos) go to the `.local-files` folder on this computer, ignored by git, since there is no Blob store locally.
 

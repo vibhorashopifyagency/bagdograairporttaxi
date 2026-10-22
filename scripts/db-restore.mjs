@@ -12,9 +12,9 @@ import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import pg from 'pg';
 
-const TABLES = ['user', 'account', 'two_factor', 'recovery_codes', 'customers', 'drivers', 'bookings', 'booking_events', 'payments', 'files', 'itineraries', 'driver_payouts', 'audit_log', 'settings'];
+const TABLES = ['user', 'account', 'two_factor', 'recovery_codes', 'customers', 'drivers', 'bookings', 'booking_events', 'payments', 'files', 'itineraries', 'driver_payouts', 'audit_log', 'settings', 'content_items', 'content_versions'];
 /** Tables whose id comes from a counter, which must carry on after the restored rows. */
-const COUNTERS = ['booking_events', 'audit_log'];
+const COUNTERS = ['booking_events', 'audit_log', 'content_versions'];
 
 const file = process.argv.slice(2).find((a) => !a.startsWith('--'));
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;

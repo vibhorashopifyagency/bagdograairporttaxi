@@ -1,3 +1,4 @@
+import { overlayList } from './published';
 import type { VehicleKey } from './vehicles';
 
 /**
@@ -12,6 +13,9 @@ import type { VehicleKey } from './vehicles';
  *
  * TODO(pre-launch): the owner must confirm every number below. They are set
  * inside the market ranges the 19 Oct 2026 competitor research recorded.
+ *
+ * These are the starting copy: a route changed, added or removed in the
+ * dashboard replaces what is written here (see ./published.ts).
  */
 
 export type Fares = Record<VehicleKey, number>;
@@ -44,7 +48,7 @@ export interface Route {
   group: 'Darjeeling hills' | 'Sikkim' | 'Siliguri and NJP' | 'NJP station' | 'Dooars' | 'Nepal and Bhutan borders';
 }
 
-export const ROUTES: Route[] = [
+export const ROUTES_START: Route[] = [
   {
     slug: 'bagdogra-airport-to-darjeeling-taxi',
     from: 'Bagdogra Airport (IXB)',
@@ -867,6 +871,8 @@ export const ROUTES: Route[] = [
     group: 'Darjeeling hills',
   },
 ];
+
+export const ROUTES = overlayList('route', ROUTES_START, (r) => r.slug);
 
 export const routeBySlug = (slug: string) => ROUTES.find((r) => r.slug === slug);
 

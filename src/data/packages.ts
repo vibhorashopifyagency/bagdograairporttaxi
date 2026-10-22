@@ -1,3 +1,4 @@
+import { overlayList } from './published';
 import type { Faq } from './routes';
 
 /**
@@ -7,6 +8,9 @@ import type { Faq } from './routes';
  *
  * TODO(pre-launch): the owner must confirm every price, hotel category and
  * inclusion below.
+ *
+ * These are the starting copy: a package changed, added or removed in the
+ * dashboard replaces what is written here (see ./published.ts).
  */
 
 export interface TourPackage {
@@ -42,7 +46,7 @@ const COMMON_EXCLUDES = [
   'Anything not listed under included',
 ];
 
-export const PACKAGES: TourPackage[] = [
+export const PACKAGES_START: TourPackage[] = [
   {
     slug: 'darjeeling-gangtok-tour-package',
     short: 'Darjeeling Gangtok',
@@ -532,5 +536,7 @@ export const PACKAGES: TourPackage[] = [
     destinations: ['gangtok', 'darjeeling', 'dooars'],
   },
 ];
+
+export const PACKAGES = overlayList('package', PACKAGES_START, (p) => p.slug);
 
 export const packageBySlug = (slug: string) => PACKAGES.find((p) => p.slug === slug);

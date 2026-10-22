@@ -1,3 +1,5 @@
+import { overlayList } from './published';
+
 export type VehicleKey = 'sedan' | 'suv' | 'innova' | 'traveller';
 
 export interface Vehicle {
@@ -9,7 +11,8 @@ export interface Vehicle {
   bestFor: string;
 }
 
-export const VEHICLES: Vehicle[] = [
+/** The starting copy. The dashboard can change a car's details but not add or remove car types, because every fare is set per type. */
+export const VEHICLES_START: Vehicle[] = [
   {
     key: 'sedan',
     name: 'Sedan',
@@ -43,5 +46,7 @@ export const VEHICLES: Vehicle[] = [
     bestFor: 'Groups, office trips and large families',
   },
 ];
+
+export const VEHICLES = overlayList('vehicle', VEHICLES_START, (v) => v.key, { fixed: true });
 
 export const vehicleByKey = (key: string) => VEHICLES.find((v) => v.key === key);

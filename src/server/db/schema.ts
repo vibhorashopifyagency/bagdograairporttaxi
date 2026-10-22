@@ -21,6 +21,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -515,6 +516,65 @@ export const requestLimits = pgTable('request_limits', {
   windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
   hits: integer('hits').notNull(),
 });
+
+/* ------------------------------------------------------------------ */
+/* Website content edited in the dashboard                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Website content the admin has changed. The starting copy is the code in
+ * src/data/; a row here replaces one item of it (a route, a package, the
+ * business details), adds a new one or removes one. `published` is what
+ * the site shows from the next deploy on (scripts/content-pull.mjs copies it
+ * into the build); `draft` is an edit not yet published. A row with neither
+ * leaves the item to the code again.
+ */
+export const contentItems = pgTable(
+  'content_items',
+  {
+    /** route, package, destination, vehicle, business, policy, site, faq, gallery, guide, order. */
+    type: text('type').notNull(),
+    /** The slug or car key, or 'main' for a single record. */
+    key: text('key').notNull(),
+    published: jsonb('published').$type<Record<string, unknown> | unknown[]>(),
+    /** The live site leaves this item out. */
+    deleted: boolean('deleted').notNull().default(false),
+    /** Fingerprint of the code's copy when the admin last published it (see src/data/published.ts). */
+    baseHash: text('base_hash'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
+    draft: jsonb('draft').$type<Record<string, unknown> | unknown[]>(),
+    /** What Publish will do with the draft: save it, remove the item, or hand it back to the code. */
+    draftAction: text('draft_action').$type<'save' | 'delete' | 'reset'>(),
+    updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.type, t.key] }),
+    index('content_items_draft_idx').on(t.type).where(sql`${t.draftAction} is not null`),
+  ],
+);
+
+/**
+ * Every publish of a content item, kept for good, for the version history
+ * and one-click restore. The newest id is the content version: the build
+ * carries the one it pulled, so the dashboard can tell when a publish is
+ * live.
+ */
+export const contentVersions = pgTable(
+  'content_versions',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    type: text('type').notNull(),
+    key: text('key').notNull(),
+    action: text('action').$type<'save' | 'delete' | 'reset'>().notNull(),
+    /** What went live; null for a removal or a hand-back to the code. */
+    data: jsonb('data').$type<Record<string, unknown> | unknown[]>(),
+    publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('content_versions_item_idx').on(t.type, t.key, t.id)],
+);
 
 /** Better Auth's Drizzle adapter looks tables up by these model names. */
 export const authSchema = { user, session, account, verification, twoFactor, rateLimit };
