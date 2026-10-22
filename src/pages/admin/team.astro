@@ -9,6 +9,7 @@ import PasswordField from '../../components/admin/PasswordField.astro';
 import { audit, checkNewAccount, createAccount, isAdmin } from '../../server/admin';
 import { getAuth } from '../../server/auth';
 import { getDb, schema } from '../../server/db';
+import { RETENTION_MONTHS, cutoffDay, lastPurge, overdueCount } from '../../server/retention';
 import { ipHash } from '../../server/security';
 import { asc, eq } from 'drizzle-orm';
 
@@ -94,6 +95,11 @@ const people = await db
   })
   .from(schema.user)
   .orderBy(asc(schema.user.createdAt));
+
+// The nightly clean-up of customer details (src/server/retention.ts), so the admin can see it runs.
+const [purge, overdue] = await Promise.all([lastPurge(), overdueCount()]);
+const ran = purge ? new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(purge.at)) : null;
+const cutoffLabel = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${cutoffDay()}T00:00:00Z`));
 ---
 
 <AdminLayout title="Team">
@@ -142,6 +148,7 @@ const people = await db
       ))}
     </section>
 
+    <div class="flex h-fit flex-col gap-6">
     <form method="post" class="card h-fit space-y-4 p-5">
       <h2 class="font-[family-name:var(--font-display)] text-xl font-bold">Add a person</h2>
       <input type="hidden" name="intent" value="create" />
@@ -156,5 +163,17 @@ const people = await db
       </label>
       <button class="btn-book w-full" type="submit">Add</button>
     </form>
+
+    <section class="card space-y-2 p-5" aria-labelledby="retention-h">
+      <h2 id="retention-h" class="font-[family-name:var(--font-display)] text-xl font-bold">Customer data</h2>
+      <p class="text-sm text-body">Names and mobile numbers are removed every night once a trip is {RETENTION_MONTHS} months old, as the privacy policy promises. Today that means trips before {cutoffLabel}. Fares and payments stay for the accounts.</p>
+      {ran ? (
+        <p class="text-sm text-body">Last run {ran}: {purge!.bookings ? `${purge!.bookings} ${purge!.bookings === 1 ? 'booking' : 'bookings'} and ${purge!.customers} ${purge!.customers === 1 ? 'customer' : 'customers'} cleared` : 'nothing was due'}.</p>
+      ) : (
+        <p class="a-msg a-msg-error text-sm">The nightly clean-up has not run yet. It needs CRON_SECRET set on Vercel (see the setup guide).</p>
+      )}
+      {overdue > 0 && <p class="a-msg a-msg-error text-sm">{overdue} {overdue === 1 ? 'booking is' : 'bookings are'} past the date and still waiting to be cleared.</p>}
+    </section>
+    </div>
   </div>
 </AdminLayout>

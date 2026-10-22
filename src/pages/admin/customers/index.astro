@@ -7,6 +7,7 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import ListFilters from '../../../components/admin/ListFilters.astro';
+import EmptyState from '../../../components/admin/EmptyState.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { audit } from '../../../server/admin';
 import { addDays, inr, istMidnight, todayIST } from '../../../server/dashboard';
@@ -74,6 +75,9 @@ const paidOf = new Map(paidRows.map((t) => [t.id, Number(t.paid)]));
 const rows = list.rows.map((r) => ({ ...r, bookings: totalOf.get(r.id)?.bookings ?? 0, trips: totalOf.get(r.id)?.trips ?? 0, nextTrip: totalOf.get(r.id)?.nextTrip ?? null, paid: paidOf.get(r.id) ?? 0 }));
 await audit({ actorId: user.id, action: 'view_customers', entity: 'customers', detail: { count: rows.length, q: q || undefined, from: from ?? undefined, to: to ?? undefined }, ipHash: ipHash(Astro.request) });
 
+/** After the admin removed someone's details at their request (customers/[id]). */
+const erasedParam = Astro.url.searchParams.get('erased');
+const erased = erasedParam !== null && /^\d+$/.test(erasedParam) ? Number(erasedParam) : null;
 const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
 ---
@@ -93,6 +97,10 @@ const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '
       </form>
     </div>
 
+    {erased !== null && (
+      <p class="a-msg a-msg-ok m-0" role="status">Their details are removed{erased ? ` from ${erased} ${erased === 1 ? 'booking' : 'bookings'}` : ''}. The trips and payments stay in the accounts without a name or number.</p>
+    )}
+
     <ListFilters
       dateLabel="Last booked"
       presets={['last7', 'last30', 'thisMonth', 'lastMonth']}
@@ -105,7 +113,13 @@ const when = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '
     />
 
     {rows.length === 0 ? (
-      <div class="a-card p-8 text-body">{page.cursor ? 'Nothing more on this page.' : q || from || to ? 'No customers match that.' : 'No customers yet. Everyone who books appears here.'}</div>
+      page.cursor ? (
+        <EmptyState compact photo="tea-worker" title="Nothing more on this page." action={{ href: listHref('/admin/customers/', { q, from, to })(null), label: 'Back to the most recent' }} />
+      ) : q || from || to ? (
+        <EmptyState compact photo="tea-worker" title="No customers match that." text="Try part of the name, or the last four digits of the mobile number." action={{ href: '/admin/customers/', label: 'Show everyone' }} />
+      ) : (
+        <EmptyState photo="tea-worker" title="No customers yet." text="Everyone who books appears here, one entry per mobile number, so a returning guest is recognised the next time." />
+      )
     ) : (
       <div class="a-card overflow-x-auto">
         <table class="a-table">

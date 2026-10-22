@@ -1,0 +1,211 @@
+---
+/**
+ * The short guide for the office: how to do each everyday job in the
+ * dashboard, then the admin's own jobs. Plain steps, readable on a phone on
+ * the road. Keep it in step with the screens when a button changes name.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { isAdmin } from '../../server/admin';
+import { POLICY } from '../../data/site';
+import { RETENTION_MONTHS } from '../../server/retention';
+
+export const prerender = false;
+
+const admin = isAdmin(Astro.locals.user);
+type Topic = { id: string; title: string; steps: string[]; note?: string };
+
+const everyone: Topic[] = [
+  {
+    id: 'morning',
+    title: 'Start the day',
+    steps: [
+      'Open Today. It shows today’s pickups in time order, and Tomorrow at the top right.',
+      'A red “Needs a driver” means a confirmed trip has no driver yet. Open it and pick one in Edit trip and driver.',
+      '“Waiting for a reply” lists new bookings nobody has answered. The time turns amber after 10 minutes and red after 30.',
+    ],
+  },
+  {
+    id: 'new-booking',
+    title: 'Answer a new booking from the website',
+    steps: [
+      'Press the green WhatsApp button next to it on Today. The message opens with the reference (BAT-…), route and time filled in.',
+      'When you have replied, change its status to Contacted (the menu on each booking, or on the booking’s page).',
+      'When the customer says yes, change it to Confirmed. Then assign the driver: the status moves to Driver assigned by itself.',
+      'If the page showed a different fare, the booking says so in red. Check the fare with the customer before confirming.',
+    ],
+  },
+  {
+    id: 'phone-booking',
+    title: 'Add a booking from a phone call or a walk-in',
+    steps: [
+      'Press New booking (the + button on a phone).',
+      'Choose the route or package, the car, the date and time, and the customer’s name and mobile number.',
+      'Leave the fare empty to use the website’s fare, or type the price you agreed.',
+      'Save. The booking gets its own BAT- reference; send it to the customer with the WhatsApp button that appears.',
+    ],
+  },
+  {
+    id: 'itinerary',
+    title: 'Send the itinerary',
+    steps: [
+      'Open the booking and press Send itinerary. It fills in from the booking and the tour package.',
+      'Check the dates, pickup, driver and car. Add or change days, photos and the message. The right side shows what the customer will see.',
+      'Press Send on WhatsApp. WhatsApp opens with the message and a link to the customer’s own trip page; press Send there.',
+      'On a phone, Share with photos sends the pictures too: choose the customer in WhatsApp.',
+      'Changed something later? Open it again and press Send update. The same link shows the new version.',
+    ],
+  },
+  {
+    id: 'ask-payment',
+    title: 'Ask for the advance',
+    steps: [
+      `The advance is ${POLICY.advancePercent}% of the fare. Open the booking and press Send QR code.`,
+      'WhatsApp opens with the amount, the UPI ID and a link that shows the office QR code.',
+      'Customers who book on the website can also pay first with “Pay advance by UPI”: their booking still arrives here, marked “payment button”.',
+    ],
+  },
+  {
+    id: 'record-payment',
+    title: 'Record money received',
+    steps: [
+      'Open the booking and press Record payment. Enter the amount, UPI or cash, and the UPI reference from the screenshot.',
+      'Who received it: the office, or the driver (for the balance after the trip).',
+      'Staff can record payments only when the admin has switched it on for them on the Team page.',
+      'A mistake cannot be deleted. Ask the admin to reverse it, then record it again correctly.',
+    ],
+    note: 'For taxi trips the driver collects the balance from the guest after the trip and hands it to the office. Tour packages keep the balance with the office.',
+  },
+  {
+    id: 'after-trip',
+    title: 'After the trip',
+    steps: [
+      'Change the status to Completed.',
+      'If the driver collected the balance, press the “Raju collected ₹…” button on the booking (or Record payment, received by the driver).',
+      'When the driver hands the cash to the office, open Drivers, then the driver, and press Received from … . Paying the driver for trips is Pay … on the same page.',
+    ],
+  },
+  {
+    id: 'find',
+    title: 'Find a booking or a customer',
+    steps: [
+      'Type part of a name, the last four digits of a mobile number, or the BAT- reference in the search box at the top (the magnifying glass on a phone).',
+      'Matches appear as you type. On a laptop, Ctrl K (⌘K on a Mac) jumps to the search box from any page.',
+      'On Bookings, the Trip and Payment filters and the dates narrow the list: for example every Darjeeling trip next week that has no payment yet.',
+    ],
+  },
+  {
+    id: 'privacy',
+    title: 'If a customer asks what we hold, or to remove it',
+    steps: [
+      `Customer names and numbers are removed by themselves ${RETENTION_MONTHS} months after the trip. Fares and payments stay for the accounts.`,
+      'If a customer asks to see their details, or to have them removed sooner, tell the admin. Only the admin can do it, from the customer’s page.',
+      'Keep notes to what helps the next trip. The customer can ask to see them.',
+    ],
+  },
+  {
+    id: 'phone',
+    title: 'Use it on your phone',
+    steps: [
+      'Open My account and press Install the app (on an iPhone: Safari, then Share, then Add to Home Screen). It opens full screen, straight to Today.',
+      'Working at night? The moon button (More on a phone) switches to dark mode. My account can also follow the phone’s own setting.',
+      'With no signal it shows a “No connection” page: nothing about customers is kept on the phone.',
+    ],
+  },
+  {
+    id: 'problems',
+    title: 'When something looks wrong',
+    steps: [
+      '“The admin is unavailable for a moment”: the database did not answer. Wait a minute and reload. Bookings made meanwhile are kept by the customer’s phone and arrive later.',
+      'A booking that says “It reached us … late” came in while the database was down. The office was emailed at the time with the details.',
+      '“Too many changes at once”: wait a few seconds and try again.',
+    ],
+  },
+];
+
+const adminOnly: Topic[] = [
+  {
+    id: 'team',
+    title: 'Team and passwords',
+    steps: [
+      'Team: add a person with a username and password, and give them the password in person.',
+      'Switch on “can record payments” only for staff who should take money. Deactivate someone who leaves; their history stays.',
+      'Keep your recovery codes and two-factor backup codes on paper or in a password manager. They are the only way back in without the password.',
+    ],
+  },
+  {
+    id: 'upi',
+    title: 'The office UPI QR code',
+    steps: [
+      'Payments, Office QR code: upload the QR picture from the bank or UPI business app. The page reads it and fills in the UPI ID.',
+      'Scan the saved code with your own phone and check the name before customers use it. The website’s booking page and every QR message use this picture.',
+    ],
+  },
+  {
+    id: 'money',
+    title: 'Refunds, reversals and the accounts',
+    steps: [
+      'A wrong payment: press Reverse on it and give a reason. The original stays, crossed out.',
+      'A refund under the cancellation policy: Refund on the booking.',
+      'Downloads: Payments has “Download for accounts (CSV)”; Bookings has its own download, which follows the filters on screen.',
+      'Drivers’ pay is set on each driver (a share of the fare or a fixed amount a trip). Only the admin sets it or changes a trip’s amount.',
+    ],
+  },
+  {
+    id: 'goal',
+    title: 'The monthly goal',
+    steps: ['Today, Change goal: set the trips and the fares you aim for this month. The ring fills as confirmed trips come in.'],
+  },
+  {
+    id: 'data',
+    title: 'Customer data requests',
+    steps: [
+      'Open the customer. “Download what we hold” gives a plain text file you can send them.',
+      '“Remove their details” takes their name, number, addresses and notes off every booking at once. It cannot be undone, and it warns you about trips still to come.',
+      `Team shows when the nightly clean-up last ran. It removes details ${RETENTION_MONTHS} months after each trip.`,
+    ],
+  },
+];
+
+const all = admin ? [...everyone, ...adminOnly] : everyone;
+---
+
+<AdminLayout title="Help">
+  <div class="flex flex-col gap-5 lg:gap-6">
+    <div>
+      <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">How to</h1>
+      <p class="m-0 mt-1 text-sm text-muted">The everyday jobs, step by step{admin ? ', then the admin’s own' : ''}. Tap one to open it.</p>
+    </div>
+
+    <nav aria-label="Topics" class="flex flex-wrap gap-2">
+      {all.map((t) => <a href={`#${t.id}`} class="inline-flex min-h-10 items-center rounded-full border border-line bg-white px-4 text-sm font-medium text-body no-underline hover:border-ink hover:text-ink">{t.title}</a>)}
+    </nav>
+
+    <div class="grid gap-3 lg:grid-cols-2 lg:gap-4">
+      {all.map((t, i) => (
+        <details id={t.id} class="a-card a-help group self-start" open={i === 0}>
+          <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3">
+            <span class="flex items-center gap-3">
+              {adminOnly.includes(t) && <span class="a-badge bg-ink text-white">Admin</span>}
+              <span class="font-display text-lg font-bold">{t.title}</span>
+            </span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" class="shrink-0 text-muted transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
+          </summary>
+          <ol class="m-0 flex list-decimal flex-col gap-2 border-t border-[#f0f1f3] py-4 pr-5 pl-10 text-body marker:font-semibold marker:text-ink">
+            {t.steps.map((s) => <li>{s}</li>)}
+          </ol>
+          {t.note && <p class="m-0 mx-5 mb-4 rounded-xl bg-mist px-4 py-3 text-sm text-body">{t.note}</p>}
+        </details>
+      ))}
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  // A link to a topic (#record-payment) opens it.
+  const open = () => {
+    const d = location.hash ? document.getElementById(location.hash.slice(1)) : null;
+    if (d instanceof HTMLDetailsElement) d.open = true;
+  };
+  addEventListener('hashchange', open);
+  open();
+</script>

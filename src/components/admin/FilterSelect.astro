@@ -1,0 +1,91 @@
+---
+/**
+ * A choice filter on an admin list ("Trip · Darjeeling", "Payment · Advance
+ * paid"), drawn like the date range field next to it. A real <select> lies
+ * over the field, so a phone opens its own picker and the keyboard works as
+ * usual; choosing sends the surrounding form, keeping the other filters.
+ */
+interface Props {
+  name: string;
+  label: string;
+  value: string | null;
+  /** What "nothing chosen" is called: "Any trip". */
+  anyLabel: string;
+  /** Plain options, or groups of them. */
+  options?: [value: string, label: string][];
+  groups?: { label: string; options: [value: string, label: string][] }[];
+  /** The same list with this filter taken off. */
+  clearHref: string;
+  /** A stroke icon on a 24px grid. */
+  icon: string;
+}
+const { name, label, value, anyLabel, options = [], groups = [], clearHref, icon } = Astro.props;
+const all = [...options, ...groups.flatMap((g) => g.options)];
+const shown = all.find(([v]) => v === value)?.[1] ?? anyLabel;
+const set = Boolean(value);
+const svg = (d: string, size = 18) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+---
+
+<div class:list={['fs-field', set && 'is-set']} data-fs>
+  <span class="fs-face" aria-hidden="true">
+    <span class="fs-icon" set:html={svg(icon)} />
+    <span class="fs-text">
+      <span class="fs-label">{label}</span>
+      <span class="fs-value" data-fs-value>{shown}</span>
+    </span>
+    <span class="fs-caret" set:html={svg('<path d="m6 9 6 6 6-6"/>', 16)} />
+  </span>
+  <select name={name} aria-label={label} class="fs-select" data-fs-select>
+    <option value="" selected={!set}>{anyLabel}</option>
+    {options.map(([v, l]) => <option value={v} selected={v === value}>{l}</option>)}
+    {groups.map((g) => (
+      <optgroup label={g.label}>
+        {g.options.map(([v, l]) => <option value={v} selected={v === value}>{l}</option>)}
+      </optgroup>
+    ))}
+  </select>
+  {set && <a href={clearHref} class="fs-clear" aria-label={`Clear ${label.toLowerCase()}`} title="Clear" set:html={svg('<path d="M18 6 6 18M6 6l12 12"/>', 16)} />}
+</div>
+
+<style is:global>
+  .fs-field {
+    position: relative; display: inline-flex; align-items: stretch; max-width: 100%; min-height: 3rem;
+    border: 1px solid var(--color-line); border-radius: 14px; background: #fff; transition: border-color 0.15s;
+  }
+  .fs-field:hover, .fs-field.is-set { border-color: var(--color-ink); }
+  .fs-field:focus-within { outline: 3px solid var(--color-lime); outline-offset: 1px; }
+  .fs-face { position: relative; display: flex; flex: 1 1 auto; align-items: center; gap: 0.7rem; min-width: 0; padding: 0.4rem 0.85rem 0.4rem 0.45rem; }
+  .fs-icon { display: grid; flex: none; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 10px; background: var(--color-mist); }
+  .fs-field.is-set .fs-icon { background: var(--color-lime); }
+  .fs-text { display: flex; min-width: 0; flex-direction: column; line-height: 1.2; }
+  .fs-label { font-size: 0.75rem; font-weight: 500; color: var(--color-muted); }
+  .fs-value { max-width: 15rem; overflow: hidden; font-size: 0.95rem; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+  .fs-field:not(.is-set) .fs-value { font-weight: 500; color: var(--color-body); }
+  .fs-caret { display: grid; flex: none; margin-left: auto; color: var(--color-muted); }
+  /* The real select covers the face (not the clear button), invisible but clickable. */
+  .fs-select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 1rem; }
+  .fs-field.is-set .fs-select { right: 2.75rem; width: calc(100% - 2.75rem); }
+  .fs-clear {
+    position: relative; z-index: 1; display: grid; flex: none; place-items: center; width: 2.75rem; border-left: 1px solid var(--color-line);
+    border-radius: 0 13px 13px 0; color: var(--color-muted);
+  }
+  .fs-clear:hover { background: var(--color-mist); color: var(--color-ink); }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLSelectElement>('[data-fs-select]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const value = sel.closest('[data-fs]')!.querySelector<HTMLElement>('[data-fs-value]')!;
+      value.textContent = sel.selectedOptions[0]?.textContent ?? '';
+      sel.form?.requestSubmit();
+    });
+    // A filter set to "any" is left out of the address rather than sent empty,
+    // whichever control sends the form (this one or the date range).
+    sel.form?.addEventListener('submit', () => {
+      if (!sel.value) sel.disabled = true;
+    });
+  });
+  // Back from the next page, the browser may restore a select it had switched off.
+  addEventListener('pageshow', () => document.querySelectorAll<HTMLSelectElement>('[data-fs-select]').forEach((s) => (s.disabled = false)));
+</script>

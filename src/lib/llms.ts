@@ -56,7 +56,7 @@ const identity = () => [
   `- Office: ${a.street}, ${a.locality} ${a.postalCode}, ${a.region}, India`,
   `- Google Business Profile: ${BUSINESS.mapsUrl}`,
   `- Languages: English, Hindi, Bengali, Nepali`,
-  `- Payment: UPI, credit or debit card, net banking, or cash to the driver`,
+  `- Payment: the advance by UPI to the office QR code; the balance to the driver after the trip, in cash or by UPI`,
   ...(rating ? [`- ${rating}`] : []),
   `- Fares last updated ${SITE.faresUpdatedLabel}; site content last updated ${SITE.contentUpdatedLabel}. Fares are one way, per car (not per person), in Indian rupees, and include fuel, tolls, parking, driver allowance and GST.`,
 ];
@@ -143,7 +143,7 @@ export function llmsFull() {
 
   out.push('## Booking and policies', '');
   out.push(
-    `- Advance: ${POLICY.advancePercent}% of the fare confirms the booking, paid by UPI, card or net banking; the balance is paid after the trip, in cash or by UPI.`,
+    `- Advance: ${POLICY.advancePercent}% of the fare confirms the booking, paid by UPI to the office QR code; the balance is paid after the trip, in cash or by UPI.`,
     `- Confirmation: instant on WhatsApp; the driver's name, photo and car number are sent the evening before pickup.`,
     `- Waiting: ${POLICY.freeWaitMinutes} minutes free after the flight or train arrives; flights and trains are tracked, so a delay costs nothing.`,
     `- Cancellation: free up to ${POLICY.freeCancelHours} hours before pickup (full refund of the advance); ${POLICY.lateCancelRefundPercent}% refund inside ${POLICY.freeCancelHours} hours; refunds within ${POLICY.refundDays} working days. Tour-package cancellation tiers: ${abs('/cancellation-refund-policy/')}`,

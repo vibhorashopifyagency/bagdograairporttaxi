@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "trailingSlash": true,
+  "crons": [{ "path": "/api/cron/retention/", "schedule": "30 20 * * *" }],
   "redirects": [
     { "source": "/index.php", "destination": "/", "permanent": true },
     { "source": "/about.php", "destination": "/about/", "permanent": true },

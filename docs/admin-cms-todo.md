@@ -1,6 +1,6 @@
 # Admin, live editing and bookings dashboard: plan and todo list
 
-Status: plan agreed and every open question settled on 21 October 2026. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, then the dashboard shell and home screen to the mock (sidebar, phone tab bar, today board at /admin/, bookings list at /admin/bookings/, new booking by hand at /admin/bookings/new/). Later the same day: a page for each booking (/admin/bookings/BAT-.../), payments by UPI QR code and cash (Phase 3b, /admin/payments/), the Send itinerary popup with the customer's private trip page (Phase 3c stage 1, /trip/...), the itineraries list and the customers pages. Not yet deployed. Going-live steps are in docs/admin-setup.md.
+Status: plan agreed and every open question settled on 21 October 2026. On 22 October 2026: bookings filters by trip and payment and a bookings CSV, search across bookings and customers, the office UPI QR code on /book/, photo empty screens, dark mode, the installable app, the nightly 24-month clean-up, customer data download and removal, failed-save alerts, backup and restore scripts, the phone check and the Help page. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, then the dashboard shell and home screen to the mock (sidebar, phone tab bar, today board at /admin/, bookings list at /admin/bookings/, new booking by hand at /admin/bookings/new/). Later the same day: a page for each booking (/admin/bookings/BAT-.../), payments by UPI QR code and cash (Phase 3b, /admin/payments/), the Send itinerary popup with the customer's private trip page (Phase 3c stage 1, /trip/...), the itineraries list and the customers pages. Not yet deployed. Going-live steps are in docs/admin-setup.md.
 
 ## Decisions taken by the owner
 
@@ -47,8 +47,8 @@ The dashboard should feel like the business: mountains, roads, a veteran-run tea
 **Brand**
 - [x] Use the site's own palette: ink, lime and white, with the Bricolage font for headings and Inter for text.
 - [x] Put the Jai Jawan badge logo and the line "Your journey, our responsibility" in the sidebar.
-- [ ] Use the site's mountain and road photos in headers and empty screens, never stock icons on grey. *(Built for the home screen greeting; empty screens still plain cards.)*
-- [ ] Light mode by default, with a dark mode for night shifts.
+- [x] Use the site's mountain and road photos in headers and empty screens, never stock icons on grey. *(Every empty list, the search page and the today board show one of the site's own photos beside the message, src/components/admin/EmptyState.astro. The "silk-route" photo carries another company's watermark, "Adorable Silkroute", so the admin does not use it; it is still used on the public site.)*
+- [x] Light mode by default, with a dark mode for night shifts. *(Built 22 Oct 2026: the moon button in the sidebar (More on a phone) or My account, which also offers "Match this device". Remembered per device in a cookie; src/styles/admin-dark.css.)*
 
 **Upbeat and motivating**
 - [x] A greeting by name and time of day, such as "Good morning, Pinku", with today's weather in Bagdogra and Darjeeling. *(Built, with Bagdogra, Darjeeling and Gangtok from Open-Meteo, cached 30 minutes.)*
@@ -62,12 +62,12 @@ The dashboard should feel like the business: mountains, roads, a veteran-run tea
 - [x] New bookings not yet answered show how long they have waited, and turn amber, then red.
 - [x] Payments due and balances to collect, with one tap to send the QR code. *(On the today board and the Payments page; each balance opens the booking with the QR popup.)*
 - [x] Quick actions always in reach: new booking, send itinerary, record payment, send QR code. *(The last three ask which booking first, then open its popup.)*
-- [ ] Search across bookings and customers from anywhere, with a keyboard shortcut on a laptop. *(Bookings search sits in the top bar on every page, with Ctrl K or ⌘K; customers come with the customer page.)*
+- [x] Search across bookings and customers from anywhere, with a keyboard shortcut on a laptop. *(The top search box lists matching bookings and customers as you type, with arrow keys and Enter; Ctrl K or ⌘K jumps to it; Enter opens /admin/search/ with both lists. On the bookings list it narrows that list instead. Searches are logged.)*
 
 **Built for the phone**
 - [x] On a phone, a bottom tab bar, large tap targets and screens that work one-handed.
 - [x] Popups open as full-screen sheets on a phone.
-- [ ] The dashboard installs to the home screen like an app.
+- [x] The dashboard installs to the home screen like an app. *(public/admin.webmanifest, scoped to /admin/, with "Install the app" on My account and iPhone instructions. Its service worker only shows a "No connection" page offline and never stores pages, so no customer data stays on the phone.)*
 
 **Approval before building**
 - [x] Mock the dashboard home screen and the itinerary popup, at phone and laptop size, and get the owner's yes before any dashboard code is written. *(Mock published on 21 October 2026: https://claude.ai/artifact/Cu63my3bhrhAk4apHDoFLS.)* *(On 21 October 2026 the owner asked for the admin to match the mock, and the home screen, shell and bookings list were built to it the same day.)*
@@ -102,7 +102,7 @@ This phase can go live before content editing is built.
 - [x] Put the reference in the WhatsApp message so staff can match a chat to a record.
 - [x] On "Confirm on WhatsApp", open WhatsApp immediately and send the booking to the API in the same click.
 - [x] If the save fails, keep the booking in the browser and retry on the next visit, so no booking is lost.
-- [ ] Save the booking the same way when a customer scans the QR code to pay first, so those bookings are recorded too. *(The payment button already saves the booking; the QR code itself comes in Phase 3b.)*
+- [x] Save the booking the same way when a customer scans the QR code to pay first, so those bookings are recorded too. *(Pay advance by UPI on /book/ saves the booking, then shows the QR code.)*
 - [x] Re-check the fare on the server so a tampered price is flagged.
 - [x] Spam protection: hidden honeypot field, rate limit per phone and IP. *(Cloudflare Turnstile left out until spam actually appears.)*
 - [x] Add a consent line on the form that links to the privacy policy.
@@ -111,7 +111,7 @@ This phase can go live before content editing is built.
 
 ## Phase 3: bookings and customers dashboard
 
-- [ ] Bookings list showing all bookings to both admin and staff, with filters by status, date, route, package and payment state, plus search by name, phone or reference. *(Built at /admin/bookings/ with search and a status filter; date, route, package and payment filters still to do.)*
+- [x] Bookings list showing all bookings to both admin and staff, with filters by status, date, route, package and payment state, plus search by name, phone or reference. *(Trip filter: all taxi, all packages, or one route or package; Payment filter: no payment, part of the advance, advance paid, fully paid, refunded. src/server/booking-filters.ts.)*
 - [x] Statuses: new, contacted, confirmed, driver assigned, completed, cancelled, no-show. *(Changed from the menu on each booking in the list, or by pressing Reply on the home screen.)*
 - [x] Booking detail page: trip, fare, payment state, notes and a timeline of every change. *(At /admin/bookings/BAT-.../; every edit, payment, reversal, QR code and itinerary sent is on the timeline.)*
 - [x] Optional "handled by" field on a booking, useful once there is more than one staff member. *(In Edit trip and driver on the booking.)*
@@ -119,7 +119,7 @@ This phase can go live before content editing is built.
 - [x] One-tap buttons to call the customer or open a WhatsApp chat from the booking. *(On the home screen cards, the bookings list and each booking's page.)*
 - [x] Customer page: contact details, all past bookings and notes. *(At /admin/customers/, with search; notes are shared by the team.)*
 - [x] Staff can create a booking manually for phone and walk-in enquiries. *(Built at /admin/bookings/new/.)*
-- [ ] Export bookings and payments to CSV for accounts. *(Payments done: "Download for accounts" on the Payments page, admin only. Bookings still to do.)*
+- [x] Export bookings and payments to CSV for accounts. *(Both admin only and logged. The bookings file follows every filter on screen and carries paid, due and the payment state.)*
 - [x] Dashboard home: today's pickups, new bookings, payments due, this week's numbers, top routes and packages.
 
 ## Phase 3b: payments by UPI QR code and cash
@@ -127,7 +127,7 @@ This phase can go live before content editing is built.
 There is no payment gateway, so payments are recorded by hand.
 
 - [x] Store the office's UPI QR code image and UPI ID in business details, editable by the admin. *(Owner's decision, 21 Oct 2026: the admin uploads the QR code picture on the Payments page, and it is shown and sent exactly as uploaded. The page reads the picture in the browser (UPI and Bharat QR codes), shows which UPI ID it pays and fills that in; a QR code that is not a UPI payment code, or a UPI ID that differs from the one in the picture, is refused. The picture is kept in the database (one small file needs no file storage). It carries no amount, so customers type it; the message and trip page say how much. The earlier version, which made a QR code from the UPI ID with the amount inside, is gone. Only the admin adds, changes or removes it (owner, 21 Oct 2026), checked on the server from the database; staff see it and send it but get a refusal if they try to change it. Removing it needs a confirmation and is kept in the audit log.)*
-- [ ] Show the QR code on the booking page in place of the current payment-link button, with the advance amount to pay.
+- [x] Show the QR code on the booking page in place of the current payment-link button, with the advance amount to pay. *(22 Oct 2026: "Pay advance by UPI" opens the office QR code with the advance, the UPI ID with a Copy button, "Pay with a UPI app" on phones, and "I have paid: send it on WhatsApp". Tour packages are priced "from", so for them the button is hidden and the advance is asked for on WhatsApp. The site's wording about cards, net banking and a payment gateway was corrected to UPI, which also changed the FAQ, the structured data and llms.txt.)*
 - [x] A "send QR code" button on each booking that opens WhatsApp to the customer with the amount and the UPI ID. *(The message also links to the trip page, which shows the office QR code and the amount to enter. "Share QR image" on a phone sends the QR code picture with the amount under it; on a laptop the same picture downloads, ready to drop into WhatsApp Web.)*
 - [ ] Record each payment on the booking: amount, method (UPI or cash), date, who received it, UPI transaction reference, optional screenshot. *(All but the screenshot, which needs photo storage (Vercel Blob). A payment larger than the balance is refused.)*
 - [x] Payment state per booking: unpaid, advance paid, fully paid, refunded. It is worked out from the recorded payments, not typed in. *(The advance is 20% of the agreed fare, so changing the fare moves it too.)*
@@ -160,7 +160,7 @@ A "Send itinerary" button on every booking, and in the quick actions, opens a po
 
 **Records**
 - [x] Log every itinerary sent on the booking's timeline, with who sent it, when, and a copy of what was sent. *(The last version sent is kept in full; earlier versions are counted, not kept.)*
-- [ ] Remove itinerary pages along with the customer's details at 24 months, or earlier if the admin chooses.
+- [x] Remove itinerary pages along with the customer's details at 24 months, or earlier if the admin chooses. *(Part of the nightly clean-up and of removing a customer on request.)*
 
 ## Phase 3d: drivers and what we pay them
 
@@ -214,12 +214,12 @@ How customers pay (owner, 21 October 2026, evening): the office takes the advanc
 ## Phase 7: privacy, safety and handover
 
 - [x] Update the privacy policy: what is stored, why, for how long and who can see it.
-- [ ] Remove names and mobile numbers from bookings 24 months after the trip date, automatically every night. Trip, fare and payment totals stay for the accounts.
-- [ ] Customer data export and deletion on request, from the customer page.
-- [ ] Daily database backups, which Neon provides, plus a tested restore.
-- [ ] Error alerts for failed booking saves.
-- [ ] Check the admin works well on a phone, since staff will use it on the road.
-- [ ] A short guide for the admin and for staff.
+- [x] Remove names and mobile numbers from bookings 24 months after the trip date, automatically every night. Trip, fare and payment totals stay for the accounts. *(src/server/retention.ts, run by the Vercel cron in vercel.json at 02:00 India time with CRON_SECRET. Also removes drop addresses, flights, notes, payment notes, itineraries, the number an itinerary went to, the values on edit entries, and access-log rows older than 24 months. Tested on 22 Oct 2026 with bookings 23, 25 and 30 months old. The Team page shows the last run.)*
+- [x] Customer data export and deletion on request, from the customer page. *(Admin only: "Download what we hold" (a plain text file to send them) and "Remove their details", which asks for a reason and a tick, and warns about trips still to come. Logged without the name.)*
+- [ ] Daily database backups, which Neon provides, plus a tested restore. *(Built: npm run db:backup and npm run db:restore, tested on 22 Oct 2026 (every table identical after the round trip); Neon's own restore is described in docs/admin-setup.md. Still to do once Neon is set up: check Neon's restore window on the chosen plan.)*
+- [x] Error alerts for failed booking saves. *(The office is emailed the booking at once when the database does not answer; a booking that arrives later through the browser's retry shows "reached us … late" on its timeline and in its email. A failed nightly clean-up is emailed too. Needs Resend.)*
+- [x] Check the admin works well on a phone, since staff will use it on the road. *(Every page checked at phone width on 22 Oct 2026; the New booking form was wider than the screen and is fixed.)*
+- [x] A short guide for the admin and for staff. *(/admin/help/, in the menu for everyone: eleven everyday jobs step by step, and five more for the admin.)*
 
 ## Phase 8 (optional, later): send directly through the WhatsApp Business Platform
 

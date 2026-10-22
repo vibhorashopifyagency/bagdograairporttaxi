@@ -30,6 +30,8 @@ const common = {
   consent: z.literal(true),
   /** Honeypot: hidden from people, filled in by bots. */
   website: z.string().max(500).default(''),
+  /** When the browser first tried, if it had to keep the booking and send it again (BaseLayout). */
+  savedAt: z.number().int().positive().optional(),
 };
 
 export const bookingInput = z.discriminatedUnion('kind', [
@@ -97,6 +99,9 @@ export async function saveBooking(input: BookingInput, ipHash: string): Promise<
 
   const now = new Date();
   const mismatch = input.fareShown !== fare.total;
+  // A booking the browser kept and sent again on a later visit: how late it is, so the office knows.
+  const late = input.savedAt && input.savedAt < now.getTime() ? Math.round((now.getTime() - input.savedAt) / 60000) : 0;
+  const lateMinutes = late >= 2 && late < 60 * 24 * 8 ? late : undefined;
   const row = {
     ref: input.ref,
     kind: input.kind,
@@ -137,13 +142,13 @@ export async function saveBooking(input: BookingInput, ipHash: string): Promise<
     await tx.insert(schema.bookingEvents).values({
       bookingId: booking.id,
       type: 'created',
-      data: { channel: input.channel, fareShown: input.fareShown, fareServer: fare.total },
+      data: { channel: input.channel, fareShown: input.fareShown, fareServer: fare.total, ...(lateMinutes ? { lateMinutes } : {}) },
     });
     return true;
   });
 
   if (!created) return { status: 200, body: { ok: true, ref: input.ref, duplicate: true } };
 
-  await sendBookingEmail({ ...row, customerName: input.name, customerPhone: phone });
+  await sendBookingEmail({ ...row, customerName: input.name, customerPhone: phone, lateMinutes });
   return { status: 201, body: { ok: true, ref: input.ref } };
 }

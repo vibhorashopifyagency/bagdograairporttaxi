@@ -7,6 +7,7 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import ListFilters from '../../../components/admin/ListFilters.astro';
+import EmptyState from '../../../components/admin/EmptyState.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { audit } from '../../../server/admin';
 import { TONE, todayIST } from '../../../server/dashboard';
@@ -85,10 +86,12 @@ const origin = Astro.url.origin;
     </ListFilters>
 
     {rows.length === 0 ? (
-      <div class="a-card p-8 text-body">
-        <p class="m-0 font-display text-xl font-bold text-ink">{from || to ? `No ${showPast ? 'past' : 'upcoming'} itineraries in those dates.` : showPast ? 'No past itineraries yet.' : 'No itineraries for upcoming trips yet.'}</p>
-        <p class="m-0 mt-1">{from || to ? `${showPast ? 'Past trips' : 'Upcoming'} is open, so only ${showPast ? 'trips before today' : 'trips from today on'} are searched. Switch above, or clear the dates.` : 'Open a booking and press Send itinerary. It fills in from the booking and the tour package, so most of it is ready before you start.'}</p>
-      </div>
+      <EmptyState
+        photo="gurudongmar"
+        compact={Boolean(from || to)}
+        title={from || to ? `No ${showPast ? 'past' : 'upcoming'} itineraries in those dates.` : showPast ? 'No past itineraries yet.' : 'No itineraries for upcoming trips yet.'}
+        text={from || to ? `${showPast ? 'Past trips' : 'Upcoming'} is open, so only ${showPast ? 'trips before today' : 'trips from today on'} are searched. Switch above, or clear the dates.` : 'Open a booking and press Send itinerary. It fills in from the booking and the tour package, so most of it is ready before you start.'}
+      />
     ) : (
       <ul class="m-0 grid list-none gap-3 p-0 md:grid-cols-2 2xl:grid-cols-3">
         {rows.map((r) => {

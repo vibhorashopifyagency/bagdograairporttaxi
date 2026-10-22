@@ -8,6 +8,7 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import ListFilters from '../../../components/admin/ListFilters.astro';
+import EmptyState from '../../../components/admin/EmptyState.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { audit, isAdmin } from '../../../server/admin';
 import { TONE, addDays, balancesToCollect, inr, inrShort, todayIST } from '../../../server/dashboard';
@@ -155,7 +156,7 @@ const stats = [
           </p>
         )}
         {rows.length === 0 ? (
-          <p class="m-0 px-5 pb-6 text-body">{range.from || range.to ? 'Nothing was received in those dates.' : 'No payments yet. Record one from a booking’s page, with the Record payment button.'}</p>
+          <EmptyState bare compact photo="hero" title={range.from || range.to ? 'Nothing was received in those dates.' : 'No payments yet.'} text={range.from || range.to ? 'Try a wider range, or clear the dates.' : 'Record one from a booking’s page, with the Record payment button. Every rupee shows up here.'} />
         ) : (
           <div class="overflow-x-auto">
             <table class="a-table">

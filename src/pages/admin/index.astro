@@ -7,6 +7,7 @@
  * The full bookings list lives at /admin/bookings/.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import EmptyState from '../../components/admin/EmptyState.astro';
 import { audit, isAdmin } from '../../server/admin';
 import {
   GOAL_KEY,
@@ -235,10 +236,7 @@ const actions = [
           </nav>
         </div>
         {pickups.length === 0 ? (
-          <div class="a-card relative overflow-hidden p-6 lg:p-8">
-            <p class="m-0 font-display text-xl font-bold">{showTomorrow ? 'Nothing booked for tomorrow yet.' : 'No pickups today. Time for chai.'}</p>
-            <p class="m-0 mt-1 text-body">Trips show up here the moment a customer confirms on WhatsApp, or when you add one by hand.</p>
-          </div>
+          <EmptyState photo={showTomorrow ? 'pelling' : 'tea-worker'} title={showTomorrow ? 'Nothing booked for tomorrow yet.' : 'No pickups today. Time for chai.'} text="Trips show up here the moment a customer confirms on WhatsApp, or when you add one by hand." />
         ) : (
           pickups.map((p) => (
             <article class="a-card flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:gap-[18px] sm:px-5 sm:py-[18px]">

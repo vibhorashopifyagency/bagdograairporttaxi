@@ -1,0 +1,109 @@
+/*
+ * Dark mode for the office dashboard, for night shifts. Light is the default;
+ * each person picks Light, Dark or "Match this device" on My account (or the
+ * moon button), remembered in a cookie, and AdminLayout puts
+ * data-theme="dark" on <html> before the page paints.
+ *
+ * How it works: "ink" is the colour of text and of dark surfaces. In dark
+ * mode --color-ink becomes the light text colour, so every heading, value
+ * and component that says color: var(--color-ink) follows by itself. The
+ * places that use ink as a dark *surface* (the sidebar, stat tiles, selected
+ * pills, primary buttons) are put back below: the sidebar stays near-black,
+ * tiles lift slightly off the page, and selected states and the main button
+ * turn lime with dark text, as on the website's dark bands.
+ *
+ * Tailwind keeps its utilities in CSS layers; these plain rules win over them.
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --a-page: #0f1115;
+  --a-surface: #171a1f;
+  --a-raised: #1f2329;
+  --a-ink-surface: #0b0c0e;
+  --a-tile: #242931;
+  --a-input: #111418;
+  --a-edge: #343a43;
+  --color-ink: #eef0f3;
+  --color-body: #c3c8d1;
+  --color-muted: #8d94a3;
+  --color-line: #2a2f37;
+  --color-mist: #1f2329;
+  --color-lime-50: #1f2a0b;
+  --color-lime-100: #3a5208;
+  --shadow-float: 0 2px 6px rgb(0 0 0 / 40%), 0 30px 60px -24px rgb(0 0 0 / 70%);
+}
+
+/* ---------- Surfaces ---------- */
+[data-theme='dark'] body { background: var(--a-page); color: var(--color-ink); }
+[data-theme='dark'] .bg-white, [data-theme='dark'] .a-card, [data-theme='dark'] .card,
+[data-theme='dark'] .a-dialog, [data-theme='dark'] .a-dialog-foot, [data-theme='dark'] .a-sheet,
+[data-theme='dark'] .drp-pop, [data-theme='dark'] .ta-pop, [data-theme='dark'] .drp-field, [data-theme='dark'] .fs-field,
+[data-theme='dark'] .it-day, [data-theme='dark'] .it-phone { background-color: var(--a-surface); }
+[data-theme='dark'] .card { box-shadow: none; }
+[data-theme='dark'] [class~='bg-[#f7f8fa]'], [data-theme='dark'] [class~='bg-[#eef0f3]'], [data-theme='dark'] [class~='bg-[#e3e6ea]'], [data-theme='dark'] .a-drop { background-color: var(--a-raised); }
+
+/* Ink as a surface: the sidebar and the phone's top bar stay near-black, tiles and banners in the page lift a little. */
+[data-theme='dark'] .bg-ink { background-color: var(--a-ink-surface); }
+[data-theme='dark'] main .bg-ink, [data-theme='dark'] .a-celebrate { background-color: var(--a-tile); }
+[data-theme='dark'] [class*='linear-gradient(var(--color-ink)'] { background-image: linear-gradient(var(--a-ink-surface) 0, var(--a-ink-surface) 6rem, transparent 6rem); }
+[data-theme='dark'] .bg-ink.text-lime, [data-theme='dark'] main span.bg-ink { background-color: #000; }
+
+/* Selected states drawn in ink (pills, tabs, rows-per-page, status chips) become lime. */
+[data-theme='dark'] [aria-current].bg-ink, [data-theme='dark'] [aria-pressed='true'].bg-ink,
+[data-theme='dark'] .a-pill input:checked + span, [data-theme='dark'] .drp-day.is-start > span, [data-theme='dark'] .drp-day.is-end > span {
+  background-color: var(--color-lime); border-color: var(--color-lime); color: #111;
+}
+[data-theme='dark'] [aria-current].bg-ink * { color: #111; }
+[data-theme='dark'] .it-switch input:checked + .it-switch-track { background: var(--color-lime); }
+[data-theme='dark'] .it-switch input:checked + .it-switch-track span { background: #111; }
+[data-theme='dark'] .it-switch-track { background: #3a4049; }
+
+/* ---------- Buttons ---------- */
+/* The main action turns lime; a red (destructive) one stays red. */
+[data-theme='dark'] .btn-book, [data-theme='dark'] a[href='/admin/bookings/new/'].bg-ink { background-color: var(--color-lime); color: #111; }
+[data-theme='dark'] .btn-book:hover, [data-theme='dark'] a[href='/admin/bookings/new/'].bg-ink:hover { background-color: var(--color-lime-hover); }
+[data-theme='dark'] .btn-book svg, [data-theme='dark'] a[href='/admin/bookings/new/'].bg-ink svg { stroke: #111; }
+[data-theme='dark'] .btn-book[class~='bg-[#b42318]'] { background-color: #b42318; color: #fff; }
+[data-theme='dark'] .btn-book[class~='bg-[#b42318]']:hover { background-color: #d03a2d; }
+[data-theme='dark'] .btn-ghost, [data-theme='dark'] .a-icon-btn, [data-theme='dark'] .a-pill span, [data-theme='dark'] .a-chip,
+[data-theme='dark'] .it-chip, [data-theme='dark'] .it-chip-x, [data-theme='dark'] .it-mini, [data-theme='dark'] .it-dashed, [data-theme='dark'] .it-photo-add,
+[data-theme='dark'] .drp-nav, [data-theme='dark'] .drp-close, [data-theme='dark'] .a-act {
+  background-color: var(--a-surface); border-color: var(--a-edge);
+}
+[data-theme='dark'] .btn-ghost:hover, [data-theme='dark'] .a-icon-btn:hover, [data-theme='dark'] .a-chip:hover, [data-theme='dark'] .a-act:hover:not(:disabled) { border-color: var(--color-muted); }
+[data-theme='dark'] .btn-ghost[class~='text-[#b42318]'] { border-color: #6b2620; }
+[data-theme='dark'] .a-icon-btn-wa, [data-theme='dark'] .a-act-wa { background: #0f7a4e; border-color: #0f7a4e; color: #fff; }
+[data-theme='dark'] .drp-seg button[aria-pressed='true'] { background: var(--a-surface); box-shadow: none; }
+[data-theme='dark'] .drp-day.is-hover-end > span { background: var(--a-surface); }
+[data-theme='dark'] .drp-preset[aria-pressed='true'] { color: #c4f25a; }
+[data-theme='dark'] input[type='radio'], [data-theme='dark'] input[type='checkbox'] { accent-color: var(--color-lime); }
+
+/* ---------- Text and lines ---------- */
+[data-theme='dark'] [class~='text-[#5c6373]'] { color: var(--color-muted); }
+[data-theme='dark'] svg[stroke='#5c6373'] { stroke: var(--color-muted); }
+[data-theme='dark'] .a-field input, [data-theme='dark'] .a-field select, [data-theme='dark'] .a-field textarea { background: var(--a-input); border-color: var(--a-edge); }
+[data-theme='dark'] [class~='border-[#f0f1f3]'], [data-theme='dark'] [class~='border-[#eceef1]'], [data-theme='dark'] [class~='border-[#e3e6ea]'],
+[data-theme='dark'] .a-table td, [data-theme='dark'] .a-dialog-head, [data-theme='dark'] .a-dialog-foot, [data-theme='dark'] .drp-body, [data-theme='dark'] .drp-presets, [data-theme='dark'] .drp-foot,
+[data-theme='dark'] .it-chip, [data-theme='dark'] .it-chip-x, [data-theme='dark'] .it-mini { border-color: #262b32; }
+
+/* Whatever sits on lime or amber keeps dark text. */
+[data-theme='dark'] .bg-lime, [data-theme='dark'] .bg-lime *, [data-theme='dark'] .bg-amber, [data-theme='dark'] .bg-amber *, [data-theme='dark'] .btn-lime { color: #111; }
+
+/* ---------- Badges and messages (TONE in src/server/dashboard.ts) ---------- */
+[data-theme='dark'] [class~='text-[#3f6200]'] { color: #b8ee3a; }
+[data-theme='dark'] [class~='bg-[#fff4d6]'], [data-theme='dark'] [class~='bg-[#fff8e6]'] { background-color: #33270a; }
+[data-theme='dark'] [class~='text-[#8a5300]'] { color: #ffcb57; }
+[data-theme='dark'] [class~='bg-[#fde8e7]'] { background-color: #3a1715; }
+[data-theme='dark'] [class~='text-[#b42318]'] { color: #ff8f86; }
+[data-theme='dark'] [class~='bg-[#e7f5ee]'] { background-color: #0d2a1f; }
+[data-theme='dark'] [class~='text-[#0f7a4e]'] { color: #5fd3a0; }
+[data-theme='dark'] .a-msg-ok { background: #1f2a0b; color: #c4f25a; }
+[data-theme='dark'] .a-msg-error { background: #3a1715; color: #ffb4ad; }
+
+/* ---------- The phone's bottom tab bar ---------- */
+[data-theme='dark'] nav.fixed.bottom-0 { background: var(--a-surface); border-color: #23272e; }
+[data-theme='dark'] nav.fixed.bottom-0 a[href='/admin/bookings/new/'] { background: var(--color-lime); }
+[data-theme='dark'] nav.fixed.bottom-0 a[href='/admin/bookings/new/'] svg { stroke: #111; }
+
+/* The WhatsApp preview in the itinerary popup keeps WhatsApp's own light colours. */
+[data-theme='dark'] [class~='bg-[#efeae2]'] { --color-ink: #111111; --color-body: #3d4451; --color-muted: #6b7384; color: #111; }

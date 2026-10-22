@@ -36,8 +36,8 @@ export const SITE = {
   faresUpdatedLabel: 'October 2026',
   // The homepage's dateModified (JSON-LD and the key-facts footnote). Bump it
   // whenever a fare, a policy or a key fact changes.
-  contentUpdated: '2026-10-20',
-  contentUpdatedLabel: '20 October 2026',
+  contentUpdated: '2026-10-22',
+  contentUpdatedLabel: '22 October 2026',
   // The destination guides' dateModified and sitemap lastmod. Bump it when a
   // destination's facts change.
   destinationsUpdated: '2026-10-19',
@@ -91,14 +91,12 @@ export const POLICY = {
   nightCharge: 300,
 };
 
-/**
- * Secure advance payment. Set `advanceUrl` to a Razorpay / PhonePe / Cashfree
- * payment page URL to show the "Pay advance securely" button on /book/.
- * Until then the button is hidden and the payment link is sent on WhatsApp.
+/*
+ * Payments: there is no payment gateway (owner, 21 Oct 2026). The advance is
+ * paid by UPI to the office QR code, which the admin uploads on the admin
+ * Payments page; /book/ shows it through /api/upi/. The balance is paid to
+ * the driver after a taxi trip, in cash or by UPI.
  */
-export const PAYMENT = {
-  advanceUrl: '', // TODO(pre-launch): payment gateway page URL
-};
 
 export const waLink = (text: string) =>
   `https://wa.me/${BUSINESS.whatsapp}?text=${encodeURIComponent(text)}`;

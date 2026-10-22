@@ -1,0 +1,118 @@
+---
+/**
+ * Search everything at once: bookings and customers that match a name, a
+ * mobile number or a BAT- reference, ten of each, with links to the full
+ * lists. The phone's search button lands here; on a laptop, Enter in the top
+ * search box does. A single exact reference goes straight to its booking.
+ * Logged, like the lists.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import EmptyState from '../../components/admin/EmptyState.astro';
+import { audit } from '../../server/admin';
+import { REF_RE } from '../../server/bookings';
+import { cleanQuery, searchAll } from '../../server/search';
+import { ipHash } from '../../server/security';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const q = cleanQuery(Astro.url.searchParams.get('q'));
+const find = Astro.url.searchParams.get('find') === '1';
+const r = await searchAll(q, 10);
+if (q.length >= 2) {
+  await audit({ actorId: user.id, action: 'search', entity: 'bookings', detail: { q, bookings: r.bookingTotal, customers: r.customerTotal }, ipHash: ipHash(Astro.request) });
+}
+// BAT-7K2Q9M typed in full: no need to show a list of one.
+const exact = REF_RE.test(q.toUpperCase()) && r.bookings[0]?.ref === q.toUpperCase();
+if (exact) return Astro.redirect(r.bookings[0]!.href, 303);
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+const enc = encodeURIComponent(q);
+---
+
+<AdminLayout title="Search">
+  <div class="flex flex-col gap-5 lg:gap-6">
+    <div>
+      <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">{q ? <>Results for “{q}”</> : 'Search'}</h1>
+      <p class="m-0 mt-1 text-sm text-muted">Bookings and customers together. Part of a name, four or more digits of a mobile number, or a BAT- reference.</p>
+    </div>
+
+    <form method="get" role="search" class="flex w-full gap-2 lg:hidden">
+      <label class="a-field flex-1"><span class="sr-only">Search bookings and customers</span><input id="page-search" name="q" type="search" data-typeahead value={q} autofocus={find || !q} placeholder="Name, mobile or BAT- reference" class="w-full" /></label>
+      <button class="btn-book" type="submit">Search</button>
+    </form>
+
+    {q.length === 1 && <p class="a-msg a-msg-error m-0" role="alert">Type at least two letters or digits.</p>}
+
+    {q.length >= 2 && (
+      <div class="grid gap-5 lg:grid-cols-2 lg:gap-6">
+        <section class="a-card min-w-0 self-start overflow-hidden" aria-labelledby="sb-h">
+          <div class="flex items-baseline justify-between gap-3 px-5 pt-5 pb-2">
+            <h2 id="sb-h" class="m-0 font-display text-xl font-bold">Bookings</h2>
+            <span class="text-sm text-muted">{r.bookingTotal.toLocaleString('en-IN')} {r.bookingTotal === 1 ? 'match' : 'matches'}</span>
+          </div>
+          {r.bookings.length ? (
+            <ul class="m-0 list-none p-0">
+              {r.bookings.map((x) => (
+                <li class="border-t border-[#f0f1f3]">
+                  <a href={x.href} class="flex items-center gap-4 px-5 py-3.5 text-ink no-underline hover:bg-mist">
+                    <span class="w-[7.2rem] shrink-0 font-mono text-sm font-bold">{x.ref}</span>
+                    <span class="flex min-w-0 flex-1 flex-col">
+                      <span class="truncate font-semibold">{x.name}</span>
+                      <span class="truncate text-sm text-muted">{x.trip} · {x.when}</span>
+                    </span>
+                    <span class:list={['a-badge hidden sm:inline-flex', x.tone]}>{x.status}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState bare compact photo="kurseong" title="No bookings match." />
+          )}
+          {r.bookingTotal > r.bookings.length && (
+            <a href={`/admin/bookings/?q=${enc}`} class="flex min-h-12 items-center border-t border-[#f0f1f3] px-5 font-semibold text-ink no-underline hover:bg-mist">See all {r.bookingTotal.toLocaleString('en-IN')} bookings →</a>
+          )}
+        </section>
+
+        <section class="a-card min-w-0 self-start overflow-hidden" aria-labelledby="sc-h">
+          <div class="flex items-baseline justify-between gap-3 px-5 pt-5 pb-2">
+            <h2 id="sc-h" class="m-0 font-display text-xl font-bold">Customers</h2>
+            <span class="text-sm text-muted">{r.customerTotal.toLocaleString('en-IN')} {r.customerTotal === 1 ? 'match' : 'matches'}</span>
+          </div>
+          {r.customers.length ? (
+            <ul class="m-0 list-none p-0">
+              {r.customers.map((c) => (
+                <li class="border-t border-[#f0f1f3]">
+                  <a href={c.href} class="flex items-center gap-4 px-5 py-3.5 text-ink no-underline hover:bg-mist">
+                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-lime-50 text-sm font-bold text-[#3f6200]" aria-hidden="true">{initials(c.name)}</span>
+                    <span class="flex min-w-0 flex-1 flex-col">
+                      <span class="truncate font-semibold">{c.name}</span>
+                      <span class="text-sm text-muted">{c.phone}</span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState bare compact photo="tea-worker" title="No customers match." />
+          )}
+          {r.customerTotal > r.customers.length && (
+            <a href={`/admin/customers/?q=${enc}`} class="flex min-h-12 items-center border-t border-[#f0f1f3] px-5 font-semibold text-ink no-underline hover:bg-mist">See all {r.customerTotal.toLocaleString('en-IN')} customers →</a>
+          )}
+        </section>
+      </div>
+    )}
+
+    {!q && (
+      <EmptyState photo="mirik" title="Find anyone in a moment" text="Try a first name, the last four digits of a mobile number, or a reference such as BAT-7K2Q9M.">
+        <p class="m-0 hidden text-body lg:block">On a laptop, press <kbd class="rounded-md border border-line px-1.5 py-0.5 text-xs">Ctrl K</kbd> on any page to jump to the search box.</p>
+      </EmptyState>
+    )}
+  </div>
+</AdminLayout>

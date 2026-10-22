@@ -411,8 +411,11 @@ export function describeEvent(type: string, data: Record<string, unknown> | null
   const amount = typeof data?.amount === 'number' ? inr(data.amount) : '';
   const method = data?.method === 'cash' ? 'cash' : 'UPI';
   switch (type) {
-    case 'created':
-      return { text: byStaff ? 'Added by hand' : `Booked on the website${data?.channel === 'payment' ? ' (payment button)' : ''}`, tone: 'lime' };
+    case 'created': {
+      const late = typeof data?.lateMinutes === 'number' ? data.lateMinutes : 0;
+      const lateText = late ? `. It reached us ${late < 120 ? `${late} min` : late < 2880 ? `${Math.round(late / 60)} h` : `${Math.round(late / 1440)} days`} late: the database was down when it was made` : '';
+      return { text: byStaff ? 'Added by hand' : `Booked on the website${data?.channel === 'payment' ? ' (payment button)' : ''}${lateText}`, tone: late ? 'amber' : 'lime' };
+    }
     case 'status': {
       const to = (data?.to as BookingStatus | undefined) ?? 'new';
       return { text: `Moved to ${STATUS_LABEL[to]?.[0].toLowerCase() ?? to}`, tone: STATUS_LABEL[to]?.[1] ?? 'grey' };

@@ -28,6 +28,7 @@ if (Astro.request.method === 'POST') {
   }
 }
 const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id);
+const themePref = (['light', 'dark', 'auto'] as const).find((t) => t === Astro.cookies.get('admin_theme')?.value) ?? 'light';
 ---
 
 <AdminLayout title="My account">
@@ -73,6 +74,23 @@ const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id)
           </form>
         </>
       )}
+    </section>
+
+    <section class="card space-y-3 p-5 lg:col-span-2" id="device" aria-labelledby="device-h">
+      <h2 id="device-h" class="font-[family-name:var(--font-display)] text-xl font-bold">This phone or computer</h2>
+      <p class="text-body" data-install-text>Put the dashboard on your home screen and it opens like an app, full screen, straight to today's pickups.</p>
+      <p class="a-msg a-msg-ok" data-installed hidden>You are using the installed app.</p>
+      <p class="text-body" data-ios hidden>On an iPhone: open this page in Safari, tap the Share button, then <strong>Add to Home Screen</strong>.</p>
+      <button type="button" class="btn-book" data-install hidden>Install the app</button>
+      <p class="text-sm text-muted">Nothing about customers is stored on the device: with no signal it shows a “No connection” page.</p>
+      <fieldset class="m-0 border-0 p-0 pt-2" data-theme-choice>
+        <legend class="mb-2 font-semibold">Appearance on this device</legend>
+        <div class="flex flex-wrap gap-2">
+          <label class="a-pill"><input type="radio" name="theme" value="light" class="sr-only" checked={themePref === 'light'} /><span>Light</span></label>
+          <label class="a-pill"><input type="radio" name="theme" value="dark" class="sr-only" checked={themePref === 'dark'} /><span>Dark, for night shifts</span></label>
+          <label class="a-pill"><input type="radio" name="theme" value="auto" class="sr-only" checked={themePref === 'auto'} /><span>Match this device</span></label>
+        </div>
+      </fieldset>
     </section>
 
     <section class="card space-y-4 p-5 lg:col-span-2">
@@ -140,6 +158,44 @@ const remaining = codes.length ? codes.length : await unusedRecoveryCodes(me.id)
       if (!res.ok) return say(tfa, 'That code did not work. Wait for a new one and try again.');
       location.reload();
     });
+    // Installing the dashboard as an app. Chrome and Edge offer it through
+    // beforeinstallprompt; iPhones only through Safari's Share menu.
+    type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+    const installBtn = document.querySelector<HTMLButtonElement>('[data-install]')!;
+    const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
+    let deferred: InstallPrompt | null = null;
+    if (standalone) {
+      document.querySelector<HTMLElement>('[data-installed]')!.hidden = false;
+      document.querySelector<HTMLElement>('[data-install-text]')!.hidden = true;
+    } else if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      document.querySelector<HTMLElement>('[data-ios]')!.hidden = false;
+    }
+    addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferred = e as InstallPrompt;
+      installBtn.hidden = false;
+    });
+    installBtn.addEventListener('click', async () => {
+      if (!deferred) return;
+      await deferred.prompt();
+      const { outcome } = await deferred.userChoice;
+      deferred = null;
+      installBtn.hidden = true;
+      if (outcome === 'accepted') document.querySelector<HTMLElement>('[data-installed]')!.hidden = false;
+    });
+
+    // Appearance: saved in a cookie for this device; "auto" follows the phone's own dark setting.
+    document.querySelectorAll<HTMLInputElement>('[data-theme-choice] input').forEach((r) =>
+      r.addEventListener('change', () => {
+        const root = document.documentElement;
+        document.cookie = `admin_theme=${r.value}; path=/admin/; max-age=31536000; samesite=lax`;
+        root.dataset.themePref = r.value;
+        const dark = r.value === 'dark' || (r.value === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) root.dataset.theme = 'dark';
+        else delete root.dataset.theme;
+      }),
+    );
+
     const off = document.getElementById('tfa-off') as HTMLFormElement | null;
     off?.addEventListener('submit', async (e) => {
       e.preventDefault();

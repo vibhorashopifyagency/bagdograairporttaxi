@@ -1,10 +1,13 @@
 # Admin and bookings: setup guide
 
 What is built so far: staff logins, saved bookings, the dashboard at
-`/admin/` (today board, bookings, a page per booking, customers, payments by
-UPI QR code and cash, itineraries sent to WhatsApp) and the customer's
-private trip page at `/trip/...`. Website editing comes next. The plan is in
-`docs/admin-cms-todo.md`.
+`/admin/` (today board, bookings with filters and a CSV download, a page per
+booking, customers, payments by UPI QR code and cash, drivers, itineraries
+sent to WhatsApp, search across bookings and customers, a Help page, dark
+mode, and an app that installs to a phone's home screen), the customer's
+private trip page at `/trip/...`, the office QR code on `/book/`, and the
+nightly removal of customer details after 24 months. Website editing comes
+next. The plan is in `docs/admin-cms-todo.md`.
 
 ## What runs where
 
@@ -29,6 +32,7 @@ private trip page at `/trip/...`. Website editing comes next. The plan is in
    | `RESEND_API_KEY` | from resend.com, optional | All |
    | `MAIL_FROM` | `Bagdogra Airport Taxi <bookings@bagdograairporttaxi.com>` | All |
    | `BOOKING_EMAIL_TO` | optional, defaults to the email shown on the site | All |
+   | `CRON_SECRET` | output of `openssl rand -hex 32` | Production |
 
 4. **Deploy.** The build runs the database migrations by itself before the site goes live.
 5. **Create the admin.** Open `https://bagdograairporttaxi.com/admin/setup/`, enter the `SETUP_TOKEN`, choose a username and password. Write down the 8 recovery codes it shows: they are the only way back in without the password. Then delete `SETUP_TOKEN` from Vercel. The page closes for good once an account exists.
@@ -37,9 +41,20 @@ private trip page at `/trip/...`. Website editing comes next. The plan is in
 8. **Drivers.** Open Drivers and add each driver with their phone, car number and pay (a share of the fare or a fixed amount a trip). Drivers already typed on bookings are on the list with their pay not set: set it for each.
 9. **UPI QR code.** Open Payments and upload the office QR code picture: the QR image from the bank, PhonePe Business, Paytm for Business or Google Pay for Business app (Share or Download QR), or a clear screenshot of it. The page reads the QR code, says which UPI ID it pays and fills that in; check it, add the name customers should see, and save. Then scan the saved QR code with your own phone and check the payee before sending it to a customer. Customers see the picture exactly as uploaded, so they type the amount themselves; the WhatsApp message and the trip page tell them how much.
 10. **Booking emails.** In Resend, add the domain `bagdograairporttaxi.com` and the DNS records it lists at the domain registrar. Until then bookings are still saved and WhatsApp still opens; only the backup email is skipped.
-11. **Test.** Make a booking on `/book/`, press Confirm on WhatsApp, and check it appears at `/admin/` with the same `BAT-` reference as the WhatsApp message.
+11. **Test.** Make a booking on `/book/`, press Confirm on WhatsApp, and check it appears at `/admin/` with the same `BAT-` reference as the WhatsApp message. Then press Pay advance by UPI on `/book/` and check the office QR code shows with the amount.
+12. **Nightly clean-up.** `vercel.json` runs `/api/cron/retention/` every night at 02:00 India time; Vercel sends `CRON_SECRET` with it. It removes customer names, numbers, addresses and notes 24 months after the trip (fares and payments stay) and old access-log rows. The Team page says when it last ran. Without `CRON_SECRET` it refuses to run, and the Team page says so.
 
 Check on the first deploy that the old `.php` redirects in `vercel.json` and the security headers still apply now that the site uses the Vercel adapter, for example that `/about.php` redirects to `/about/`.
+
+## Alerts
+
+If a booking reaches the server but the database does not answer, the office is emailed the booking at once (subject "Booking not saved: BAT-…"), and the customer's browser sends it again on their next visit; it then shows on its timeline as "reached us … late". A failed nightly clean-up is emailed too. Both need the Resend settings from step 10; without them they only appear in the Vercel logs (Project, Logs, search `[alert]`).
+
+## Backups
+
+- **Neon's own.** Neon keeps the database's history and can restore it to a moment in the past: in the Neon console open the project, Branches, then Restore. How far back depends on the Neon plan (hours on the free plan, days on paid ones), so check it in Neon's settings.
+- **Your own copy.** Once a week, or before any big change, run `npm run db:backup` with `DATABASE_URL` set to the production `DATABASE_URL_UNPOOLED` from Vercel. It writes `backups/backup-<date>.json.gz` (ignored by git). It holds customer names and numbers: keep it in a safe place, never in a shared folder, and delete copies older than 24 months.
+- **Restoring your copy.** Create a new empty database (a new Neon branch), set `DATABASE_URL` to it, run `npm run db:migrate`, then `npm run db:restore -- backups/backup-<date>.json.gz`. It refuses a database that already has data. Point Vercel at the new database and redeploy; everyone signs in again. Tested on 22 Oct 2026: a backup restored into an empty database came back identical, table for table.
 
 ## If a password is lost
 

@@ -149,7 +149,7 @@ const kinds = [
     </div>
     {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
 
-    <div class="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
       <section class="a-card flex flex-col gap-4 p-5" aria-labelledby="trip-h">
         <h2 id="trip-h" class="m-0 font-display text-xl font-bold">Trip</h2>
         <fieldset class="m-0 flex flex-wrap gap-2 border-0 p-0">
@@ -176,7 +176,7 @@ const kinds = [
         <label class="a-field" data-for-kind="other" hidden={draft.kind !== 'other'}>Trip
           <input name="trip" value={draft.trip} maxlength="120" placeholder="Siliguri to Lava, 2 days" />
         </label>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label class="a-field">Car
             <select name="vehicle">
               {VEHICLES.map((v) => <option value={v.key} selected={draft.vehicle === v.key}>{v.name} · {v.seats} seats</option>)}

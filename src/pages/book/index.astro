@@ -7,7 +7,7 @@ import TimePicker from '../../components/TimePicker.astro';
 import { ROUTES, ROUTE_GROUPS } from '../../data/routes';
 import { PACKAGES } from '../../data/packages';
 import { VEHICLES } from '../../data/vehicles';
-import { BUSINESS, POLICY, PAYMENT } from '../../data/site';
+import { BUSINESS, POLICY } from '../../data/site';
 
 // Only what the script needs, so the inline payload stays a few kB.
 const data = {
@@ -16,13 +16,12 @@ const data = {
   vehicles: Object.fromEntries(VEHICLES.map((v) => [v.key, v.name])),
   policy: POLICY,
   whatsapp: BUSINESS.whatsapp,
-  paymentUrl: PAYMENT.advanceUrl,
 };
 ---
 
 <BaseLayout
-  title="Book a Bagdogra Airport Taxi Online: Instant Fare, Secure Advance"
-  description={`Book a fixed-fare taxi from Bagdogra Airport, NJP or Siliguri in under a minute. See the full fare, pay a ${POLICY.advancePercent}% advance securely and get instant WhatsApp confirmation.`}
+  title="Book a Bagdogra Airport Taxi Online: Instant Fare, UPI Advance"
+  description={`Book a fixed-fare taxi from Bagdogra Airport, NJP or Siliguri in under a minute. See the full fare, pay a ${POLICY.advancePercent}% advance by UPI and get instant WhatsApp confirmation.`}
   crumbs={[{ name: 'Book a taxi', path: '/book/' }]}
 >
   <div class="wrap mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -110,7 +109,7 @@ const data = {
         </dl>
         <div class="space-y-3 px-5 pb-5">
           <button type="button" id="wa" class="btn-wa w-full"><Icon name="whatsapp" /> Confirm on WhatsApp</button>
-          <button type="button" id="pay" class="btn-book w-full"><Icon name="shield" /> Pay advance securely</button>
+          <button type="button" id="pay" class="btn-book w-full"><Icon name="shield" /> Pay advance by UPI</button>
           <p class="text-xs text-muted" id="pay-note"></p>
           <p class="text-xs text-muted">We save your name, mobile number and trip details to arrange this booking. <a href="/privacy/">Privacy policy</a></p>
         </div>
@@ -125,6 +124,46 @@ const data = {
     </aside>
   </div>
 
+  {/* Paying the advance first: the office UPI QR code, from /api/upi/ when the button is pressed. */}
+  <dialog id="pay-dlg" class="pay-dlg" aria-labelledby="pay-title">
+    <div class="pay-head">
+      <h2 id="pay-title" class="m-0 text-xl font-extrabold">Pay the advance by UPI</h2>
+      <button type="button" class="pay-x" data-pay-close aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+    </div>
+    <div class="pay-main">
+      <div class="pay-amount">
+        <span class="text-sm text-white/70">Advance for booking <strong class="font-mono text-white" data-pay-ref></strong></span>
+        <strong class="text-4xl font-extrabold text-lime" data-pay-amt></strong>
+        <span class="text-sm text-white/70" data-pay-rest></span>
+      </div>
+
+      <div data-pay-loading class="pay-note">Loading our UPI QR code…</div>
+      <div data-pay-qr hidden class="pay-qr">
+        {/* The QR picture and the UPI app link are made by the script once /api/upi/ answers. */}
+        <div class="flex min-w-0 flex-col gap-1.5">
+          <span class="font-bold text-ink">Scan with any UPI app</span>
+          <span class="text-sm text-body">Google Pay, PhonePe, Paytm, BHIM or your bank's app.</span>
+          <span class="text-sm text-body" data-pay-payee></span>
+          <span class="flex flex-wrap items-center gap-2 text-sm" data-pay-idrow hidden>
+            <span class="text-muted">UPI ID</span>
+            <code class="pay-id" data-pay-id></code>
+            <button type="button" class="pay-copy" data-pay-copy>Copy</button>
+          </span>
+        </div>
+      </div>
+      <p data-pay-none hidden class="pay-note">Our UPI QR code is sent with your confirmation on WhatsApp. Your booking is saved; press the button below to send it to us.</p>
+
+      <ol class="pay-steps" data-pay-steps>
+        <li>Pay <strong data-pay-amt2></strong> and write <strong data-pay-ref2></strong> in the note, if your app asks for one.</li>
+        <li>Send us the payment screenshot on WhatsApp. We confirm your booking there.</li>
+      </ol>
+      <button type="button" class="btn-wa w-full" data-pay-wa><Icon name="whatsapp" /> <span data-pay-wa-label>I have paid: send it on WhatsApp</span></button>
+      <p class="m-0 text-center text-xs text-muted">Free cancellation up to {POLICY.freeCancelHours} hours before pickup. <a href="/cancellation-refund-policy/">Refund policy</a></p>
+    </div>
+  </dialog>
+
   <script type="application/json" id="book-data" set:html={JSON.stringify(data)} />
   <script>
     type Data = {
@@ -133,7 +172,6 @@ const data = {
       vehicles: Record<string, string>;
       policy: { advancePercent: number; nightCharge: number; nightChargeFrom: string; nightChargeTo: string };
       whatsapp: string;
-      paymentUrl: string;
     };
     const d: Data = JSON.parse(document.getElementById('book-data')!.textContent!);
     const f = document.getElementById('book') as HTMLFormElement;
@@ -281,22 +319,103 @@ const data = {
       window.open(`https://wa.me/${d.whatsapp}?text=${encodeURIComponent(message())}`, '_blank', 'noopener');
       save(p);
     });
-    if (!d.paymentUrl) {
-      $('pay-note').textContent = 'A secure payment link (UPI, card or net banking) is sent with your WhatsApp confirmation.';
-      ($('pay') as HTMLButtonElement).hidden = true;
-    } else {
-      $('pay-note').textContent = 'Payments are processed by a secure, RBI-regulated payment gateway. We never see your card details.';
-      $('pay').addEventListener('click', () => {
-        if (!check()) return;
-        save(payload('payment'));
-        const c = calc();
-        const u = new URL(d.paymentUrl);
-        u.searchParams.set('amount', String(c.adv * 100));
-        u.searchParams.set('name', val('name'));
-        u.searchParams.set('phone', val('phone'));
-        location.href = u.href;
-      });
+    // Paying the advance first. The booking is saved the moment the button is
+    // pressed, then the office QR code shows with the amount. Tour packages are
+    // priced "from", so their advance is asked for on WhatsApp once the office
+    // confirms the final price.
+    const dlg = $('pay-dlg') as HTMLDialogElement;
+    const q1 = <T extends Element = HTMLElement>(sel: string) => dlg.querySelector<T>(sel)!;
+    type Upi = { ok: boolean; payee: string; id: string; qr: { src: string; w: number; h: number } | null };
+    let upi: Promise<Upi | null> | null = null;
+    const loadUpi = () => (upi ??= fetch('/api/upi/').then((r) => (r.ok ? r.json() : null)).catch(() => null));
+    const upiLink = (u: Upi, amount: number) =>
+      `upi://pay?pa=${u.id}&pn=${encodeURIComponent(u.payee)}&cu=INR&am=${amount.toFixed(2)}&tn=${encodeURIComponent(`Booking ${ref}`)}`;
+
+    function syncPayButton() {
+      const pkg = kind() === 'package';
+      ($('pay') as HTMLButtonElement).hidden = pkg;
+      $('pay-note').textContent = pkg
+        ? 'For tour packages we confirm the final price on WhatsApp first, then send our UPI QR code for the advance.'
+        : 'Pay by scanning our UPI QR code with any UPI app. No card details, no payment page.';
     }
+    f.addEventListener('change', syncPayButton);
+    syncPayButton();
+
+    $('pay').addEventListener('click', async () => {
+      if (!check()) return;
+      const p = payload('payment');
+      save(p);
+      const c = calc();
+      q1('[data-pay-ref]').textContent = ref;
+      q1('[data-pay-ref2]').textContent = ref;
+      q1('[data-pay-amt]').textContent = inr(c.adv);
+      q1('[data-pay-amt2]').textContent = inr(c.adv);
+      q1('[data-pay-rest]').textContent = `${d.policy.advancePercent}% of ${inr(c.total)}. The other ${inr(c.total - c.adv)} is paid to your driver after the trip.`;
+      q1('[data-pay-loading]').hidden = false;
+      q1('[data-pay-qr]').hidden = true;
+      q1('[data-pay-none]').hidden = true;
+      const oldApp = dlg.querySelector<HTMLElement>('[data-pay-app]');
+      if (oldApp) oldApp.hidden = true;
+      q1('[data-pay-steps]').hidden = false;
+      q1('[data-pay-wa-label]').textContent = 'I have paid: send it on WhatsApp';
+      dlg.showModal();
+      const u = await loadUpi();
+      q1('[data-pay-loading]').hidden = true;
+      if (!u?.qr) {
+        // No QR code uploaded yet (or offline): the office sends it on WhatsApp.
+        q1('[data-pay-none]').hidden = false;
+        q1('[data-pay-steps]').hidden = true;
+        q1('[data-pay-wa-label]').textContent = 'Confirm on WhatsApp';
+        return;
+      }
+      const box = q1('[data-pay-qr]');
+      const img = box.querySelector('img') ?? box.insertBefore(document.createElement('img'), box.firstChild);
+      img.src = u.qr.src;
+      img.width = u.qr.w;
+      img.height = u.qr.h;
+      img.alt = `UPI QR code of ${u.payee || 'Bagdogra Airport Taxi'}`;
+      q1('[data-pay-payee]').textContent = u.payee ? `Pays ${u.payee}` : '';
+      q1('[data-pay-idrow]').hidden = !u.id;
+      q1('[data-pay-id]').textContent = u.id;
+      q1('[data-pay-qr]').hidden = false;
+      if (u.id) {
+        // On a phone the QR code cannot scan itself: this opens the UPI app with the amount filled in.
+        let app = dlg.querySelector<HTMLAnchorElement>('[data-pay-app]');
+        if (!app) {
+          app = Object.assign(document.createElement('a'), { className: 'btn-book pay-app w-full' });
+          app.dataset.payApp = '';
+          box.after(app);
+        }
+        app.href = upiLink(u, c.adv);
+        app.textContent = `Pay ${inr(c.adv)} with a UPI app`;
+        app.hidden = false;
+      }
+    });
+    // Fetch the QR details as soon as someone shows interest, so the popup opens filled in.
+    $('pay').addEventListener('pointerenter', () => void loadUpi(), { once: true });
+    $('pay').addEventListener('focus', () => void loadUpi(), { once: true });
+    q1('[data-pay-copy]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      try {
+        await navigator.clipboard.writeText(q1('[data-pay-id]').textContent ?? '');
+        btn.textContent = 'Copied';
+      } catch {
+        btn.textContent = 'Select and copy';
+      }
+      setTimeout(() => (btn.textContent = 'Copy'), 2000);
+    });
+    q1('[data-pay-wa]').addEventListener('click', () => {
+      const paid = !q1('[data-pay-qr]').hidden;
+      const c = calc();
+      const text = paid ? `${message()}\nAdvance paid: ${inr(c.adv)} by UPI. I am sending the payment screenshot.` : message();
+      // Opened first and in the same click, or the browser blocks the window.
+      window.open(`https://wa.me/${d.whatsapp}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+      dlg.close();
+    });
+    q1('[data-pay-close]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => {
+      if (e.target === dlg) dlg.close();
+    });
     calc();
   </script>
 </BaseLayout>
@@ -316,4 +435,29 @@ const data = {
   .chip input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
   .chip input:focus-visible + span { outline: 3px solid var(--color-lime); outline-offset: 2px; }
   .vehicle:has(input:checked) { border-color: var(--color-ink); box-shadow: 0 0 0 2px var(--color-lime-100); }
+</style>
+
+<style is:global>
+  /* The "Pay the advance by UPI" popup: centred on a laptop, a sheet from the bottom on a phone. */
+  .pay-dlg { width: min(100% - 2rem, 30rem); max-height: calc(100dvh - 2rem); margin: auto; padding: 0; border: 0; border-radius: 1.5rem; background: #fff; color: var(--color-ink); }
+  .pay-dlg[open] { display: flex; flex-direction: column; }
+  .pay-dlg::backdrop { background: rgb(17 17 17 / 55%); }
+  .pay-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--color-line); }
+  .pay-x { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--color-line); border-radius: 0.75rem; background: #fff; color: var(--color-ink); cursor: pointer; }
+  .pay-main { display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; padding: 1.25rem; }
+  .pay-amount { display: flex; flex-direction: column; gap: 0.15rem; padding: 1rem 1.15rem; border-radius: 1rem; background: var(--color-ink); }
+  .pay-qr { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 0.85rem; border: 1px solid var(--color-line); border-radius: 1rem; }
+  .pay-qr img { width: 170px; height: auto; max-height: 300px; object-fit: contain; flex-shrink: 0; }
+  .pay-qr > div { flex: 1 1 11rem; }
+  .pay-id { overflow-wrap: anywhere; padding: 0.15rem 0.45rem; border-radius: 0.4rem; background: var(--color-mist); font-size: 0.9rem; }
+  .pay-copy { min-height: 2.25rem; padding: 0 0.75rem; border: 1px solid var(--color-ink); border-radius: 0.6rem; background: #fff; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+  .pay-note { margin: 0; padding: 0.85rem 1rem; border-radius: 0.85rem; background: var(--color-mist); font-size: 0.92rem; color: var(--color-body); }
+  .pay-steps { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.92rem; color: var(--color-body); }
+  .pay-steps[hidden], .pay-app[hidden] { display: none; }
+  /* A UPI link only opens an app on a phone. */
+  @media (hover: hover) and (pointer: fine) { .pay-app { display: none; } }
+  @media (max-width: 639px) {
+    .pay-dlg { width: 100%; max-width: 100%; max-height: 92dvh; margin: auto 0 0; border-radius: 1.5rem 1.5rem 0 0; }
+    .pay-main { padding-bottom: max(env(safe-area-inset-bottom), 1.25rem); }
+  }
 </style>

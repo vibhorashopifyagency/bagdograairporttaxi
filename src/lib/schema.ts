@@ -124,7 +124,7 @@ export function businessGraph() {
       },
       priceRange: '₹600 – ₹30,000',
       currenciesAccepted: 'INR',
-      paymentAccepted: 'UPI, Credit Card, Debit Card, Net Banking, Cash',
+      paymentAccepted: 'UPI, Cash',
       areaServed: AREA_SERVED,
       foundingDate: BUSINESS.foundingYear,
       // GSTIN is a tax identifier users can check in a public registry, one of

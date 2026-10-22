@@ -57,7 +57,7 @@ const fromFare = inr(Math.min(...ROUTES.filter((r) => r.fromShort === 'Bagdogra 
 const heroReview = GOOGLE.isSample ? undefined : (GOOGLE.reviews.find((r) => r.rating === 5 && r.text.length < 200) ?? GOOGLE.reviews[0]);
 const steps = [
   { title: 'Pick your route and car', text: 'See the full fare before you pay anything.' },
-  { title: `Pay ${POLICY.advancePercent}% advance securely`, text: 'UPI, card or net banking. Instant WhatsApp confirmation.' },
+  { title: `Pay ${POLICY.advancePercent}% advance by UPI`, text: 'Scan our QR code with any UPI app. Instant WhatsApp confirmation.' },
   { title: 'Get your driver’s details', text: 'Name, photo and car number the evening before.' },
   { title: 'Meet at arrivals', text: 'Your driver waits with a name board, even if the flight is late.' },
 ];

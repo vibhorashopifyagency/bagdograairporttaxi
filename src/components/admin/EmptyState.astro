@@ -1,0 +1,47 @@
+---
+/**
+ * What an admin list shows when it has nothing in it: one of the site's own
+ * photos of the hills and roads beside a friendly line, never a grey icon.
+ * `compact` is for "nothing matches that" inside a filtered list, where the
+ * photo shrinks to a strip so the filters stay the focus.
+ */
+import { PHOTOS, type PhotoKey } from '../../lib/photos';
+
+interface Props {
+  photo: PhotoKey;
+  title: string;
+  text?: string;
+  action?: { href: string; label: string };
+  compact?: boolean;
+  /** Sits inside another card (no border of its own). */
+  bare?: boolean;
+  /** Where the photo is anchored, for pictures whose subject is off-centre. */
+  focus?: string;
+}
+const { photo, title, text, action, compact = false, bare = false, focus = 'center' } = Astro.props;
+const p = PHOTOS[photo];
+---
+
+<div class:list={['a-empty', compact && 'a-empty-compact', !bare && 'a-card']} role="status">
+  <img src={`/img/${photo}-800.webp`} alt="" width="800" height={Math.round((800 * p.height) / p.width)} loading="lazy" decoding="async" style={`object-position: ${focus}`} />
+  <div class="a-empty-text">
+    <p class="m-0 font-display text-xl font-bold text-ink">{title}</p>
+    {text && <p class="m-0 text-body">{text}</p>}
+    <slot />
+    {action && <a href={action.href} class="btn-book mt-2 self-start">{action.label}</a>}
+  </div>
+</div>
+
+<style is:global>
+  .a-empty { display: grid; overflow: hidden; grid-template-columns: minmax(0, 1fr); }
+  .a-empty img { display: block; width: 100%; height: 9.5rem; object-fit: cover; }
+  .a-empty-text { display: flex; flex-direction: column; justify-content: center; gap: 0.35rem; padding: 1.25rem 1.25rem 1.5rem; }
+  .a-empty-compact img { height: 5.5rem; }
+  @media (min-width: 640px) {
+    .a-empty { grid-template-columns: minmax(180px, 34%) minmax(0, 1fr); }
+    .a-empty img { height: 100%; min-height: 11rem; }
+    .a-empty-compact { grid-template-columns: minmax(120px, 22%) minmax(0, 1fr); }
+    .a-empty-compact img { min-height: 7rem; }
+    .a-empty-text { padding: 1.75rem 2rem; }
+  }
+</style>

@@ -6,12 +6,13 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import Pager from '../../../components/admin/Pager.astro';
-import { audit } from '../../../server/admin';
-import { STATUS_LABEL, TONE, inr, waText } from '../../../server/dashboard';
+import { audit, isAdmin } from '../../../server/admin';
+import { STATUS_LABEL, TONE, inr, todayIST, waText } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { advanceOf } from '../../../server/fares';
 import { pageNumber, rowsFor } from '../../../server/paging';
 import { paymentsByBooking, summarise } from '../../../server/payments';
+import { RETENTION_MONTHS, eraseCustomer } from '../../../server/retention';
 import { ipHash } from '../../../server/security';
 import { firstName, phoneLabel } from '../../../lib/itinerary-text';
 import { desc, eq, sql } from 'drizzle-orm';
@@ -26,9 +27,22 @@ const [customer] = /^[0-9a-f-]{36}$/.test(id) ? await db.select().from(c).where(
 if (!customer || customer.personalDataRemovedAt) return Astro.redirect('/admin/customers/', 303);
 
 let error = '';
+let eraseError = '';
 let notes = customer.notes ?? '';
+const admin = isAdmin(user);
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
+  if (f.get('intent') === 'erase') {
+    // Removing their details at their request: admin only, checked again inside eraseCustomer.
+    const reason = f.get('reason') === 'duplicate' ? 'duplicate' : 'asked';
+    if (f.get('confirm') !== 'yes') eraseError = 'Tick the box to confirm. This cannot be undone.';
+    else {
+      const r = await eraseCustomer(customer.id, reason, { actorId: user.id, ipHash: ipHash(Astro.request), role: user.role });
+      if (r.ok) return Astro.redirect(`/admin/customers/?erased=${r.bookings}`, 303);
+      eraseError = r.error;
+      if (!admin) Astro.response.status = 403;
+    }
+  }
   if (f.get('intent') === 'notes') {
     notes = String(f.get('notes') ?? '').trim();
     if (notes.length > 2000) error = 'Notes are limited to 2,000 characters.';
@@ -75,6 +89,13 @@ const pays = await paymentsByBooking(bookings.map((x) => x.id));
 await audit({ actorId: user.id, action: 'view_customer', entity: 'customer', entityId: customer.id, detail: { bookings: totals?.bookings ?? 0 }, ipHash: ipHash(Astro.request) });
 
 const sums = bookings.map((x) => ({ x, pay: summarise(x.fareTotal, advanceOf(x.fareTotal), pays.get(x.id) ?? [], x.kind) }));
+// Trips still to come, so removing their details on request is not done by accident before a pickup.
+const [upcoming] = admin
+  ? await db
+      .select({ n: sql<number>`count(*)::int`, first: sql<string | null>`min(${b.pickupDate})` })
+      .from(b)
+      .where(sql`${b.customerId} = ${customer.id} and ${b.pickupDate} >= ${todayIST()} and ${b.status} not in ('cancelled', 'no_show', 'completed')`)
+  : [];
 const count = totals?.bookings ?? 0;
 const pages = Math.max(1, Math.ceil(count / size));
 const pageHref = (n: number) => `/admin/customers/${customer.id}/${n > 1 ? `?page=${n}` : ''}`;
@@ -152,7 +173,8 @@ const stats = [
         />
       </section>
 
-      <section class="a-card flex flex-col gap-3 self-start p-5" aria-labelledby="notes-h">
+      <div class="flex min-w-0 flex-col gap-5 self-start lg:gap-6">
+      <section class="a-card flex flex-col gap-3 p-5" aria-labelledby="notes-h">
         <h2 id="notes-h" class="m-0 font-display text-xl font-bold">Notes</h2>
         {Astro.url.searchParams.get('saved') && <p class="a-msg a-msg-ok m-0" role="status">Saved.</p>}
         {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
@@ -163,6 +185,55 @@ const stats = [
         </form>
         <p class="m-0 text-sm text-muted">Shared with the whole team. Keep to what helps the next trip; the customer can ask to see what we hold.</p>
       </section>
+
+      <section class="a-card flex flex-col gap-3 p-5" aria-labelledby="privacy-h">
+        <h2 id="privacy-h" class="m-0 font-display text-xl font-bold">Their data</h2>
+        <p class="m-0 text-sm text-body">Name and number are removed by themselves {RETENTION_MONTHS} months after the last trip. A customer may ask sooner to see what we hold, or to have it removed.</p>
+        {eraseError && <p class="a-msg a-msg-error m-0" role="alert">{eraseError}</p>}
+        {admin ? (
+          <div class="flex flex-wrap gap-2">
+            <a href={`/admin/customers/${customer.id}/export.txt`} class="btn-ghost min-h-11 px-4 py-2 text-sm" download>Download what we hold</a>
+            <button type="button" class="btn-ghost min-h-11 border-[#f3b8b2] px-4 py-2 text-sm text-[#b42318] hover:border-[#b42318]" data-open="erase-dlg">Remove their details…</button>
+          </div>
+        ) : (
+          <p class="m-0 text-sm text-muted">If they ask to see or remove their details, tell the admin: only the admin can do it.</p>
+        )}
+      </section>
+      </div>
     </div>
   </div>
+
+  {admin && (
+    <dialog id="erase-dlg" class="a-dialog a-dialog-sm" aria-labelledby="erase-title" data-autoopen={eraseError ? '' : undefined}>
+      <form method="post" class="a-dialog-body">
+        <input type="hidden" name="intent" value="erase" />
+        <div class="a-dialog-head">
+          <h2 id="erase-title" class="m-0 font-display text-xl font-bold">Remove {name}’s details?</h2>
+          <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+        </div>
+        <div class="a-dialog-main flex flex-col gap-4">
+          <p class="m-0 text-body">Their name, mobile number, drop addresses, flight numbers and notes go from {count === 1 ? 'their one booking' : `all ${count} of their bookings`}, and any itinerary you sent them stops working. Trip, fare and payment amounts stay, so the accounts still add up. <strong class="text-ink">This cannot be undone.</strong></p>
+          {upcoming && upcoming.n > 0 && (
+            <p class="a-msg a-msg-error m-0">They have {upcoming.n} {upcoming.n === 1 ? 'trip' : 'trips'} still to come{upcoming.first ? `, the first on ${day.format(new Date(`${upcoming.first}T00:00:00Z`))}` : ''}. After this, the office and the driver cannot see who to pick up or how to call them.</p>
+          )}
+          <p class="m-0 text-sm text-body">Download what we hold first if they asked to see it.</p>
+          <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+            <legend class="mb-1 text-sm font-semibold">Why</legend>
+            <label class="flex min-h-11 items-center gap-2.5"><input type="radio" name="reason" value="asked" checked class="h-5 w-5 accent-[#111111]" /> The customer asked us to remove them</label>
+            <label class="flex min-h-11 items-center gap-2.5"><input type="radio" name="reason" value="duplicate" class="h-5 w-5 accent-[#111111]" /> A test or duplicate entry</label>
+          </fieldset>
+          <label class="flex items-start gap-2.5 rounded-xl bg-mist p-3"><input type="checkbox" name="confirm" value="yes" required class="mt-0.5 h-5 w-5 accent-[#b42318]" /> <span>I understand this cannot be undone.</span></label>
+        </div>
+        <div class="a-dialog-foot">
+          <button type="button" data-close class="btn-ghost">Keep them</button>
+          <button type="submit" class="btn-book bg-[#b42318] hover:bg-[#8f1d14]">Remove their details</button>
+        </div>
+      </form>
+    </dialog>
+  )}
 </AdminLayout>
+
+<script>
+  import { openDialogs } from '../../../lib/admin-client';
+  openDialogs();
+</script>

@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
+import { computeFare } from '../../server/fares';
 import { bookingInput, saveBooking } from '../../server/bookings';
+import { alertBookingNotSaved } from '../../server/mail';
 import { LIMITS, rateLimit } from '../../server/rate-limit';
 import { ipHash } from '../../server/security';
 
@@ -37,7 +39,12 @@ export const POST: APIRoute = async ({ request }) => {
     const result = await saveBooking(parsed.data, ip);
     return json(result.status, result.body);
   } catch (e) {
-    console.error('[bookings] save failed', e);
+    // The office hears about it now, with the details, rather than when the customer next visits.
+    const d = parsed.data;
+    if (!d.website) {
+      const fare = d.kind === 'taxi' ? computeFare({ kind: 'taxi', routeSlug: d.route, vehicle: d.vehicle, time: d.time }) : computeFare({ kind: 'package', packageSlug: d.package, vehicle: d.vehicle, pax: d.pax });
+      await alertBookingNotSaved({ ref: d.ref, name: d.name, phone: d.phone, date: d.date, time: d.time, trip: fare?.tripName ?? (d.kind === 'taxi' ? d.route : d.package), pax: d.pax, fareShown: d.fareShown, channel: d.channel }, e);
+    }
     // 503 tells the browser to keep the booking and retry later.
     return json(503, { ok: false, error: 'Could not save right now.' });
   }

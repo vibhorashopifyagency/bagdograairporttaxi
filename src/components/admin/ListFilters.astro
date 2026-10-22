@@ -3,7 +3,8 @@
  * The toolbar above a long list: a date range (see DateRangePicker) and how
  * many rows a page shows, all one height. Choosing dates starts the list
  * again from the top and keeps its other filters (search, status, tab).
- * Anything passed in the "start" slot (the Upcoming / Past tabs) sits first.
+ * Anything passed in the "start" slot (the Upcoming / Past tabs) sits first;
+ * the "end" slot (more filters, such as trip and payment) follows the dates.
  */
 import DateRangePicker from './DateRangePicker.astro';
 import RowsPicker from './RowsPicker.astro';
@@ -34,5 +35,6 @@ const { dateLabel, from, to, presets, by, keep = {}, clearHref, rows, rowsHref, 
   {Object.entries(keep).map(([k, v]) => v && <input type="hidden" name={k} value={v} />)}
   <slot name="start" />
   <DateRangePicker label={dateLabel} from={from} to={to} today={todayIST()} presets={presets} by={by} clearHref={clearHref} />
+  <slot name="end" />
   <RowsPicker class="ml-auto" current={rows} href={rowsHref} />
 </form>

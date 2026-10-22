@@ -31,7 +31,7 @@ export const GENERAL_FAQS: Faq[] = [
   },
   {
     q: 'How can I pay?',
-    a: 'Pay the advance online by UPI, debit or credit card, or net banking through a secure payment gateway. Pay the balance to the driver in cash or UPI at the end of the trip.',
+    a: 'Pay the advance by UPI: scan our QR code on the booking page with any UPI app (Google Pay, PhonePe, Paytm, BHIM) and send us the payment screenshot on WhatsApp. Pay the balance to the driver in cash or UPI at the end of the trip.',
   },
   {
     q: 'Do you pick up from NJP railway station and Siliguri?',
