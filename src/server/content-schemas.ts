@@ -9,7 +9,6 @@
 import { z } from 'zod';
 import { GALLERY_CATEGORIES } from '../data/gallery';
 import { ROUTE_GROUPS } from '../data/routes';
-import { PHOTOS } from '../lib/photos';
 
 const text = (label: string, min: number, max: number) =>
   z
@@ -18,13 +17,20 @@ const text = (label: string, min: number, max: number) =>
     .min(min, min <= 1 ? `${label} is empty.` : `${label} needs at least ${min} characters.`)
     .max(max, `${label} is too long (at most ${max} characters).`);
 
+/**
+ * A field that may be left empty. Empty is kept as null, not dropped: the
+ * build lays the admin's copy over the code's field by field
+ * (src/data/published.ts), so a dropped field would bring the code's value
+ * back. Pages read these with `if (x)` or `x ?? other`, which treat null as
+ * empty.
+ */
 const optionalText = (label: string, max: number) =>
   z
     .string()
     .trim()
     .max(max, `${label} is too long (at most ${max} characters).`)
-    .optional()
-    .transform((v) => (v ? v : undefined));
+    .nullish()
+    .transform((v) => (v ? v : null));
 
 const slug = z
   .string()
@@ -39,7 +45,9 @@ const list = (label: string, item: z.ZodType, max: number, min = 0) =>
 
 const faq = z.object({ q: text('A question', 5, 200), a: text('An answer', 10, 900) });
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Write the time as 24-hour HH:MM, for example 22:00.');
-const photoKey = z.string().refine((k) => k in PHOTOS, 'Choose a photo from the library.');
+/** A photo library key. Whether it exists is checked at Publish, since a new upload is still a draft. */
+const photoKey = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Choose a photo from the library.').max(80);
+const optionalPhoto = photoKey.nullish().transform((v) => v || null);
 
 export const routeSchema = z.object({
   slug,
@@ -64,6 +72,7 @@ export const routeSchema = z.object({
   destination: optionalText('Destination', 80),
   returnSlug: optionalText('Return route', 80),
   group: z.enum(ROUTE_GROUPS, 'Choose which group of routes this belongs to.'),
+  photo: optionalPhoto,
 });
 
 export const packageSchema = z
@@ -83,6 +92,7 @@ export const packageSchema = z
     excludes: list('excluded items', text('An excluded item', 3, 200), 20),
     faqs: list('questions', faq, 10),
     destinations: list('destinations', slug, 8),
+    photo: optionalPhoto,
   })
   .refine((p) => p.days === p.nights + 1, { message: 'Days must be one more than nights.', path: ['days'] })
   .refine((p) => p.itinerary.length === p.days, { message: 'Write one plan for each day of the trip.', path: ['itinerary'] });
@@ -101,6 +111,7 @@ export const destinationSchema = z.object({
   permit: optionalText('Permit', 500),
   faqs: list('questions', faq, 10),
   geo: z.object({ lat: z.number().min(20).max(30), lng: z.number().min(85).max(93) }),
+  photo: optionalPhoto,
 });
 
 export const vehicleSchema = z.object({
@@ -183,6 +194,25 @@ export const guideSchema = z.object({
   published: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   updated: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   updatedLabel: z.string(),
+});
+
+const httpUrl = (label: string) => z.union([z.literal(''), z.url(`${label} looks wrong.`).regex(/^https?:\/\//, `${label} must start with https://`)]);
+
+export const photoSchema = z.object({
+  key: photoKey,
+  title: optionalText('The name', 60),
+  // May be empty while it is a draft; Publish asks for it (src/server/content.ts).
+  alt: z.string().trim().max(200, 'The description is too long (at most 200 characters).'),
+  width: z.number().int().min(1),
+  height: z.number().int().min(1),
+  file: z.string().max(300).optional(),
+  artist: text('Taken by', 2, 100),
+  license: text('The licence', 2, 60),
+  licenseUrl: httpUrl('The licence link'),
+  source: httpUrl('The link to the original'),
+  own: z.boolean().optional(),
+  upload: z.string().regex(/^website\/[0-9a-f-]{36}\.jpg$/).nullish().transform((v) => v || null),
+  focus: z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) }).nullish().transform((v) => v ?? null),
 });
 
 export const orderSchema = list('items', slug, 500);

@@ -70,7 +70,8 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   const res = await next();
   res.headers.set('Cache-Control', 'no-store');
   res.headers.set('X-Robots-Tag', 'noindex, nofollow');
-  res.headers.set('X-Frame-Options', 'DENY');
+  // Same origin only: the page editor (Edit pages) opens the dashboard's own forms in a side panel.
+  res.headers.set('X-Frame-Options', 'SAMEORIGIN');
   res.headers.set('Referrer-Policy', 'same-origin');
   return res;
 });

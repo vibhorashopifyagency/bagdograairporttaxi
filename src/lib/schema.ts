@@ -22,15 +22,13 @@ import type { Faq, Route } from '../data/routes';
 import { VEHICLES } from '../data/vehicles';
 import type { TourPackage } from '../data/packages';
 import type { Destination } from '../data/destinations';
-import photos from '../data/photos.json';
+import { PHOTOS, photoFile, photoKeyOf } from '../data/photo-library';
 
 export const abs = (path: string) => new URL(path, SITE.url).href;
 
 /** ISO 8601 with the IST offset, for every date in the graph. */
 export const isoDate = (d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T00:00:00+05:30` : d);
 
-type PhotoMeta = { alt: string; width: number; height: number; artist: string; license: string; licenseUrl: string; source: string; own?: boolean };
-const PHOTOS = photos as Record<string, PhotoMeta>;
 
 /**
  * The crops `scripts/fetch-photos.mjs` writes beside each photo. Google asks
@@ -64,8 +62,8 @@ export function photoImages(key: string) {
       };
   return CROPS.map(([ratio, width, height]) => ({
     '@type': 'ImageObject',
-    contentUrl: abs(`/img/${key}-${ratio}.webp`),
-    url: abs(`/img/${key}-${ratio}.webp`),
+    contentUrl: abs(photoFile(key, ratio)),
+    url: abs(photoFile(key, ratio)),
     width,
     height,
     caption: p.alt,
@@ -79,8 +77,8 @@ export function photoImages(key: string) {
  * is a plain ImageObject.
  */
 export function pageImages(imageUrl: string) {
-  const m = imageUrl.match(/\/img\/([a-z0-9-]+)-(?:400|800|1600|16x9|4x3|1x1)\.webp$/);
-  const fromPhoto = m ? photoImages(m[1]) : undefined;
+  const key = photoKeyOf(imageUrl);
+  const fromPhoto = key ? photoImages(key) : undefined;
   return fromPhoto ?? [{ '@type': 'ImageObject', contentUrl: imageUrl, url: imageUrl, width: 1200, height: 630 }];
 }
 

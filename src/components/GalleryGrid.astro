@@ -8,6 +8,7 @@
 import type { GalleryItem } from '../data/gallery';
 import { GALLERY_CATEGORIES } from '../data/gallery';
 import { PHOTOS } from '../lib/photos';
+import { photoFile } from '../data/photo-library';
 import Photo from './Photo.astro';
 import Icon from './Icon.astro';
 interface Props {
@@ -22,7 +23,7 @@ const count = (c: string) => items.filter((i) => i.category === c).length;
 // A rhythm of big and wide tiles so the grid reads like a magazine spread.
 const span = (i: number) => (dense ? (i === 0 ? 'md:col-span-2 md:row-span-2' : '') : i % 7 === 0 ? 'md:col-span-2 md:row-span-2' : i % 7 === 4 ? 'md:col-span-2' : '');
 const data = items.map((it) => ({
-  src: `/img/${it.photo}-1600.webp`,
+  src: photoFile(it.photo, 1600),
   title: it.title,
   place: it.place,
   alt: PHOTOS[it.photo].alt,

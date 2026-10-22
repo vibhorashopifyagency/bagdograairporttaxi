@@ -3,11 +3,13 @@ import type { Faq } from '../data/routes';
 interface Props {
   faqs: Faq[];
   heading?: string;
+  /** "route:bagdogra-airport-to-darjeeling-taxi:faqs": marks the questions for the dashboard's page editor. */
+  edit?: string;
 }
-const { faqs, heading = 'Frequently asked questions' } = Astro.props;
+const { faqs, heading = 'Frequently asked questions', edit } = Astro.props;
 ---
 
-<section aria-labelledby="faq-h" class="mt-14">
+<section aria-labelledby="faq-h" class="mt-14" data-edit={edit}>
   <h2 id="faq-h" class="mb-5 text-2xl font-extrabold sm:text-3xl">{heading}</h2>
   <div class="space-y-3">
     {faqs.map((f) => (

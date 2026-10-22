@@ -1,0 +1,124 @@
+---
+/**
+ * The inside of the Review and publish popup (PublishBar.astro): every
+ * change waiting, what it changes, and the checks Publish will run. When a
+ * check fails, Publish is refused and the problems are listed instead.
+ */
+import { isAdmin } from '../../../server/admin';
+import { checkBeforePublish, reviewChanges } from '../../../server/content';
+
+export const prerender = false;
+export const partial = true;
+
+if (!isAdmin(Astro.locals.user)) return new Response(null, { status: 403 });
+
+const [changes, problems] = await Promise.all([reviewChanges(), checkBeforePublish()]);
+const n = changes.length;
+const ICON: Record<string, [string, string]> = {
+  route: ['₹', 'bg-lime-50 text-[#3f6200]'],
+  package: ['P', 'bg-[#e7f0ff] text-[#1d4ed8]'],
+  vehicle: ['C', 'bg-[#e7f0ff] text-[#1d4ed8]'],
+  business: ['B', 'bg-[#fff4d6] text-[#8a5300]'],
+  policy: ['%', 'bg-[#fff4d6] text-[#8a5300]'],
+  site: ['G', 'bg-[#fff4d6] text-[#8a5300]'],
+  gallery: ['▣', 'bg-mist text-ink'],
+  faq: ['?', 'bg-mist text-ink'],
+  destination: ['D', 'bg-[#e7f5ee] text-[#0f7a4e]'],
+  guide: ['G', 'bg-[#e7f5ee] text-[#0f7a4e]'],
+  order: ['↕', 'bg-mist text-ink'],
+};
+const checks = ['Every link on the website still goes somewhere', 'Each fare written in a page matches the fare chart', 'Nothing needed is left empty', 'Contact details are real before the website leaves pre-launch'];
+const month = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', month: 'long', year: 'numeric' }).format(new Date());
+const close = '<path d="M6 6l12 12M18 6 6 18"/>';
+---
+
+<header class="flex items-start gap-4 px-6 pt-6 pb-4 max-md:px-4 max-md:pt-4">
+  <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+    <h2 id="pub-title" class="m-0 font-display text-[28px] leading-tight font-bold">Review and publish</h2>
+    <p class="m-0 text-body">
+      {n === 0
+        ? 'There is nothing waiting to be published.'
+        : n === 1
+          ? 'The website is rebuilt with this change, usually in about a minute, and the old version stays up until then.'
+          : `These ${n} changes go live together. The website is rebuilt with them, usually in about a minute, and the old version stays up until then.`}
+    </p>
+  </div>
+  <button type="button" data-pub-close class="a-icon-btn" aria-label="Close">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={close} />
+  </button>
+</header>
+
+<div class="a-dialog-main flex flex-col gap-4 pt-0">
+  <div class="flex flex-col">
+    {changes.map((c) => {
+      const [initial, tone] = ICON[c.type] ?? ['•', 'bg-mist text-ink'];
+      return (
+        <article class="flex items-start gap-4 border-t border-[#f0f1f3] py-4">
+          <span class:list={['grid h-10 w-10 shrink-0 place-items-center rounded-xl font-display font-bold', tone]} aria-hidden="true">{initial}</span>
+          <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+            {c.kind !== c.title && <span class="text-[13px] font-semibold text-muted">{c.kind}</span>}
+            <a href={c.href} class="text-[17px] font-bold text-ink no-underline hover:underline">{c.title}</a>
+            {c.lines.length === 0 && <span class="text-sm text-muted">No visible change.</span>}
+            {c.lines.slice(0, 8).map((l) => (
+              <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-sm">
+                <span class="min-w-[120px] text-body">{l.what}</span>
+                {l.from && <span class="text-muted line-through">{l.from}</span>}
+                {l.from && l.to && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5c6373" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                )}
+                {l.to && <span class="rounded-md bg-lime-50 px-1.5 font-bold text-[#3f6200]">{l.from ? l.to : `added: ${l.to}`}</span>}
+                {l.from && !l.to && <span class="text-sm font-semibold text-[#b42318]">taken out</span>}
+              </div>
+            ))}
+            {c.lines.length > 8 && <span class="text-sm text-muted">and {c.lines.length - 8} more changes</span>}
+          </div>
+          <button type="button" data-pub-undo={`${c.type}|${c.key}`} class="btn-ghost min-h-9 shrink-0 rounded-[10px] px-3 py-1 text-[13px]">Undo</button>
+        </article>
+      );
+    })}
+  </div>
+
+  {n > 0 && problems.length > 0 && (
+    <section class="flex flex-col gap-3 rounded-2xl border-2 border-[#f2b8b5] p-4" role="alert">
+      <div class="flex items-center gap-3">
+        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#fde8e7]">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#b42318" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+        </span>
+        <div class="flex flex-col">
+          <span class="font-display text-xl font-bold">Not ready to publish</span>
+          <span class="text-sm text-muted">Fix these first. Your drafts are safe.</span>
+        </div>
+      </div>
+      <ul class="m-0 flex flex-col gap-2 pl-5 text-sm text-body">
+        {problems.map((p) => <li>{p}</li>)}
+      </ul>
+    </section>
+  )}
+
+  {n > 0 && problems.length === 0 && (
+    <section class="flex flex-col gap-2.5 rounded-2xl bg-mist p-4">
+      <span class="font-bold">Checked before publishing</span>
+      {checks.map((k) => (
+        <span class="flex items-center gap-2.5 text-sm text-body">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f6200" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+          {k}
+        </span>
+      ))}
+      <span class="border-t border-line pt-2.5 text-[13px] text-muted">
+        "Fares updated {month}" and "Content updated" move on by themselves when a fare, a policy or page text changes.
+      </span>
+    </section>
+  )}
+  <p data-pub-note class="m-0 text-sm font-semibold text-[#b42318]" role="status"></p>
+</div>
+
+<footer class="a-dialog-foot">
+  <span class="flex-[1_1_240px] text-[13px] text-muted">Every version is kept. You can put any earlier one back from its page.</span>
+  <button type="button" data-pub-close class="btn-ghost min-h-12">Keep editing</button>
+  {n > 0 && (
+    <button type="button" data-pub-go class="btn-book min-h-12 disabled:opacity-50" disabled={problems.length > 0}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+      <span data-label>Publish {n === 1 ? '1 change' : `${n} changes`}</span>
+    </button>
+  )}
+</footer>

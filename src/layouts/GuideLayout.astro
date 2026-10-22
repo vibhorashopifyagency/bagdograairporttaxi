@@ -16,12 +16,13 @@ import GuideCard from '../components/GuideCard.astro';
 import PackageCard from '../components/PackageCard.astro';
 import Photo from '../components/Photo.astro';
 import Icon from '../components/Icon.astro';
-import { GUIDES } from '../data/guides';
+import { GUIDES, GUIDES_START } from '../data/guides';
 import { PACKAGES } from '../data/packages';
 import { BUSINESS, waLink } from '../data/site';
 import type { Faq } from '../data/routes';
 import { guidePhoto } from '../lib/photos';
 import { article, faqPage } from '../lib/schema';
+import { photoFile } from '../data/photo-library';
 
 interface Props {
   guide: (typeof GUIDES)[number];
@@ -61,6 +62,7 @@ const readMinutes = Math.max(2, Math.round(words / 200));
 
 // One hue per fact tile: lime, amber, teal, coral. Each shows as a soft shadow and fills the tile on hover.
 const TINTS = ['#a1e005', '#ffb300', '#14b8a6', '#fb7185'];
+const summaryEdited = g.summary !== GUIDES_START.find((x) => x.slug === g.slug)?.summary;
 const others = GUIDES.filter((x) => x.slug !== g.slug);
 const pkgs = packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Boolean) as typeof PACKAGES;
 ---
@@ -69,11 +71,11 @@ const pkgs = packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Bool
   title={title}
   description={g.description}
   crumbs={[{ name: 'Travel guides', path: '/guides/' }, { name: crumb, path }]}
-  schema={[article({ headline: g.title, description: g.description, path, modified: g.updated, published: g.published, image: `/img/${photo}-1600.webp` }), faqPage(faqs, path)]}
+  schema={[article({ headline: g.title, description: g.description, path, modified: g.updated, published: g.published, image: photoFile(photo, 1600) }), faqPage(faqs, path)]}
   ogType="article"
-  ogImage={`/img/${photo}-1600.webp`}
+  ogImage={photoFile(photo, 1600)}
 >
-  <PageHero slot="hero" image={photo} eyebrow="Travel guide" title={g.title}>
+  <PageHero slot="hero" image={photo} eyebrow="Travel guide" title={g.title} edit={`guide:${g.slug}`} editTitle="title" editPhoto={false}>
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> {readMinutes} min read</span>
       <span class="chip-light"><Icon name="check" class="h-4 w-4" /> Updated <time datetime={g.updated}>{g.updatedLabel}</time></span>
@@ -84,7 +86,8 @@ const pkgs = packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Bool
   <article class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-14">
     <div class="min-w-0">
       <p class="eyebrow">The short answer</p>
-      <div class="mt-3"><slot name="answer" /></div>
+      {/* The page's own answer, until the admin rewrites the guide's summary in the dashboard. */}
+      {summaryEdited ? <p class="answer mt-3" data-edit={`guide:${g.slug}:summary`}>{g.summary}</p> : <div class="mt-3" data-edit={`guide:${g.slug}:summary`}><slot name="answer" /></div>}
 
       {facts.length > 0 && (
         <dl class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-reveal-stagger data-pop>

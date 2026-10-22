@@ -29,6 +29,7 @@ import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { getDb, schema } from './db';
 import { env, isProduction, requireEnv } from './env';
 import { imageInfo } from './payments';
+import { photoFile } from '../data/photo-library';
 
 export type FileKind = 'payment' | 'itinerary';
 export type FileRow = typeof schema.files.$inferSelect;
@@ -130,6 +131,61 @@ export async function saveUpload(u: Upload): Promise<{ error: string } | { file:
   }
 }
 
+/* ---------------- Website photos ---------------- */
+
+/*
+ * Photos for the public website (the photo library, /admin/photos/). They
+ * are not tied to a booking, so they have no row in `files` and no clean-up
+ * touches them: the library entry (src/data/photo-library.ts) holds the
+ * pathname, website/<id>.jpg. Each build reads them to make the website's
+ * own files (scripts/content-photos.mjs); the original is only ever shown to
+ * the admin, through /admin/photos/original/<id>.jpg.
+ */
+
+/** The smallest long side worth putting on the website: the large size is 1600 pixels. */
+export const WEBSITE_PHOTO_MIN = 1200;
+
+/** Stores one website photo, already a JPEG from the browser. */
+export async function saveWebsitePhoto(bytes: Uint8Array): Promise<{ error: string } | { pathname: string; width: number; height: number }> {
+  if (!filesReady()) return { error: NOT_READY };
+  if (bytes.length > MAX_UPLOAD) return { error: 'That picture is too large. Choose it again: the page makes it smaller before sending.' };
+  const info = imageInfo(bytes);
+  if (info?.mime !== 'image/jpeg') return { error: 'That picture could not be read. Choose a JPG or PNG photo.' };
+  if (Math.max(info.w, info.h) < WEBSITE_PHOTO_MIN) return { error: `That photo is too small for the website (${info.w} by ${info.h} pixels). Choose one at least ${WEBSITE_PHOTO_MIN} pixels across, ideally 1600 or more.` };
+  if (Math.max(info.w, info.h) > 4000) return { error: 'That picture is too large. Choose it again: the page makes it smaller before sending.' };
+  const pathname = `website/${randomUUID()}.jpg`;
+  await writeStored(pathname, bytes);
+  return { pathname, width: info.w, height: info.h };
+}
+
+/** The id in a website photo's pathname, for its admin address. */
+export const websitePhotoId = (pathname: string) => pathname.match(/^website\/([0-9a-f-]{36})\.jpg$/)?.[1] ?? null;
+export const websitePhotoSrc = (pathname: string) => `/admin/photos/original/${websitePhotoId(pathname)}.jpg`;
+
+/** The original of a website photo, for the admin's library before it is published. */
+export async function websitePhotoResponse(id: string, request: Request): Promise<Response> {
+  if (!UUID_RE.test(id)) return notFound();
+  const pathname = `website/${id}.jpg`;
+  const headers: Record<string, string> = { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' };
+  const s = store();
+  if (s === 'blob') {
+    const r = await get(pathname, { access: 'private', ifNoneMatch: request.headers.get('if-none-match') ?? undefined });
+    if (!r) return notFound();
+    headers.ETag = r.blob.etag;
+    return r.statusCode === 304 ? new Response(null, { status: 304, headers }) : new Response(r.stream, { headers });
+  }
+  if (s === 'local') {
+    const bytes = await readFile(localPath(pathname)).catch(() => null);
+    return bytes ? new Response(bytes, { headers }) : notFound();
+  }
+  return notFound();
+}
+
+/** Deletes a website photo's original that nothing will use again (an upload never published). */
+export async function deleteWebsitePhoto(pathname: string): Promise<void> {
+  if (websitePhotoId(pathname)) await deleteStored([pathname]).catch((e) => console.error('[files] could not delete', pathname, e));
+}
+
 /* ---------------- Finding them ---------------- */
 
 export async function fileById(id: string): Promise<FileRow | null> {
@@ -205,7 +261,7 @@ export function withoutMissing<T extends { photos: string[]; days: { photo: stri
 /** Where an itinerary photo key's picture is: the website's own copy, or an upload (the customer's signed address, or the admin's in a preview). */
 export function photoSrc(key: string, width: 800 | 1600, forStaff = false): string {
   const id = uploadIdOf(key);
-  if (!id) return `/img/${key}-${width}.webp`;
+  if (!id) return photoFile(key, width);
   return forStaff ? adminFileSrc(id) : tripPhotoSrc(id);
 }
 

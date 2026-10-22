@@ -1,0 +1,49 @@
+---
+/**
+ * Chooses the photo a page shows (a package, a route), from the photo
+ * library, with a picture of the choice. Empty means "the usual one", which
+ * src/lib/photos.ts picks from the places the page is about.
+ */
+import { photoTitle } from '../../data/photo-library';
+import { listEntries } from '../../server/content';
+import { photoThumb } from '../../server/photo-use';
+
+interface Props {
+  value?: string | null;
+  /** The photo the page shows when nothing is chosen. */
+  usual: string;
+  was?: string;
+}
+const { value, usual, was } = Astro.props;
+const library = (await listEntries('photo')).filter((e) => e.current);
+const options = library.map((e) => ({ key: e.key, name: photoTitle(e.current as never), src: photoThumb(e, 800) }));
+const usualOption = options.find((o) => o.key === usual);
+const shown = options.find((o) => o.key === value) ?? usualOption;
+---
+
+<div class="flex flex-col gap-3" data-photo-picker>
+  <img src={shown?.src ?? '/img/hero-800.webp'} alt="" width="800" height="450" class="aspect-[16/9] h-auto w-full rounded-2xl object-cover" data-picker-img />
+  <label class="a-field">
+    The photo at the top of the page
+    <select name="photo" data-picker-select>
+      <option value="" selected={!value}>The usual one{usualOption ? `: ${usualOption.name}` : ''}</option>
+      {options.map((o) => <option value={o.key} selected={o.key === value}>{o.name}</option>)}
+    </select>
+  </label>
+  {was && <span class="wf-was">Changed from what is live</span>}
+  <span class="text-[13px] text-muted">Add or upload photos in <a href="/admin/photos/">Photos</a>. A new photo shows here once it is uploaded.</span>
+  <script type="application/json" data-picker-src set:html={JSON.stringify({ '': usualOption?.src ?? '', ...Object.fromEntries(options.map((o) => [o.key, o.src])) })} />
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-photo-picker]').forEach((box) => {
+    const src = JSON.parse(box.querySelector('[data-picker-src]')!.textContent || '{}') as Record<string, string>;
+    const sel = box.querySelector<HTMLSelectElement>('[data-picker-select]')!;
+    sel.addEventListener('change', () => {
+      const img = box.querySelector<HTMLImageElement>('[data-picker-img]');
+      if (img && src[sel.value]) img.src = src[sel.value];
+      // A preview elsewhere on the page follows too.
+      document.querySelectorAll<HTMLImageElement>('[data-picker-mirror]').forEach((m) => src[sel.value] && (m.src = src[sel.value]));
+    });
+  });
+</script>

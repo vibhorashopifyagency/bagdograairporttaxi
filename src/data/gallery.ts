@@ -4,11 +4,11 @@
  * credits are on /photo-credits/). `href` points at the page that lets the
  * viewer act on what they see: a destination guide, a route or the cars.
  *
- * To add the business's own photographs, drop them into public/img/ as
- * name-{400,800,1600}.webp, add the entry to src/data/photos.json and list
- * the key here.
+ * The admin edits this list, and adds photos to the library, in the
+ * dashboard (Photos).
  */
 import type { PhotoKey } from '../lib/photos';
+import { PHOTOS } from './photo-library';
 import { overlayWhole } from './published';
 
 export type GalleryCategory = 'Darjeeling hills' | 'Sikkim' | 'Dooars and Bhutan' | 'On the road' | 'Our cars';
@@ -56,4 +56,5 @@ export const GALLERY_START: GalleryItem[] = [
   { photo: 'car-traveller', title: 'Tempo Traveller', place: 'Twelve seats for groups', category: 'Our cars', href: '/book/?vehicle=traveller', cta: 'Book a Tempo Traveller' },
 ];
 
-export const GALLERY = overlayWhole('gallery', GALLERY_START);
+/** A photo the website cannot show (an upload the build could not make) leaves the gallery rather than show broken. */
+export const GALLERY = overlayWhole('gallery', GALLERY_START).filter((g) => PHOTOS[g.photo]);

@@ -1,0 +1,208 @@
+---
+/**
+ * One destination guide: its opening answer, best time, days needed,
+ * highlights, how to reach, permits, questions and photo.
+ * /admin/pages/destination/new/ adds one. Admin only; saves are drafts until
+ * Publish. Also opens in the page editor's side panel (Edit pages).
+ */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../../components/admin/PublishBar.astro';
+import WebField from '../../../../components/admin/WebField.astro';
+import RowList from '../../../../components/admin/RowList.astro';
+import PhotoPicker from '../../../../components/admin/PhotoPicker.astro';
+import VersionHistory from '../../../../components/admin/VersionHistory.astro';
+import { isAdmin } from '../../../../server/admin';
+import { discardDraft, getEntry, markForRemoval, markForReset, saveDraft } from '../../../../server/content';
+import { destinationFromForm, missingNumber, slugify } from '../../../../server/content-forms';
+import { wasNotes } from '../../../../server/content-diff';
+import { defaultPhoto } from '../../../../lib/photos';
+import { ipHash } from '../../../../server/security';
+import '../../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+type Data = Record<string, any>;
+
+const slugParam = Astro.params.slug!;
+const isNew = slugParam === 'new';
+let entry = isNew ? null : await getEntry('destination', slugParam);
+if (!isNew && !entry) return Astro.redirect('/admin/pages/', 303);
+
+let error = '';
+let errorField = '';
+let posted: Data | null = null;
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? 'save');
+  const here = (done: string, slug = slugParam) => Astro.redirect(`/admin/pages/destination/${slug}/?done=${done}`, 303);
+  if (intent === 'discard') {
+    await discardDraft(ctx, 'destination', slugParam);
+    return here('discarded');
+  }
+  if (intent === 'remove') {
+    const r = await markForRemoval(ctx, 'destination', slugParam);
+    if (r.ok) return Astro.redirect('/admin/pages/?done=removed', 303);
+    error = r.error;
+  }
+  if (intent === 'reset') {
+    const r = await markForReset(ctx, 'destination', slugParam);
+    if (r.ok) return here('reset');
+    error = r.error;
+  }
+  if (intent === 'save') {
+    const slug = isNew ? slugify(String(f.get('slug') ?? '')) || slugify(String(f.get('name') ?? '')) : slugParam;
+    posted = destinationFromForm(f, slug);
+    const missing = missingNumber(posted, ['geo.lat', 'geo.lng']);
+    if (missing) {
+      error = 'The map pin needs both numbers. Copy them from Google Maps: press and hold the place, then copy the two numbers shown.';
+      errorField = missing;
+    } else if (!slug) {
+      error = 'Write the name first: the web address is made from it.';
+      errorField = 'slug';
+    } else {
+      const r = await saveDraft(ctx, 'destination', slug, posted);
+      if (r.ok) return here(r.message ? 'same' : 'saved', slug);
+      error = r.error;
+      errorField = r.field ?? '';
+    }
+  }
+}
+
+entry = isNew ? null : await getEntry('destination', slugParam);
+const blank: Data = { name: '', short: '', region: '', altitude: '', summary: '', bestTime: '', daysNeeded: '', highlights: [{ name: '', note: '' }], howToReach: '', permit: '', faqs: [], geo: { lat: '', lng: '' } };
+const removed = entry && !entry.current;
+const d: Data = posted ?? (entry?.current as Data | null) ?? (entry?.live as Data | null) ?? blank;
+const live = (entry?.live as Data | null) ?? null;
+const was = entry && live && entry.current ? wasNotes('destination', live, entry.current) : {};
+const err = (path: string) => (errorField === path || errorField.startsWith(`${path}.`) ? error : undefined);
+const title = isNew ? 'Add a destination' : String(d.name || 'Destination');
+const done = Astro.url.searchParams.get('done');
+const state: [string, string] = isNew
+  ? ['Not saved yet', 'bg-mist text-body']
+  : removed
+    ? ['Off the website', 'bg-[#fde8e7] text-[#b42318]']
+    : entry!.pending === 'delete'
+      ? ['Comes off when you publish', 'bg-[#fde8e7] text-[#b42318]']
+      : entry!.live === null
+        ? ['New, not live yet', 'bg-[#e7f0ff] text-[#1d4ed8]']
+        : entry!.pending
+          ? ['Draft, not live yet', 'bg-[#fff4d6] text-[#8a5300]']
+          : ['Live', 'bg-lime-50 text-[#3f6200]'];
+---
+
+<AdminLayout title={title}>
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+    <div class="flex flex-col gap-2">
+      <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 text-sm text-muted" data-chrome>
+        <a href="/admin/pages/" class="font-semibold text-body">Edit pages</a><span aria-hidden="true">›</span><span>Destination guides</span>
+      </nav>
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">{title}</h1>
+        <span class:list={['web-state', state[1]]}>{state[0]}</span>
+        <span class="flex-1"></span>
+        {!isNew && live && (
+          <span class="flex gap-2" data-chrome>
+            <a href={`/admin/pages/edit/?path=/destinations/${slugParam}/`} class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Edit on the page</a>
+            <a href={`/destinations/${slugParam}/`} target="_blank" rel="noopener" class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Live page</a>
+          </span>
+        )}
+      </div>
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish.</p>}
+    {done === 'same' && <p class="a-msg a-msg-ok m-0" role="status">That is what the website already shows, so there was nothing to save.</p>}
+    {done === 'discarded' && <p class="a-msg a-msg-ok m-0" role="status">Draft thrown away. This is what the website shows.</p>}
+    {done === 'reset' && <p class="a-msg a-msg-ok m-0" role="status">It goes back to the starting copy when you publish.</p>}
+    {done === 'restored' && <p class="a-msg a-msg-ok m-0" role="status">The earlier version is back as a draft. Publish to put it live.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+    {removed && <p class="a-msg m-0 bg-[#fde8e7] text-[#8f1d14]">This destination is off the website. Put it back from the panel below, or put back a version from the history.</p>}
+
+    <div class="flex flex-wrap items-start gap-5">
+      <form method="post" data-web-form class="flex min-w-0 flex-[1_1_620px] flex-col gap-5">
+        <input type="hidden" name="intent" value="save" />
+        <fieldset disabled={Boolean(removed)} class="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">The place</h2>
+            <div class="grid gap-3.5 sm:grid-cols-2">
+              <WebField label="Name" name="name" value={d.name} was={was.name} error={err('name')} placeholder="Darjeeling" />
+              <WebField label="Short name, for titles (if different)" name="short" value={d.short ?? ''} was={was.short} error={err('short')} />
+              <WebField label="Region" name="region" value={d.region} was={was.region} error={err('region')} placeholder="Darjeeling district, West Bengal" />
+              <WebField label="Altitude" name="altitude" value={d.altitude} was={was.altitude} error={err('altitude')} placeholder="2,042 m" />
+              {isNew && <WebField label="Web address" name="slug" value={posted?.slug ?? ''} placeholder="Made from the name" error={err('slug')} class="sm:col-span-2" help="bagdograairporttaxi.com/destinations/… It cannot change once published." />}
+            </div>
+          </section>
+
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">Opening answer and facts</h2>
+            <WebField label="The first thing Google and AI answers quote" name="summary" rows={4} value={d.summary} was={was.summary && 'Changed from what is live'} error={err('summary')} count={[160, 450]} maxlength={600} help="What the place is, why people go, and how far it is from Bagdogra." />
+            <WebField label="Best time to visit" name="bestTime" rows={2} value={d.bestTime} was={was.bestTime && 'Changed from what is live'} error={err('bestTime')} />
+            <WebField label="Days needed" name="daysNeeded" value={d.daysNeeded} was={was.daysNeeded} error={err('daysNeeded')} placeholder="2 to 3 days" />
+            <WebField label="How to reach" name="howToReach" rows={3} value={d.howToReach} was={was.howToReach && 'Changed from what is live'} error={err('howToReach')} />
+            <WebField label="Permits (leave empty when none are needed)" name="permit" rows={2} value={d.permit ?? ''} was={was.permit && 'Changed from what is live'} error={err('permit')} />
+          </section>
+
+          <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold" id="highlights">Top things to see</h2>
+            <RowList id="highlights" noun="highlight" addLabel="Add a highlight" max={12} numbered cards was={was.highlights} fields={[{ name: 'hName', label: 'Highlight', placeholder: 'Tiger Hill' }, { name: 'hNote', label: 'Its note', rows: 2 }]} values={(d.highlights ?? []).map((h: Data) => [h.name, h.note])} />
+          </section>
+
+          <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold" id="faqs">Questions travellers ask</h2>
+            <p class="m-0 text-sm text-muted">The page also answers best time, days needed and how to reach from the boxes above.</p>
+            <RowList id="faqs" noun="question" addLabel="Add a question" max={10} cards was={was.faqs} fields={[{ name: 'faqQ', label: 'Question' }, { name: 'faqA', label: 'Answer', rows: 3 }]} values={(d.faqs ?? []).map((x: Data) => [x.q, x.a])} />
+          </section>
+
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6" id="photo">
+            <h2 class="m-0 font-display text-xl font-bold">Photo and map pin</h2>
+            <PhotoPicker value={d.photo} usual={defaultPhoto.destination(isNew ? '' : slugParam)} was={was.photo} />
+            <div class="grid grid-cols-2 gap-3.5">
+              <WebField label="Latitude" name="lat" inputmode="decimal" value={d.geo?.lat} was={was['geo.lat']} error={err('geo.lat')} />
+              <WebField label="Longitude" name="lng" inputmode="decimal" value={d.geo?.lng} was={was['geo.lng']} error={err('geo.lng')} />
+            </div>
+          </section>
+        </fieldset>
+        {!removed && (
+          <div class="web-save">
+            <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+            <button type="submit" class="btn-book min-h-12">{isNew ? 'Save the new destination' : 'Save as draft'}</button>
+          </div>
+        )}
+      </form>
+
+      {!isNew && (
+        <aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-4 xl:max-w-[400px]" data-chrome>
+          <section class="a-card flex flex-col gap-2.5 p-5">
+            <h2 class="m-0 font-display text-lg font-bold">This destination</h2>
+            {entry!.pending === 'save' && <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Discard my changes</button></form>}
+            {removed && entry!.state !== 'added' && <form method="post"><input type="hidden" name="intent" value="reset" /><button class="btn-book min-h-11 w-full">Put it back on the website</button></form>}
+            {!removed && entry!.state === 'edited' && (
+              <form method="post" data-confirm="Undo every change made in the dashboard and go back to the starting copy when you publish?"><input type="hidden" name="intent" value="reset" /><button class="btn-ghost min-h-11 w-full">Back to the starting copy</button></form>
+            )}
+            {!removed && entry!.pending !== 'delete' && (
+              <form method="post" data-confirm="Take this destination off the website when you publish? Publish refuses while a route or package still points at it."><input type="hidden" name="intent" value="remove" /><button class="btn-ghost min-h-11 w-full text-[#b42318]">Take it off the website</button></form>
+            )}
+            {entry!.pending === 'delete' && <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Keep it on the website</button></form>}
+          </section>
+          <VersionHistory type="destination" itemKey={slugParam} />
+        </aside>
+      )}
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { wireCounters, wireDirty, wireLists } from '../../../../lib/admin-web';
+  wireLists();
+  wireCounters();
+  wireDirty();
+  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((f) =>
+    f.addEventListener('submit', (e) => {
+      if (!confirm(f.dataset.confirm!)) e.preventDefault();
+    }),
+  );
+</script>

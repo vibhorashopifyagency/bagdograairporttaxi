@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "prebuild": "node scripts/fetch-google-reviews.mjs && node --env-file-if-exists=.env scripts/db-migrate.mjs --if-configured && node --env-file-if-exists=.env scripts/content-pull.mjs",
+    "prebuild": "node scripts/fetch-google-reviews.mjs && node --env-file-if-exists=.env scripts/db-migrate.mjs --if-configured && node --env-file-if-exists=.env scripts/content-pull.mjs && node --env-file-if-exists=.env scripts/content-photos.mjs",
     "build": "astro build",
     "postbuild": "node scripts/verify-build.mjs",
     "preview": "astro preview",
@@ -26,7 +26,7 @@
     "db:seed": "node --env-file-if-exists=.env scripts/db-seed.mjs",
     "db:backup": "node --env-file-if-exists=.env scripts/db-backup.mjs",
     "db:restore": "node --env-file-if-exists=.env scripts/db-restore.mjs",
-    "content:pull": "node --env-file-if-exists=.env scripts/content-pull.mjs"
+    "content:pull": "node --env-file-if-exists=.env scripts/content-pull.mjs && node --env-file-if-exists=.env scripts/content-photos.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",

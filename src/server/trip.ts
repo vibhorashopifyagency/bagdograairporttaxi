@@ -57,10 +57,10 @@ export async function bookingForToken(token: string): Promise<BookingRow | null>
 
 /* ---------------- The photo library ---------------- */
 
-export type LibraryPhoto = { key: string; title: string; place: string; alt: string };
+export type LibraryPhoto = { key: string; title: string; place: string; alt: string; base: string };
 
 /** Every photo on the website, the same set as the gallery page. */
-export const LIBRARY: LibraryPhoto[] = GALLERY.map((g) => ({ key: g.photo, title: g.title, place: g.place, alt: PHOTOS[g.photo]?.alt ?? g.title }));
+export const LIBRARY: LibraryPhoto[] = GALLERY.filter((g) => PHOTOS[g.photo]).map((g) => ({ key: g.photo, title: g.title, place: g.place, alt: PHOTOS[g.photo].alt || g.title, base: PHOTOS[g.photo].base }));
 const LIBRARY_KEYS = new Set(LIBRARY.map((p) => p.key));
 export const isPhotoKey = (k: string) => LIBRARY_KEYS.has(k);
 /** Uploaded photos ('u:…', src/server/files.ts) carry no caption. */

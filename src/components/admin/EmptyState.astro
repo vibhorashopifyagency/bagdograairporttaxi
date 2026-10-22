@@ -6,6 +6,7 @@
  * photo shrinks to a strip so the filters stay the focus.
  */
 import { PHOTOS, type PhotoKey } from '../../lib/photos';
+import { photoFile } from '../../data/photo-library';
 
 interface Props {
   photo: PhotoKey;
@@ -23,7 +24,7 @@ const p = PHOTOS[photo];
 ---
 
 <div class:list={['a-empty', compact && 'a-empty-compact', !bare && 'a-card']} role="status">
-  <img src={`/img/${photo}-800.webp`} alt="" width="800" height={Math.round((800 * p.height) / p.width)} loading="lazy" decoding="async" style={`object-position: ${focus}`} />
+  <img src={photoFile(photo, 800)} alt="" width="800" height={Math.round((800 * p.height) / p.width)} loading="lazy" decoding="async" style={`object-position: ${focus}`} />
   <div class="a-empty-text">
     <p class="m-0 font-display text-xl font-bold text-ink">{title}</p>
     {text && <p class="m-0 text-body">{text}</p>}

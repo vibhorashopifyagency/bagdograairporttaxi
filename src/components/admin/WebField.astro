@@ -1,0 +1,80 @@
+---
+/**
+ * One box of a website-editing form. A box whose draft differs from what is
+ * live is tinted lime and says what it was ("was 5 working days"), as in the
+ * mock. `count` shows a live character count against a recommended range.
+ */
+interface Props {
+  label: string;
+  name: string;
+  value?: string | number | null;
+  /** "was ..." when the draft differs from the live website. */
+  was?: string;
+  help?: string;
+  error?: string;
+  type?: 'text' | 'email' | 'url' | 'number' | 'tel';
+  inputmode?: 'text' | 'numeric' | 'decimal' | 'tel' | 'email' | 'url';
+  placeholder?: string;
+  /** Text after the value inside the box: "% of the fare". */
+  suffix?: string;
+  /** Text before the value inside the box: "₹". */
+  prefix?: string;
+  rows?: number;
+  /** [ideal minimum, ideal maximum] characters, shown as a counter. */
+  count?: [number, number];
+  maxlength?: number;
+  required?: boolean;
+  class?: string;
+  autocomplete?: string;
+}
+const { label, name, value, was, help, error, type = 'text', inputmode, placeholder, suffix, prefix, rows, count, maxlength, required, class: cls, autocomplete = 'off' } = Astro.props;
+const id = `wf-${name.replace(/[^a-z0-9]+/gi, '-')}`;
+const describedBy = [help && `${id}-help`, was && `${id}-was`, error && `${id}-err`].filter(Boolean).join(' ') || undefined;
+const boxed = Boolean(suffix || prefix);
+const text = value === null || value === undefined ? '' : String(value);
+---
+
+<div class:list={['wf', cls, was && 'wf-changed', error && 'wf-error']} data-wf>
+  <label for={id} class="wf-label">{label}{required && <span class="sr-only"> (needed)</span>}</label>
+  {rows ? (
+    <textarea id={id} name={name} rows={rows} placeholder={placeholder} maxlength={maxlength} required={required} aria-invalid={error ? 'true' : undefined} aria-describedby={describedBy} data-count={count?.join(',')} class="wf-input">{text}</textarea>
+  ) : boxed ? (
+    <span class="wf-input wf-boxed">
+      {prefix && <span class="wf-affix">{prefix}</span>}
+      <input id={id} name={name} type={type} value={text} inputmode={inputmode} placeholder={placeholder} maxlength={maxlength} required={required} autocomplete={autocomplete} aria-invalid={error ? 'true' : undefined} aria-describedby={describedBy} data-count={count?.join(',')} />
+      {suffix && <span class="wf-affix">{suffix}</span>}
+    </span>
+  ) : (
+    <input id={id} name={name} type={type} value={text} inputmode={inputmode} placeholder={placeholder} maxlength={maxlength} required={required} autocomplete={autocomplete} aria-invalid={error ? 'true' : undefined} aria-describedby={describedBy} data-count={count?.join(',')} class="wf-input" />
+  )}
+  {count && <span class="wf-count" aria-live="polite" data-count-for={id}></span>}
+  {was && <span id={`${id}-was`} class="wf-was">{was}</span>}
+  {error && <span id={`${id}-err`} class="wf-err">{error}</span>}
+  {help && <span id={`${id}-help`} class="wf-help">{help}</span>}
+</div>
+
+<style is:global>
+  .wf { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+  .wf-label { font-weight: 600; font-size: 0.875rem; color: var(--color-ink); }
+  .wf-input {
+    min-height: 2.875rem; width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #d0d4dc; border-radius: 0.75rem; padding: 0.55rem 0.875rem;
+    font: inherit; font-size: 1rem; color: var(--color-ink); background: #fff;
+  }
+  textarea.wf-input { line-height: 1.5; resize: vertical; }
+  .wf-input:focus, .wf-boxed:focus-within { outline: 3px solid var(--color-lime); outline-offset: 1px; }
+  .wf-boxed { display: flex; align-items: center; gap: 0.4rem; padding-top: 0; padding-bottom: 0; }
+  .wf-boxed input { flex: 1 1 auto; min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-weight: 700; color: inherit; padding: 0.55rem 0; }
+  .wf-affix { flex-shrink: 0; font-size: 0.875rem; color: #5c6373; white-space: nowrap; }
+  .wf-changed .wf-input { background: var(--color-lime-50); border: 2px solid var(--color-lime); }
+  .wf-was { font-size: 0.8125rem; color: #3f6200; }
+  .wf-help { font-size: 0.8125rem; color: #5c6373; }
+  .wf-err { font-size: 0.8125rem; font-weight: 600; color: #b42318; }
+  .wf-error .wf-input { border: 2px solid #b42318; }
+  .wf-count { font-size: 0.8125rem; color: #5c6373; }
+  .wf-count.is-off { color: #8a5300; font-weight: 600; }
+  [data-theme='dark'] .wf-input { background: var(--a-input); border-color: var(--a-edge); }
+  [data-theme='dark'] .wf-changed .wf-input { background: #1f2a0b; border-color: var(--color-lime); }
+  [data-theme='dark'] .wf-was { color: #b8ee3a; }
+  [data-theme='dark'] .wf-help, [data-theme='dark'] .wf-count, [data-theme='dark'] .wf-affix { color: var(--color-muted); }
+  [data-theme='dark'] .wf-err { color: #ff8f86; }
+</style>

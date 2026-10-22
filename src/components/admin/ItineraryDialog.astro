@@ -14,6 +14,7 @@ import type { Template } from '../../lib/itinerary-text';
 import { firstName, phoneLabel } from '../../lib/itinerary-text';
 import DateField from './DateField.astro';
 import TimeField from './TimeField.astro';
+import { photoFile } from '../../data/photo-library';
 
 interface Props {
   booking: { id: string; ref: string };
@@ -228,7 +229,7 @@ const field = 'a-field it-field';
         {library.map((p) => (
           <li>
             <button type="button" class="it-pick" data-pick={p.key} aria-pressed="false">
-              <img src={`/img/${p.key}-400.webp`} alt="" loading="lazy" width="400" height="267" />
+              <img src={photoFile(p.key, 400)} alt="" loading="lazy" width="400" height="267" />
               <span class="flex flex-col px-2.5 py-2 text-left"><span class="text-sm font-semibold">{p.title}</span><span class="text-xs text-muted">{p.place}</span></span>
             </button>
           </li>
@@ -275,7 +276,7 @@ const field = 'a-field it-field';
     pay: { total: number; paid: number; due: number; driverCollects: boolean; last: string };
     upiReady: boolean;
     templates: Template[];
-    library: { key: string; title: string; place: string; alt: string }[];
+    library: { key: string; title: string; place: string; alt: string; base: string }[];
     uploads: { key: string; src: string }[];
     uploadReady: boolean;
     drivers: { id: string; name: string; phone: string; car: string }[];
@@ -295,7 +296,7 @@ const field = 'a-field it-field';
     const titleOf = (key: string) => cfg.library.find((p) => p.key === key)?.title ?? (key.startsWith('u:') ? 'Your photo' : '');
     /** A library photo at one of the website's widths, or an uploaded one (a single size, for signed-in staff). */
     const srcOf = (key: string, width: 400 | 800 | 1600) =>
-      key.startsWith('u:') ? (cfg.uploads.find((u) => u.key === key)?.src ?? `/admin/files/${key.slice(2)}.jpg`) : `/img/${key}-${width}.webp`;
+      key.startsWith('u:') ? (cfg.uploads.find((u) => u.key === key)?.src ?? `/admin/files/${key.slice(2)}.jpg`) : `${cfg.library.find((p) => p.key === key)?.base ?? '/img/hero'}-${width}.webp`;
     const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => {
       const n = document.createElement(tag);
       if (cls) n.className = cls;

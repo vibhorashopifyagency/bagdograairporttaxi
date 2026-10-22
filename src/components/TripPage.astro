@@ -14,6 +14,7 @@ import { dateRange, dayDate, firstName, shortRange } from '../lib/itinerary-text
 import { qrSrc, upiLink, type Upi } from '../lib/upi';
 import type { ItineraryData } from '../server/db/schema';
 import { photoSrc, uploadIdOf } from '../server/files';
+import { photoFile } from '../data/photo-library';
 import type { PaySummary } from '../server/payments';
 
 interface Props {
@@ -55,7 +56,7 @@ const waUs = `https://wa.me/${BUSINESS.whatsapp}?text=${encodeURIComponent(`Nama
 const message = d.message.trim();
 // An uploaded photo is the office's own (src/server/files.ts): signed for the customer, the admin's copy in a preview.
 const coverUploaded = Boolean(uploadIdOf(cover));
-const og = new URL(coverUploaded ? photoSrc(cover, 1600) : `/img/${cover}-16x9.webp`, SITE.url).href;
+const og = new URL(coverUploaded ? photoSrc(cover, 1600) : photoFile(cover, '16x9'), SITE.url).href;
 const ogTitle = `${first ? `${first}'s ` : ''}${place} trip${shortRange(d.start, d.end) ? `, ${shortRange(d.start, d.end)}` : ''}`;
 
 const callIcon =
@@ -98,7 +99,7 @@ const tick = '<path d="M20 6 9 17l-5-5"/>';
       </header>
 
       <section class="relative h-[300px] text-white sm:h-[340px]">
-        <img src={photoSrc(cover, 1600, preview)} srcset={coverUploaded ? undefined : `/img/${cover}-800.webp 800w, /img/${cover}-1600.webp 1600w`} sizes={coverUploaded ? undefined : '(min-width: 720px) 720px, 100vw'} alt={photoAlt(cover)} onerror={coverUploaded ? "this.onerror=null;this.src='/img/hero-1600.webp'" : undefined} class="absolute inset-0 h-full w-full object-cover" />
+        <img src={photoSrc(cover, 1600, preview)} srcset={coverUploaded ? undefined : `${photoFile(cover, 800)} 800w, ${photoFile(cover, 1600)} 1600w`} sizes={coverUploaded ? undefined : '(min-width: 720px) 720px, 100vw'} alt={photoAlt(cover)} onerror={coverUploaded ? "this.onerror=null;this.src='/img/hero-1600.webp'" : undefined} class="absolute inset-0 h-full w-full object-cover" />
         <div class="absolute inset-0 bg-[linear-gradient(180deg,rgb(17_17_17/0.05)_30%,rgb(17_17_17/0.84)_100%)]"></div>
         <div class="absolute right-5 bottom-5 left-5 flex flex-col gap-1.5 sm:right-7 sm:left-7">
           <span class:list={['self-start rounded-full px-2.5 py-0.5 text-xs font-bold text-ink', cancelled ? 'bg-[#fde8e7]' : confirmed ? 'bg-lime' : 'bg-amber']}>

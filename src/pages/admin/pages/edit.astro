@@ -1,0 +1,327 @@
+---
+/**
+ * The page editor (Phase 6, "Edit pages"): a public page shown as it is, with
+ * every spot the dashboard can change outlined. The page templates mark
+ * those spots with data-edit="type:key:field" (a destination's summary, a
+ * route's stops, a guide's title, the photo at the top). Clicking one:
+ *   - plain words: edited right there, Enter saves a draft of that field;
+ *   - lists (questions, highlights, days, fares, stops, tips) and photos:
+ *     the item's form opens in a side panel at that section.
+ * The page is the published one; drafts of plain words are laid over it
+ * here so the admin sees them, and lists say "shows after you publish".
+ * Layout, colours and section order cannot be changed. Admin only.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../components/admin/PublishBar.astro';
+import { isAdmin } from '../../../server/admin';
+import '../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const raw = Astro.url.searchParams.get('path') ?? '/';
+// Only the website's own pages, never the dashboard or the API.
+const path = /^\/(?!admin|api|trip)[a-z0-9\-/]*$/.test(raw) ? (raw.endsWith('/') ? raw : `${raw}/`) : '/';
+const back = '<path d="M15 18l-6-6 6-6"/>';
+---
+
+<AdminLayout title="Edit on the page">
+  <div class="flex flex-col gap-4">
+    <PublishBar />
+    <div class="a-card flex flex-wrap items-center gap-x-4 gap-y-3 p-3 pl-4">
+      <a href="/admin/pages/" class="a-icon-btn" aria-label="Back to Edit pages"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={back} /></a>
+      <div class="flex min-w-0 flex-[1_1_240px] flex-col leading-tight">
+        <span class="truncate font-display text-lg font-bold" data-pe-title>Loading the page…</span>
+        <span class="truncate text-[13px] text-muted" data-pe-path>{path}</span>
+      </div>
+      <div class="flex gap-1 rounded-xl border border-line bg-white p-1" role="group" aria-label="Screen size">
+        <button type="button" class="pe-size" data-size="full" aria-pressed="true">Laptop</button>
+        <button type="button" class="pe-size" data-size="phone" aria-pressed="false">Phone</button>
+      </div>
+      <label class="flex items-center gap-2 text-sm font-semibold text-body"><input type="checkbox" data-pe-outline checked class="h-[18px] w-[18px] accent-lime" />Outline what can be edited</label>
+      <a href={path} target="_blank" rel="noopener" class="btn-ghost min-h-10 px-3.5 py-1 text-sm" data-pe-live>Live page</a>
+    </div>
+    <p class="a-msg m-0 bg-mist text-body" data-pe-help>
+      Click an outlined spot. Words change right on the page: press Enter to save, Esc to stop. Lists and photos open their form beside the page.
+    </p>
+    <div class="pe-stage" data-pe-stage>
+      <iframe src={path} title="The page being edited" class="pe-frame" data-pe-frame data-path={path}></iframe>
+    </div>
+  </div>
+
+  <dialog class="pe-panel" data-pe-panel aria-labelledby="pe-panel-h">
+    <div class="flex items-center gap-3 border-b border-line px-4 py-3">
+      <h2 id="pe-panel-h" class="m-0 flex-1 truncate font-display text-lg font-bold" data-pe-panel-title>Edit</h2>
+      <a href="#" class="text-sm font-semibold" data-pe-panel-full target="_top">Open in full</a>
+      <button type="button" class="a-icon-btn" data-pe-panel-close aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+    </div>
+    <iframe title="Form" class="min-h-0 w-full flex-1 border-0" data-pe-panel-frame></iframe>
+  </dialog>
+</AdminLayout>
+
+<style is:global>
+  .pe-size { min-height: 2.25rem; padding: 0 0.85rem; border: 0; border-radius: 0.6rem; background: transparent; font-weight: 600; font-size: 0.875rem; color: var(--color-body); }
+  .pe-size[aria-pressed='true'] { background: var(--color-ink); color: #fff; }
+  .pe-stage { display: flex; justify-content: center; border-radius: 20px; background: #e3e6ea; padding: 0; overflow: hidden; }
+  .pe-stage.is-phone { padding: 1rem 0; }
+  .pe-frame { display: block; width: 100%; height: calc(100dvh - 230px); min-height: 560px; border: 0; background: #fff; }
+  .pe-stage.is-phone .pe-frame { width: 400px; max-width: 100%; border-radius: 24px; box-shadow: 0 10px 40px -12px rgb(17 17 17 / 40%); }
+  .pe-panel { margin: 0 0 0 auto; width: min(100%, 680px); max-width: none; height: 100dvh; max-height: none; border: 0; padding: 0; background: #fff; color: var(--color-ink); }
+  .pe-panel[open] { display: flex; flex-direction: column; }
+  .pe-panel::backdrop { background: rgb(17 17 17 / 35%); }
+  [data-theme='dark'] .pe-stage { background: #0b0c0e; }
+  [data-theme='dark'] .pe-panel { background: var(--a-surface); }
+  [data-theme='dark'] .pe-size[aria-pressed='true'] { background: var(--color-lime); color: #111; }
+  @media (max-width: 767px) { .pe-frame { height: calc(100dvh - 300px); } }
+</style>
+
+<script>
+  /** Fields edited in a form beside the page rather than on it. */
+  const PANEL_FIELDS = new Set(['faqs', 'highlights', 'itinerary', 'includes', 'excludes', 'stops', 'tips', 'fares', 'fromPrice', 'list', 'photo']);
+  const FORM: Record<string, (key: string) => string> = {
+    route: (k) => `/admin/fares/route/${k}/`,
+    package: (k) => `/admin/fares/package/${k}/`,
+    destination: (k) => `/admin/pages/destination/${k}/`,
+    guide: (k) => `/admin/pages/guide/${k}/`,
+    faq: () => '/admin/pages/faq/main/',
+  };
+  const NAMES: Record<string, string> = {
+    faqs: 'Questions', highlights: 'Top things to see', itinerary: 'Day by day', includes: 'Included', excludes: 'Not included',
+    stops: 'Stops on the way', tips: 'Tips', fares: 'Fares', fromPrice: 'Price', list: 'General questions', photo: 'Photo',
+    summary: 'Opening answer', bestTime: 'Best time to visit', daysNeeded: 'Days needed', howToReach: 'How to reach', permit: 'Permits', title: 'Title',
+  };
+
+  type Item = { current: Record<string, unknown> | unknown[] | null; live: Record<string, unknown> | unknown[] | null; pending: string | null; state: string };
+  const frame = document.querySelector<HTMLIFrameElement>('[data-pe-frame]')!;
+  const stage = document.querySelector<HTMLElement>('[data-pe-stage]')!;
+  const panel = document.querySelector<HTMLDialogElement>('[data-pe-panel]')!;
+  const panelFrame = document.querySelector<HTMLIFrameElement>('[data-pe-panel-frame]')!;
+  const refreshBar = () => (window as unknown as { refreshPublishBar?: () => Promise<void> }).refreshPublishBar?.();
+  const field = (v: unknown, f: string) => (v && !Array.isArray(v) && typeof v === 'object' ? (v as Record<string, unknown>)[f] : undefined);
+
+  /* ---------- Screen size and outlines ---------- */
+  document.querySelectorAll<HTMLButtonElement>('[data-size]').forEach((b) =>
+    b.addEventListener('click', () => {
+      document.querySelectorAll('[data-size]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      stage.classList.toggle('is-phone', b.dataset.size === 'phone');
+    }),
+  );
+  const outline = document.querySelector<HTMLInputElement>('[data-pe-outline]')!;
+  outline.addEventListener('change', () => frame.contentDocument?.documentElement.classList.toggle('pe-outlines', outline.checked));
+
+  /* ---------- The page inside ---------- */
+  const STYLE = `
+    html.pe-outlines [data-edit] { outline: 2px dashed rgb(161 224 5 / 90%); outline-offset: 3px; }
+    [data-edit] { cursor: pointer; position: relative; transition: outline-color .15s, background-color .15s; }
+    [data-edit]:hover { outline: 2px solid #a1e005 !important; outline-offset: 3px; background-color: rgb(161 224 5 / 8%); }
+    [data-edit].pe-draft { outline: 2px solid #ffb300 !important; outline-offset: 3px; }
+    [data-edit].pe-editing { outline: 3px solid #a1e005 !important; background: #fff; color: #111; cursor: text; }
+    .pe-tag { position: absolute; z-index: 60; top: -12px; right: 8px; padding: 2px 8px; border-radius: 999px; font: 600 11px/1.6 Inter, system-ui, sans-serif; letter-spacing: .02em; pointer-events: none; }
+    .pe-tag.is-draft { background: #ffb300; color: #111; }
+    .pe-bar { position: absolute; z-index: 70; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border-radius: 14px; background: #111; color: #fff; font: 500 13px/1.4 Inter, system-ui, sans-serif; box-shadow: 0 10px 30px -10px rgb(0 0 0 / 50%); max-width: min(560px, calc(100vw - 24px)); }
+    .pe-bar button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 10px; font: 700 14px Inter, system-ui, sans-serif; cursor: pointer; }
+    .pe-bar .pe-save { background: #a1e005; color: #111; }
+    .pe-bar .pe-cancel { background: #2a2f36; color: #fff; }
+    .pe-bar .pe-msg { flex: 1 1 200px; color: #c9ced8; }
+    .pe-bar .pe-msg.is-error { color: #ffb4ad; font-weight: 600; }
+  `;
+
+  let editing: { el: HTMLElement; before: string; bar: HTMLElement } | null = null;
+  let items: Record<string, Item> = {};
+
+  const parts = (el: Element) => {
+    const [type, key, f] = (el.getAttribute('data-edit') ?? '').split(':');
+    return { type, key, f, id: `${type}:${key}` };
+  };
+
+  function paintSpots(doc: Document) {
+    doc.querySelectorAll<HTMLElement>('[data-edit]').forEach((el) => {
+      const { id, f } = parts(el);
+      const it = items[id];
+      el.classList.remove('pe-draft');
+      el.querySelector(':scope > .pe-tag')?.remove();
+      if (!it) return;
+      const name = f === 'list' ? null : f;
+      const now = name ? field(it.current, name) : it.current;
+      const was = name ? field(it.live, name) : it.live;
+      const changed = it.pending && JSON.stringify(now ?? null) !== JSON.stringify(was ?? null);
+      // Plain words: show the draft right on the page (inside the one paragraph a spot may wrap).
+      if (changed && name && !PANEL_FIELDS.has(name) && typeof now === 'string') {
+        const only = el.children.length === 1 && !el.firstElementChild!.children.length ? (el.firstElementChild as HTMLElement) : el;
+        only.textContent = now;
+      }
+      if (it.pending === 'delete' || changed) {
+        el.classList.add('pe-draft');
+        const tag = doc.createElement('span');
+        tag.className = 'pe-tag is-draft';
+        tag.textContent = it.pending === 'delete' ? 'Comes off when you publish' : name && !PANEL_FIELDS.has(name) ? 'Draft' : 'Changed: shows after you publish';
+        if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        el.append(tag);
+      }
+    });
+  }
+
+  async function loadItems(doc: Document) {
+    const ids = [...new Set([...doc.querySelectorAll('[data-edit]')].map((el) => parts(el).id))];
+    if (!ids.length) {
+      items = {};
+      return;
+    }
+    const res = await fetch(`/admin/api/content/?items=${encodeURIComponent(ids.join(','))}`).catch(() => null);
+    const data = res?.ok ? await res.json() : { items: {} };
+    items = data.items ?? {};
+    paintSpots(doc);
+  }
+
+  function stopEditing(save: boolean) {
+    if (!editing) return;
+    const { el, before, bar } = editing;
+    if (!save) el.textContent = before;
+    el.removeAttribute('contenteditable');
+    el.classList.remove('pe-editing');
+    bar.remove();
+    editing = null;
+    const doc = frame.contentDocument;
+    if (doc) paintSpots(doc);
+  }
+
+  async function saveEditing() {
+    if (!editing) return;
+    const { el, bar } = editing;
+    const { type, key, f } = parts(el);
+    const value = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const msg = bar.querySelector<HTMLElement>('.pe-msg')!;
+    const btn = bar.querySelector<HTMLButtonElement>('.pe-save')!;
+    btn.disabled = true;
+    msg.className = 'pe-msg';
+    msg.textContent = 'Saving…';
+    const res = await fetch('/admin/api/content/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'field', type, key, path: f, value: value || null }) }).catch(() => null);
+    const r = res ? await res.json().catch(() => ({ ok: false, error: 'The server did not answer.' })) : { ok: false, error: 'No connection. Try again.' };
+    btn.disabled = false;
+    if (!r.ok) {
+      msg.className = 'pe-msg is-error';
+      msg.textContent = r.error;
+      el.focus();
+      return;
+    }
+    const doc = frame.contentDocument!;
+    stopEditing(true);
+    await loadItems(doc);
+    refreshBar();
+  }
+
+  function startEditing(el: HTMLElement) {
+    const doc = el.ownerDocument;
+    if (editing?.el === el) return;
+    stopEditing(false);
+    el.querySelector(':scope > .pe-tag')?.remove();
+    const before = el.textContent ?? '';
+    el.setAttribute('contenteditable', 'plaintext-only');
+    el.classList.add('pe-editing');
+    el.focus();
+    const bar = doc.createElement('div');
+    bar.className = 'pe-bar';
+    bar.setAttribute('contenteditable', 'false');
+    const { f } = parts(el);
+    bar.innerHTML = `<button type="button" class="pe-save">Save</button><button type="button" class="pe-cancel">Cancel</button><span class="pe-msg"></span>`;
+    bar.querySelector('.pe-msg')!.textContent = `${NAMES[f] ?? 'Text'}: Enter saves a draft, Esc cancels.`;
+    doc.body.append(bar);
+    const r = el.getBoundingClientRect();
+    const win = doc.defaultView!;
+    bar.style.top = `${r.bottom + win.scrollY + 10}px`;
+    bar.style.left = `${Math.max(8, Math.min(r.left + win.scrollX, win.innerWidth - bar.offsetWidth - 12))}px`;
+    bar.querySelector('.pe-save')!.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveEditing();
+    });
+    bar.querySelector('.pe-cancel')!.addEventListener('click', (e) => {
+      e.stopPropagation();
+      stopEditing(false);
+    });
+    editing = { el, before, bar };
+  }
+
+  function openPanel(el: Element) {
+    const { type, key, f } = parts(el);
+    const href = FORM[type]?.(key);
+    if (!href) return;
+    const url = `${href}#${f === 'list' ? 'faqs' : f}`;
+    panel.querySelector('[data-pe-panel-title]')!.textContent = NAMES[f] ?? 'Edit';
+    panel.querySelector<HTMLAnchorElement>('[data-pe-panel-full]')!.href = href;
+    panelFrame.src = url;
+    panel.showModal();
+  }
+
+  frame.addEventListener('load', async () => {
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    // Keep the address bar on the page shown, so a reload stays here.
+    const shown = frame.contentWindow!.location.pathname;
+    const url = new URL(location.href);
+    url.searchParams.set('path', shown);
+    history.replaceState(null, '', url);
+    document.querySelector('[data-pe-path]')!.textContent = shown;
+    document.querySelector('[data-pe-title]')!.textContent = doc.title.replace(/\s*[|·–-]\s*Bagdogra Airport Taxi.*$/, '') || shown;
+    document.querySelector<HTMLAnchorElement>('[data-pe-live]')!.href = shown;
+    const style = doc.createElement('style');
+    style.textContent = STYLE;
+    doc.head.append(style);
+    doc.documentElement.classList.toggle('pe-outlines', outline.checked);
+    const count = doc.querySelectorAll('[data-edit]').length;
+    document.querySelector('[data-pe-help]')!.textContent = count
+      ? 'Click an outlined spot. Words change right on the page: press Enter to save, Esc to stop. Lists and photos open their form beside the page.'
+      : 'Nothing on this page is edited here: its words are part of the design. Open a destination, travel guide, tour package, taxi route or the questions page.';
+    editing = null;
+    await loadItems(doc);
+
+    // Clicks on an editable spot edit it instead of following links or opening questions.
+    doc.addEventListener(
+      'click',
+      (e) => {
+        const t = e.target as Element;
+        if (t.closest('.pe-bar')) return;
+        const el = t.closest<HTMLElement>('[data-edit]');
+        if (!el) {
+          if (editing) stopEditing(false);
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        if (PANEL_FIELDS.has(parts(el).f)) openPanel(el);
+        else startEditing(el);
+      },
+      true,
+    );
+    doc.addEventListener('keydown', (e) => {
+      if (!editing) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveEditing();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        stopEditing(false);
+      }
+    });
+    // A word pasted in from elsewhere comes in as plain text.
+    doc.addEventListener('paste', (e) => {
+      if (!editing) return;
+      e.preventDefault();
+      doc.execCommand('insertText', false, (e.clipboardData?.getData('text/plain') ?? '').replace(/\s+/g, ' '));
+    });
+  });
+
+  /* ---------- The side panel ---------- */
+  const closePanel = () => panel.close();
+  document.querySelector('[data-pe-panel-close]')!.addEventListener('click', closePanel);
+  panel.addEventListener('click', (e) => {
+    if (e.target === panel) closePanel();
+  });
+  window.addEventListener('message', async (e) => {
+    if (e.origin !== location.origin || e.data?.type !== 'content-saved') return;
+    refreshBar();
+    const doc = frame.contentDocument;
+    if (doc) await loadItems(doc);
+  });
+</script>

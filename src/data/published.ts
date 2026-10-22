@@ -29,6 +29,7 @@ export type ContentType =
   | 'faq'
   | 'gallery'
   | 'guide'
+  | 'photo'
   | 'order';
 
 /** One published item: its data, or a deletion. `on` is the day (India) it went live. */

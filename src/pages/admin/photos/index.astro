@@ -1,0 +1,537 @@
+---
+/**
+ * Photos, as in the mock's "Photo library": every photo the website can
+ * show, with what it shows, who took it and where it is used; new photos
+ * uploaded here; and the gallery page's list. Admin only. Everything saves
+ * as a draft and goes live with Publish (the photo files themselves are made
+ * by the build, scripts/content-photos.mjs).
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../components/admin/PublishBar.astro';
+import WebField from '../../../components/admin/WebField.astro';
+import VersionHistory from '../../../components/admin/VersionHistory.astro';
+import { isAdmin } from '../../../server/admin';
+import { START_PHOTO_KEYS, discardDraft, getEntry, listEntries, markForRemoval, saveDraft, type Entry } from '../../../server/content';
+import { wasNotes } from '../../../server/content-diff';
+import { deleteWebsitePhoto, filesReady } from '../../../server/files';
+import { photoThumb, photoUses } from '../../../server/photo-use';
+import { photoTitle } from '../../../data/photo-library';
+import { GALLERY_CATEGORIES } from '../../../data/gallery';
+import { ipHash } from '../../../server/security';
+import '../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+type Data = Record<string, any>;
+
+const tab = Astro.url.searchParams.get('tab') === 'gallery' ? 'gallery' : 'library';
+let selected = Astro.url.searchParams.get('photo') ?? '';
+let error = '';
+let errorField = '';
+let posted: Data | null = null;
+let postedGallery: Data[] | null = null;
+
+const LICENCES = ['Our own photo', 'CC BY 4.0', 'CC BY-SA 4.0', 'CC BY 2.0', 'CC BY-SA 3.0', 'CC BY 3.0', 'Public domain'];
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? '');
+  const s = (k: string) => String(f.get(k) ?? '').trim();
+  const key = s('key');
+  const back = (done: string, photo = key) => Astro.redirect(`/admin/photos/?photo=${encodeURIComponent(photo)}&done=${done}`, 303);
+  const e = key ? await getEntry('photo', key) : null;
+
+  if (intent === 'save' && e?.current) {
+    selected = key;
+    const fx = Number(s('focusX'));
+    const fy = Number(s('focusY'));
+    const license = s('license');
+    posted = {
+      ...(e.current as Data),
+      title: s('title') || null,
+      alt: s('alt'),
+      artist: s('artist'),
+      license,
+      licenseUrl: license === 'Our own photo' ? '' : s('licenseUrl'),
+      source: license === 'Our own photo' ? '' : s('source'),
+      own: license === 'Our own photo',
+      focus: s('focusX') !== '' && Number.isFinite(fx) && Number.isFinite(fy) ? { x: Math.round(fx * 10) / 10, y: Math.round(fy * 10) / 10 } : null,
+    };
+    if (!posted.own && posted.artist === '') posted.artist = 'Unknown';
+    const r = await saveDraft(ctx, 'photo', key, posted);
+    if (r.ok) return back(r.message ? 'same' : 'saved');
+    error = r.error;
+    errorField = r.field ?? '';
+  }
+  if (intent === 'discard' && e) {
+    const draft = (e.current as Data | null)?.upload;
+    const live = (e.live as Data | null)?.upload;
+    await discardDraft(ctx, 'photo', key);
+    if (draft && draft !== live) await deleteWebsitePhoto(draft);
+    return e.live ? back('discarded') : Astro.redirect('/admin/photos/?done=deleted', 303);
+  }
+  if (intent === 'delete' && e) {
+    const used = (await photoUses()).get(key)?.length ?? 0;
+    if (START_PHOTO_KEYS.has(key)) error = 'This photo came with the website and pages name it, so it cannot be deleted. Replace it instead.';
+    else if (used) error = `It is still used on ${used} ${used === 1 ? 'page' : 'pages'}. Choose another photo there first.`;
+    else if (!e.live) {
+      // Never published: nothing to keep in the history.
+      const upload = (e.current as Data | null)?.upload;
+      await discardDraft(ctx, 'photo', key);
+      if (upload) await deleteWebsitePhoto(upload);
+      return Astro.redirect('/admin/photos/?done=deleted', 303);
+    } else {
+      const r = await markForRemoval(ctx, 'photo', key);
+      if (r.ok) return back('removing');
+      error = r.error;
+    }
+    selected = key;
+  }
+  if (intent === 'gallery') {
+    const col = (k: string) => f.getAll(k).map((v) => String(v).trim());
+    const [photos, titles, places, cats, hrefs, ctas] = ['gPhoto', 'gTitle', 'gPlace', 'gCategory', 'gHref', 'gCta'].map(col);
+    postedGallery = photos.map((photo, i) => ({ photo, title: titles[i], place: places[i], category: cats[i], ...(hrefs[i] ? { href: hrefs[i] } : {}), cta: ctas[i] || null }));
+    const r = await saveDraft(ctx, 'gallery', 'main', postedGallery);
+    if (r.ok) return Astro.redirect(`/admin/photos/?tab=gallery&done=${r.message ? 'same' : 'saved'}`, 303);
+    error = r.error;
+    const row = /^(\d+)/.exec(r.field ?? '');
+    if (row) error = `Gallery photo ${Number(row[1]) + 1}: ${error}`;
+  }
+}
+
+const [entries, uses, galleryEntry] = await Promise.all([listEntries('photo'), photoUses(), getEntry('gallery', 'main')]);
+const library = entries.filter((e) => e.current);
+const offLibrary = entries.filter((e) => !e.current);
+const pd = (e: Entry) => e.current as Data;
+
+const thumb = photoThumb;
+const describedOk = (p: Data) => String(p.alt ?? '').trim().length >= 10;
+const usedOn = (key: string) => uses.get(key) ?? [];
+const chip = (e: Entry): [string, string] | null => {
+  if (e.pending === 'delete') return ['Deleted when you publish', 'bg-[#fde8e7] text-[#b42318]'];
+  if (!e.live) return ['New, not live yet', 'bg-[#e7f0ff] text-[#1d4ed8]'];
+  if (e.pending) return ['Draft', 'bg-[#fff4d6] text-[#8a5300]'];
+  return null;
+};
+
+if (!selected || !entries.some((e) => e.key === selected)) selected = tab === 'library' ? '' : selected;
+const sel = selected ? entries.find((e) => e.key === selected) : undefined;
+const sp: Data | null = sel ? (posted ?? (sel.current as Data | null) ?? (sel.live as Data)) : null;
+const sWas = sel?.live && sel.current ? wasNotes('photo', sel.live, sel.current) : {};
+const err = (path: string) => (errorField === path ? error : undefined);
+const done = Astro.url.searchParams.get('done');
+const gallery: Data[] = postedGallery ?? ((galleryEntry?.current as Data[] | null) ?? []);
+const galleryWas = galleryEntry?.pending === 'save';
+const pickList = library.map((e) => ({ key: e.key, name: photoTitle(pd(e) as never), src: thumb(e) }));
+const icon = {
+  up: '<path d="M12 16V4M6 10l6-6 6 6M4 20h16"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  mvUp: '<path d="m18 15-6-6-6 6"/>',
+  mvDown: '<path d="m6 9 6 6 6-6"/>',
+};
+const canUpload = filesReady();
+---
+
+<AdminLayout title="Photos">
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+
+    <div class="flex flex-wrap items-end justify-between gap-3.5">
+      <div class="flex flex-col gap-3.5">
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">Photos</h1>
+        <nav aria-label="What to edit" class="flex flex-wrap gap-1.5 self-start rounded-[14px] border border-line bg-white p-1">
+          <a href="/admin/photos/" aria-current={tab === 'library' ? 'page' : undefined} class:list={['rounded-[10px] px-4 py-2 no-underline', tab === 'library' ? 'bg-ink font-semibold text-white' : 'font-medium text-body hover:bg-mist']}>Library · {library.length}</a>
+          <a href="/admin/photos/?tab=gallery" aria-current={tab === 'gallery' ? 'page' : undefined} class:list={['rounded-[10px] px-4 py-2 no-underline', tab === 'gallery' ? 'bg-ink font-semibold text-white' : 'font-medium text-body hover:bg-mist']}>Gallery page · {gallery.length}</a>
+        </nav>
+      </div>
+      {tab === 'library' && (
+        <label class="flex h-12 w-full max-w-[340px] items-center gap-2.5 rounded-[14px] border border-line bg-white px-3.5 focus-within:outline-3 focus-within:outline-lime">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5c6373" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.search} />
+          <input type="search" data-photo-find placeholder="Find a photo or place" aria-label="Find a photo or place" class="min-w-0 flex-1 border-0 bg-transparent text-ink outline-none" />
+        </label>
+      )}
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish.</p>}
+    {done === 'same' && <p class="a-msg a-msg-ok m-0" role="status">That is what the website already shows, so there was nothing to save.</p>}
+    {done === 'uploaded' && <p class="a-msg a-msg-ok m-0" role="status">Uploaded. Say what the photo shows, then publish it. It shows on a page once you choose it there.</p>}
+    {done === 'replaced' && <p class="a-msg a-msg-ok m-0" role="status">The new picture is in place as a draft. Every page that uses this photo shows it once you publish.</p>}
+    {done === 'discarded' && <p class="a-msg a-msg-ok m-0" role="status">Draft thrown away. This is what the website shows.</p>}
+    {done === 'deleted' && <p class="a-msg a-msg-ok m-0" role="status">Photo deleted.</p>}
+    {done === 'removing' && <p class="a-msg a-msg-ok m-0" role="status">It leaves the library when you publish.</p>}
+    {done === 'restored' && <p class="a-msg a-msg-ok m-0" role="status">The earlier version is back as a draft. Publish to put it live.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+
+    {tab === 'library' && (
+      <div class="flex flex-wrap items-start gap-5">
+        <div class="flex min-w-0 flex-[1_1_560px] flex-col gap-4">
+          {canUpload ? (
+            <div class="ph-drop" data-drop tabindex="-1">
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple data-upload-input id="ph-file" class="sr-only" />
+              <label for="ph-file" class="flex cursor-pointer flex-wrap items-center gap-4">
+                <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-lime-50">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4f7a00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.up} />
+                </span>
+                <span class="flex min-w-0 flex-[1_1_260px] flex-col gap-0.5">
+                  <span class="font-bold">Drop your own photos here, or choose them</span>
+                  <span class="text-sm text-muted">JPG or PNG, at least 1600 pixels wide. The website makes the small sizes and Google's wide, 4:3 and square crops by itself.</span>
+                </span>
+              </label>
+              <p class="m-0 text-sm font-semibold" data-upload-status role="status" aria-live="polite"></p>
+            </div>
+          ) : (
+            <p class="a-msg m-0 bg-[#fff4d6] text-[#8a5300]">Photo storage is not connected yet, so new photos cannot be uploaded. The photos below can still be described and framed.</p>
+          )}
+
+          <ul class="m-0 grid list-none gap-3 p-0 [grid-template-columns:repeat(auto-fill,minmax(168px,1fr))]" data-photo-grid>
+            {library.map((e) => {
+              const p = pd(e);
+              const n = usedOn(e.key).length;
+              const c = chip(e);
+              const name = photoTitle(p as never);
+              return (
+                <li data-find={`${name} ${p.alt ?? ''} ${e.key}`.toLowerCase()}>
+                  <a href={`/admin/photos/?photo=${e.key}`} aria-current={e.key === selected ? 'true' : undefined} class:list={['ph-card', e.key === selected && 'is-on']}>
+                    <img src={thumb(e)} alt="" width="400" height="267" loading="lazy" decoding="async" class="aspect-[3/2] w-full object-cover" style={p.focus ? `object-position: ${p.focus.x}% ${p.focus.y}%` : undefined} />
+                    <span class="flex flex-col gap-0.5 px-3 pt-2.5 pb-3">
+                      <span class="truncate text-sm font-bold text-ink">{name}</span>
+                      <span class="text-[12px] text-muted">{n ? `Used on ${n} ${n === 1 ? 'page' : 'pages'}` : 'Not used yet'}</span>
+                      <span class:list={['text-[12px] font-semibold', describedOk(p) ? 'text-[#3f6200]' : 'text-[#b42318]']}>{describedOk(p) ? 'Described' : 'Needs a description'}</span>
+                      {c && <span class:list={['a-badge mt-1 self-start text-[11px]', c[1]]}>{c[0]}</span>}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+          <p class="m-0 hidden text-sm text-muted" data-find-none>No photo matches.</p>
+          {offLibrary.length > 0 && (
+            <p class="m-0 text-sm text-muted">Deleted and published: {offLibrary.map((e) => <a href={`/admin/photos/?photo=${e.key}`} class="mr-2">{e.key}</a>)}</p>
+          )}
+        </div>
+
+        <aside class="flex min-w-0 flex-[1_1_380px] flex-col gap-4 xl:max-w-[460px]">
+          {!sel || !sp ? (
+            <section class="a-card flex flex-col gap-2 p-5">
+              <h2 class="m-0 font-display text-lg font-bold">Choose a photo</h2>
+              <p class="m-0 text-sm text-body">Open a photo to say what it shows, credit who took it, choose the part that must always stay in when it is cut to fit, or replace it. A page's own photo is chosen on that page (a package or a route) or in the gallery.</p>
+            </section>
+          ) : !sel.current ? (
+            <section class="a-card flex flex-col gap-3 p-5">
+              <h2 class="m-0 font-display text-lg font-bold">{photoTitle(sp as never)}</h2>
+              <p class="m-0 text-sm text-body">This photo was deleted from the library. Put back a version from the history to use it again.</p>
+            </section>
+          ) : (
+            <form method="post" data-web-form class="a-card flex flex-col overflow-hidden" data-photo-form>
+              <input type="hidden" name="intent" value="save" />
+              <input type="hidden" name="key" value={sel.key} />
+              <input type="hidden" name="focusX" value={sp.focus?.x ?? ''} data-fx />
+              <input type="hidden" name="focusY" value={sp.focus?.y ?? ''} data-fy />
+              <div class="relative bg-ink">
+                <button type="button" class="ph-focus" data-focus-area aria-label="Choose the part of the photo that must always show: click it">
+                  <img src={thumb(sel, 800)} alt={sp.alt || ''} width={sp.width} height={sp.height} class="block h-auto max-h-[340px] w-full object-contain" data-focus-img />
+                  <span class="ph-dot" data-dot hidden={!sp.focus} style={sp.focus ? `left: ${sp.focus.x}%; top: ${sp.focus.y}%` : undefined}></span>
+                </button>
+              </div>
+              <div class="flex flex-col gap-4 p-5">
+                <div class="flex flex-col gap-2">
+                  <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <span class="text-sm font-semibold">What stays in when it is cut to fit</span>
+                    <button type="button" data-focus-reset class="text-sm font-semibold text-body underline" hidden={!sp.focus}>Back to the middle</button>
+                  </div>
+                  <div class="grid grid-cols-[16fr_12fr_9fr] items-end gap-2">
+                    {[['16 / 9', 'Wide'], ['4 / 3', '4:3'], ['1 / 1', 'Square']].map(([ratio, label]) => (
+                      <span class="flex flex-col gap-1">
+                        <img src={thumb(sel, 400)} alt="" class="w-full rounded-lg object-cover" style={`aspect-ratio: ${ratio}; ${sp.focus ? `object-position: ${sp.focus.x}% ${sp.focus.y}%` : ''}`} data-crop />
+                        <span class="text-[12px] text-muted">{label}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <span class="text-[13px] text-muted" data-focus-help>{sp.focus ? 'Click the photo again to move the point.' : 'Click the part of the photo that must always show. Until then, the middle stays in.'}</span>
+                  {sWas.focus && <span class="wf-was">Changed from what is live</span>}
+                </div>
+                <WebField label="Name, for this dashboard" name="title" value={sp.title ?? ''} placeholder={photoTitle({ key: sel.key })} was={sWas.title} error={err('title')} />
+                <WebField label="What the photo shows (needed)" name="alt" rows={2} value={sp.alt} was={sWas.alt && 'Changed from what is live'} error={err('alt')} count={[20, 125]} maxlength={200} help={'Read aloud to blind visitors and used by Google Images. Say what is in it, not "photo of".'} />
+                <div class="grid gap-3.5 sm:grid-cols-2">
+                  <WebField label="Taken by" name="artist" value={sp.artist} was={sWas.artist} error={err('artist')} />
+                  <label class="a-field">
+                    Licence
+                    <select name="license" data-licence>
+                      {[...new Set([...LICENCES, sp.license])].map((l) => <option value={l} selected={l === sp.license}>{l}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div class="grid gap-3.5" data-cc hidden={sp.license === 'Our own photo'}>
+                  <WebField label="Licence link" name="licenseUrl" type="url" value={sp.licenseUrl} was={sWas.licenseUrl} error={err('licenseUrl')} placeholder="https://creativecommons.org/licenses/by-sa/4.0" />
+                  <WebField label="Link to the original" name="source" type="url" value={sp.source} was={sWas.source} error={err('source')} help="Where the photo came from; shown on the photo credits page" />
+                </div>
+                <div class="flex flex-col gap-1.5 rounded-2xl bg-mist p-4">
+                  <span class="font-bold">{usedOn(sel.key).length ? `Used on ${usedOn(sel.key).length} ${usedOn(sel.key).length === 1 ? 'page' : 'pages'}` : 'Not used on any page yet'}</span>
+                  {usedOn(sel.key).slice(0, 12).map((u) => <a href={u.href} target="_blank" rel="noopener" class="text-sm">{u.label}</a>)}
+                  {usedOn(sel.key).length > 12 && <span class="text-sm text-muted">and {usedOn(sel.key).length - 12} more</span>}
+                  {!usedOn(sel.key).length && <span class="text-sm text-muted">Choose it on a package or a route, or add it to the gallery page.</span>}
+                </div>
+                <div class="flex flex-wrap gap-2.5">
+                  <button type="submit" class="btn-book min-h-12 flex-1">Save</button>
+                  {canUpload && (
+                    <label class="btn-ghost min-h-12 flex-1 cursor-pointer">
+                      <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" class="sr-only" data-replace={sel.key} />
+                      Replace the photo
+                    </label>
+                  )}
+                </div>
+                <p class="m-0 text-sm font-semibold" data-replace-status role="status" aria-live="polite"></p>
+              </div>
+            </form>
+          )}
+          {sel?.current && (
+            <section class="a-card flex flex-col gap-2.5 p-5">
+              {sel.pending === 'save' && sel.live && (
+                <form method="post"><input type="hidden" name="intent" value="discard" /><input type="hidden" name="key" value={sel.key} /><button class="btn-ghost min-h-11 w-full">Discard my changes</button></form>
+              )}
+              {sel.pending === 'delete' && (
+                <form method="post"><input type="hidden" name="intent" value="discard" /><input type="hidden" name="key" value={sel.key} /><button class="btn-ghost min-h-11 w-full">Keep it in the library</button></form>
+              )}
+              {START_PHOTO_KEYS.has(sel.key) ? (
+                <p class="m-0 text-sm text-muted">This photo came with the website, so it can be replaced but not deleted.</p>
+              ) : usedOn(sel.key).length ? (
+                <p class="m-0 text-sm text-muted">It can be deleted once no page uses it.</p>
+              ) : (
+                sel.pending !== 'delete' && (
+                  <form method="post" data-confirm="Delete this photo from the library?"><input type="hidden" name="intent" value="delete" /><input type="hidden" name="key" value={sel.key} /><button class="btn-ghost min-h-11 w-full text-[#b42318]">Delete this photo</button></form>
+                )
+              )}
+            </section>
+          )}
+          {sel && <VersionHistory type="photo" itemKey={sel.key} />}
+        </aside>
+      </div>
+    )}
+
+    {tab === 'gallery' && (
+      <form method="post" data-web-form class="flex flex-col gap-4">
+        <input type="hidden" name="intent" value="gallery" />
+        <p class="m-0 max-w-3xl text-body">The photos on the gallery page, in this order, grouped by place. A link takes the visitor from a photo to the page about it. {galleryWas && <span class="font-semibold text-[#8a5300]">Changed from what is live.</span>}</p>
+        <div data-list="gallery" class="flex flex-col gap-3" data-max="80">
+          {gallery.map((g) => (
+            <div data-row class="a-card ph-gal">
+              <img src={pickList.find((x) => x.key === g.photo)?.src ?? '/img/hero-400.webp'} alt="" width="160" height="107" class="ph-gal-img" data-gal-thumb />
+              <div class="grid min-w-0 flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <label class="a-field">Photo<select name="gPhoto" data-gal-photo>{pickList.map((x) => <option value={x.key} selected={x.key === g.photo}>{x.name}</option>)}</select></label>
+                <label class="a-field">Title<input name="gTitle" value={g.title} /></label>
+                <label class="a-field">Place<input name="gPlace" value={g.place} /></label>
+                <label class="a-field">Group<select name="gCategory">{GALLERY_CATEGORIES.map((c) => <option selected={c === g.category}>{c}</option>)}</select></label>
+                <label class="a-field">Link to a page<input name="gHref" value={g.href ?? ''} placeholder="/destinations/darjeeling/" /></label>
+                <label class="a-field">Button text<input name="gCta" value={g.cta ?? ''} placeholder="Darjeeling guide and taxi fare" /></label>
+              </div>
+              <div class="web-row-tools">
+                <button type="button" data-move="up" class="a-icon-btn" aria-label="Move this photo up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvUp} /></button>
+                <button type="button" data-move="down" class="a-icon-btn" aria-label="Move this photo down"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvDown} /></button>
+                <button type="button" data-remove-row class="a-icon-btn" aria-label="Take this photo off the gallery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+              </div>
+            </div>
+          ))}
+          <template>
+            <div data-row class="a-card ph-gal">
+              <img src={pickList[0]?.src} alt="" width="160" height="107" class="ph-gal-img" data-gal-thumb />
+              <div class="grid min-w-0 flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <label class="a-field">Photo<select name="gPhoto" data-gal-photo>{pickList.map((x) => <option value={x.key}>{x.name}</option>)}</select></label>
+                <label class="a-field">Title<input name="gTitle" /></label>
+                <label class="a-field">Place<input name="gPlace" /></label>
+                <label class="a-field">Group<select name="gCategory">{GALLERY_CATEGORIES.map((c) => <option>{c}</option>)}</select></label>
+                <label class="a-field">Link to a page<input name="gHref" placeholder="/destinations/darjeeling/" /></label>
+                <label class="a-field">Button text<input name="gCta" placeholder="Darjeeling guide and taxi fare" /></label>
+              </div>
+              <div class="web-row-tools">
+                <button type="button" data-move="up" class="a-icon-btn" aria-label="Move this photo up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvUp} /></button>
+                <button type="button" data-move="down" class="a-icon-btn" aria-label="Move this photo down"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvDown} /></button>
+                <button type="button" data-remove-row class="a-icon-btn" aria-label="Take this photo off the gallery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+              </div>
+            </div>
+          </template>
+        </div>
+        <button type="button" data-add-row="gallery" class="web-add">+ Add a photo to the gallery</button>
+        <div class="web-save">
+          <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+          <button type="submit" class="btn-book min-h-12">Save as draft</button>
+        </div>
+        <script type="application/json" id="gal-thumbs" set:html={JSON.stringify(Object.fromEntries(pickList.map((x) => [x.key, x.src])))} />
+      </form>
+    )}
+  </div>
+</AdminLayout>
+
+<style is:global>
+  .ph-drop { display: flex; flex-direction: column; gap: 0.5rem; padding: 1.25rem; border: 2px dashed #b6bcc8; border-radius: 20px; background: #fff; }
+  .ph-drop:focus-within, .ph-drop.is-over { border-color: var(--color-lime); background: var(--color-lime-50); }
+  .ph-card { display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; border: 1px solid var(--color-line); background: #fff; text-decoration: none; }
+  .ph-card:hover { border-color: #b6bcc8; }
+  .ph-card.is-on { border: 3px solid var(--color-lime); }
+  .ph-focus { position: relative; display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: crosshair; }
+  .ph-dot { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 3px solid #fff; background: rgb(161 224 5 / 85%); box-shadow: 0 0 0 2px #111, 0 4px 12px rgb(0 0 0 / 40%); pointer-events: none; }
+  .ph-gal { display: flex; align-items: flex-start; gap: 0.875rem; padding: 0.875rem; }
+  .ph-gal-img { width: 132px; height: 88px; flex-shrink: 0; border-radius: 12px; object-fit: cover; }
+  @media (max-width: 639px) { .ph-gal { flex-wrap: wrap; } .ph-gal-img { width: 100%; height: 140px; } }
+  [data-theme='dark'] .ph-drop, [data-theme='dark'] .ph-card { background: var(--a-surface); border-color: var(--a-edge); }
+  [data-theme='dark'] .ph-card.is-on { border-color: var(--color-lime); }
+</style>
+
+<script>
+  import { wireCounters, wireDirty, wireLists } from '../../../lib/admin-web';
+  import { CANNOT_OPEN, shrinkToJpeg } from '../../../lib/shrink-image';
+  wireLists();
+  wireCounters();
+  wireDirty();
+  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((f) =>
+    f.addEventListener('submit', (e) => {
+      if (!confirm(f.dataset.confirm!)) e.preventDefault();
+    }),
+  );
+
+  /* ---------- Find a photo ---------- */
+  const find = document.querySelector<HTMLInputElement>('[data-photo-find]');
+  find?.addEventListener('input', () => {
+    const q = find.value.trim().toLowerCase();
+    let shown = 0;
+    document.querySelectorAll<HTMLElement>('[data-photo-grid] > li').forEach((li) => {
+      li.hidden = Boolean(q) && !li.dataset.find!.includes(q);
+      if (!li.hidden) shown++;
+    });
+    document.querySelector<HTMLElement>('[data-find-none]')?.classList.toggle('hidden', shown > 0);
+  });
+
+  /* ---------- Uploads ---------- */
+  /** Big enough for the website's 1600-pixel size, small enough to send quickly. */
+  const WEBSITE_MAX = { w: 2400, h: 2400 };
+  async function upload(file: File, replace = ''): Promise<{ ok: boolean; key?: string; error?: string }> {
+    let jpeg: Blob;
+    try {
+      jpeg = await shrinkToJpeg(file, WEBSITE_MAX, 0.88);
+    } catch {
+      return { ok: false, error: CANNOT_OPEN };
+    }
+    const fd = new FormData();
+    fd.append('file', jpeg, 'photo.jpg');
+    fd.append('name', file.name);
+    if (replace) fd.append('replace', replace);
+    const res = await fetch('/admin/api/photo-upload/', { method: 'POST', body: fd }).catch(() => null);
+    return res ? res.json().catch(() => ({ ok: false, error: 'The server did not answer.' })) : { ok: false, error: 'No connection. Try again.' };
+  }
+  async function uploadAll(files: File[]) {
+    const status = document.querySelector<HTMLElement>('[data-upload-status]');
+    let last = '';
+    const errors: string[] = [];
+    for (const [i, f] of files.entries()) {
+      if (status) status.textContent = files.length > 1 ? `Uploading ${i + 1} of ${files.length}…` : 'Uploading…';
+      const r = await upload(f);
+      if (r.ok && r.key) last = r.key;
+      else errors.push(`${f.name}: ${r.error}`);
+    }
+    if (errors.length && status) {
+      status.textContent = errors.join(' ');
+      status.style.color = '#b42318';
+    }
+    if (last && !errors.length) location.href = `/admin/photos/?photo=${last}&done=uploaded`;
+    else if (last) setTimeout(() => (location.href = `/admin/photos/?photo=${last}&done=uploaded`), 4000);
+  }
+  document.querySelector<HTMLInputElement>('[data-upload-input]')?.addEventListener('change', (e) => {
+    const input = e.target as HTMLInputElement;
+    if (input.files?.length) uploadAll([...input.files]);
+  });
+  const drop = document.querySelector<HTMLElement>('[data-drop]');
+  drop?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('is-over');
+  });
+  drop?.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+  drop?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('is-over');
+    const files = [...(e.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+    if (files.length) uploadAll(files);
+  });
+  document.querySelector<HTMLInputElement>('[data-replace]')?.addEventListener('change', async (e) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const status = document.querySelector<HTMLElement>('[data-replace-status]')!;
+    status.style.color = '';
+    status.textContent = 'Uploading the new picture…';
+    const r = await upload(file, input.dataset.replace);
+    if (r.ok) location.href = `/admin/photos/?photo=${input.dataset.replace}&done=replaced`;
+    else {
+      status.style.color = '#b42318';
+      status.textContent = r.error ?? 'It could not be uploaded.';
+    }
+  });
+
+  /* ---------- The point that stays in ---------- */
+  const area = document.querySelector<HTMLButtonElement>('[data-focus-area]');
+  const setFocus = (x: number | null, y: number | null) => {
+    const fx = document.querySelector<HTMLInputElement>('[data-fx]')!;
+    const fy = document.querySelector<HTMLInputElement>('[data-fy]')!;
+    const dot = document.querySelector<HTMLElement>('[data-dot]')!;
+    fx.value = x === null ? '' : String(x);
+    fy.value = y === null ? '' : String(y);
+    dot.hidden = x === null;
+    if (x !== null) {
+      dot.style.left = `${x}%`;
+      dot.style.top = `${y}%`;
+    }
+    document.querySelectorAll<HTMLImageElement>('[data-crop]').forEach((img) => (img.style.objectPosition = x === null ? '' : `${x}% ${y}%`));
+    document.querySelector<HTMLElement>('[data-focus-reset]')!.hidden = x === null;
+    document.querySelector('[data-focus-help]')!.textContent = x === null ? 'Click the part of the photo that must always show. Until then, the middle stays in.' : 'Click the photo again to move the point.';
+    fx.form?.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  /** The picture inside the box: object-contain can leave bands either side of it. */
+  const pictureBox = () => {
+    const img = document.querySelector<HTMLImageElement>('[data-focus-img]')!;
+    const r = img.getBoundingClientRect();
+    const scale = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
+    const w = img.naturalWidth * scale;
+    const h = img.naturalHeight * scale;
+    return { r, w, h, left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2 };
+  };
+  const placeDot = () => {
+    const fx = document.querySelector<HTMLInputElement>('[data-fx]');
+    const dot = document.querySelector<HTMLElement>('[data-dot]');
+    if (!fx || !dot || fx.value === '') return;
+    const fy = Number(document.querySelector<HTMLInputElement>('[data-fy]')!.value);
+    const b = pictureBox();
+    if (!b.w) return;
+    dot.style.left = `${((b.left - b.r.left + (Number(fx.value) / 100) * b.w) / b.r.width) * 100}%`;
+    dot.style.top = `${((b.top - b.r.top + (fy / 100) * b.h) / b.r.height) * 100}%`;
+  };
+  const focusImg = document.querySelector<HTMLImageElement>('[data-focus-img]');
+  if (focusImg?.complete) placeDot();
+  focusImg?.addEventListener('load', placeDot);
+  addEventListener('resize', placeDot);
+  area?.addEventListener('click', (e) => {
+    const b = pictureBox();
+    const x = Math.round(Math.min(100, Math.max(0, ((e.clientX - b.left) / b.w) * 100)));
+    const y = Math.round(Math.min(100, Math.max(0, ((e.clientY - b.top) / b.h) * 100)));
+    setFocus(x, y);
+    placeDot();
+  });
+  document.querySelector('[data-focus-reset]')?.addEventListener('click', () => setFocus(null, null));
+
+  /* ---------- Licence: links only for someone else's photo ---------- */
+  const lic = document.querySelector<HTMLSelectElement>('[data-licence]');
+  lic?.addEventListener('change', () => {
+    const cc = document.querySelector<HTMLElement>('[data-cc]');
+    if (cc) cc.hidden = lic.value === 'Our own photo';
+  });
+
+  /* ---------- Gallery: the thumbnail follows the chosen photo ---------- */
+  const thumbs = JSON.parse(document.getElementById('gal-thumbs')?.textContent || '{}') as Record<string, string>;
+  document.addEventListener('change', (e) => {
+    const sel = (e.target as Element).closest<HTMLSelectElement>('[data-gal-photo]');
+    if (!sel) return;
+    const img = sel.closest('[data-row]')?.querySelector<HTMLImageElement>('[data-gal-thumb]');
+    if (img && thumbs[sel.value]) img.src = thumbs[sel.value];
+  });
+</script>

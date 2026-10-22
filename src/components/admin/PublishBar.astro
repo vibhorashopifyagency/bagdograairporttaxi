@@ -1,0 +1,277 @@
+---
+/**
+ * The bar at the top of every website-editing screen, as in the mock
+ * (https://claude.ai/artifact/Cu63my3bhrhAk4apHDoFLS, "Website editing"):
+ *   - drafts waiting: "3 changes are not on the website yet", Discard all, Review and publish;
+ *   - just published: "Publishing", until the new deploy answers with the new content version;
+ *   - a deploy that did not start or is slow: "Not live yet", Try again;
+ *   - otherwise calm: "Everything is on the website", and Refresh Google reviews.
+ * The Review and publish popup loads /admin/website/review/. Pages that save
+ * without reloading (the fare grid) call window.refreshPublishBar().
+ */
+import { GOOGLE } from '../../data/reviews';
+import { env } from '../../server/env';
+import { lastPublished, pendingChanges, publishStatus } from '../../server/content';
+
+const [s, pending, last] = await Promise.all([publishStatus(), pendingChanges(), lastPublished()]);
+const ist = (d: Date, opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', ...opts }).format(d);
+const sameDay = (a: Date, b: Date) => ist(a, { dateStyle: 'short' }) === ist(b, { dateStyle: 'short' });
+const when = (d: Date) => {
+  const time = ist(d, { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s?([ap])m/i, ' $1m').toLowerCase();
+  if (sameDay(d, new Date())) return `today at ${time}`;
+  if (sameDay(d, new Date(Date.now() - 864e5))) return `yesterday at ${time}`;
+  return `${ist(d, { day: 'numeric', month: 'short' })}, ${time}`;
+};
+const lastLine = last ? `Last published ${when(last.at)}${last.by ? ` by ${last.by.split(' ')[0]}` : ''}.` : 'Nothing has been published from the dashboard yet.';
+
+const deploy = s.lastDeploy;
+const startedAt = deploy ? new Date(deploy.at) : null;
+const ageMin = startedAt ? (Date.now() - startedAt.getTime()) / 60000 : Infinity;
+type State = 'drafts' | 'publishing' | 'failed' | 'nohook' | 'slow' | 'calm';
+const state: State =
+  s.drafts > 0
+    ? 'drafts'
+    : s.latest > s.live
+      ? !deploy || deploy.version < s.latest
+        ? 'failed'
+        : !deploy.ok
+          ? s.hook || import.meta.env.DEV
+            ? 'failed'
+            : 'nohook'
+          : ageMin < 12
+            ? 'publishing'
+            : 'slow'
+      : 'calm';
+
+const names = pending.map((p) => p.title);
+const summary = names.length <= 3 ? names.join(', ').replace(/, ([^,]*)$/, ' and $1') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+const reviewsDay = GOOGLE.fetchedAt ? new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' }).format(new Date(GOOGLE.fetchedAt)) : '';
+const canFetchReviews = Boolean(env('GOOGLE_PLACES_API_KEY')) && (s.hook || import.meta.env.DEV);
+const up = '<path d="M12 19V5M5 12l7-7 7 7"/>';
+const spin = '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>';
+---
+
+<section
+  data-chrome
+  data-pub-bar
+  data-state={state}
+  data-latest={s.latest}
+  data-started={startedAt?.getTime() ?? ''}
+  aria-label="Website status"
+  aria-live="polite"
+  class:list={[
+    'flex flex-wrap items-center gap-x-5 gap-y-3 rounded-[18px] py-3 pr-3 pl-5',
+    state === 'drafts' ? 'bg-ink text-white' : state === 'failed' || state === 'slow' || state === 'nohook' ? 'a-card border-2 border-[#f2b8b5]' : 'a-card',
+  ]}
+>
+  <span
+    aria-hidden="true"
+    class:list={[
+      'h-2.5 w-2.5 shrink-0 rounded-full',
+      state === 'drafts' && 'bg-amber shadow-[0_0_0_4px_rgb(255_179_0/25%)]',
+      state === 'publishing' && 'pub-pulse bg-amber shadow-[0_0_0_4px_rgb(255_179_0/25%)]',
+      (state === 'failed' || state === 'slow' || state === 'nohook') && 'bg-[#b42318] shadow-[0_0_0_4px_rgb(180_35_24/18%)]',
+      state === 'calm' && 'bg-lime shadow-[0_0_0_4px_rgb(161_224_5/25%)]',
+    ]}
+  ></span>
+
+  {state === 'drafts' && (
+    <>
+      <div class="flex min-w-0 flex-[1_1_280px] flex-col">
+        <span class="font-semibold">{s.drafts === 1 ? '1 change is' : `${s.drafts} changes are`} not on the website yet</span>
+        <span class="text-[13px] text-[#c9ced8]">{summary}. {lastLine}</span>
+      </div>
+      <button type="button" data-pub-discard-all class="min-h-11 rounded-xl border border-[#3d4451] bg-transparent px-4 font-semibold text-white hover:border-white">Discard all</button>
+      <button type="button" data-pub-review class="btn-lime min-h-11 gap-2 px-4">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={up} />
+        Review and publish
+      </button>
+    </>
+  )}
+
+  {state === 'publishing' && (
+    <div class="flex min-w-0 flex-[1_1_280px] flex-col gap-2">
+      <span class="font-semibold">Publishing: the website is being rebuilt with your changes</span>
+      <span class="h-2 overflow-hidden rounded-full bg-mist" aria-hidden="true"><span data-pub-progress class="block h-full w-[8%] rounded-full bg-lime transition-[width] duration-1000"></span></span>
+      <span class="text-[13px] text-muted">Usually about a minute. You can leave this page; the old version stays up until the new one is ready.</span>
+    </div>
+  )}
+
+  {state === 'failed' && (
+    <>
+      <div class="flex min-w-0 flex-[1_1_280px] flex-col">
+        <span class="font-semibold">Published, but not live yet</span>
+        <span class="text-[13px] text-muted">The website did not start rebuilding{deploy?.error ? ` (${deploy.error})` : ''}. Your changes are saved; the website keeps showing the last good version.</span>
+      </div>
+      <button type="button" data-pub-retry class="btn-book min-h-11 px-4">Try again</button>
+    </>
+  )}
+
+  {state === 'slow' && (
+    <>
+      <div class="flex min-w-0 flex-[1_1_280px] flex-col">
+        <span class="font-semibold">Not live yet: this is taking longer than usual</span>
+        <span class="text-[13px] text-muted">The rebuild started {startedAt && when(startedAt)}. If a rebuild fails, the website keeps the last good version. Try again, or look at Deployments in Vercel.</span>
+      </div>
+      <button type="button" data-pub-retry class="btn-book min-h-11 px-4">Try again</button>
+    </>
+  )}
+
+  {state === 'nohook' && (
+    <div class="flex min-w-0 flex-[1_1_280px] flex-col">
+      <span class="font-semibold">Published, but not live yet</span>
+      <span class="text-[13px] text-muted">The website has no "Publish" deploy hook yet, so your changes go live with the next deploy. Setting up the hook once (docs/admin-setup.md, step 3) makes Publish put them live within about a minute.</span>
+    </div>
+  )}
+
+  {state === 'calm' && (
+    <>
+      <div class="flex min-w-0 flex-[1_1_280px] flex-col">
+        <span class="font-semibold">Everything is on the website</span>
+        <span class="text-[13px] text-muted">{lastLine}{reviewsDay && ` Google reviews last fetched ${reviewsDay}.`}</span>
+      </div>
+      {canFetchReviews && (
+        <button type="button" data-pub-reviews class="btn-ghost min-h-11 gap-2 px-4">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={spin} />
+          Refresh Google reviews
+        </button>
+      )}
+    </>
+  )}
+</section>
+
+<dialog id="pub-review" class="a-dialog pub-dialog" aria-labelledby="pub-title">
+  <div data-pub-review-body class="a-dialog-body">
+    <div class="a-dialog-main"><p class="m-0 text-muted">Checking your changes…</p></div>
+  </div>
+</dialog>
+
+<style is:global>
+  .pub-dialog { width: min(100% - 2rem, 780px); }
+  .pub-pulse { animation: pub-pulse 1.4s ease-in-out infinite; }
+  @keyframes pub-pulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .pub-pulse { animation: none; } }
+</style>
+
+<script>
+  /**
+   * Works for whichever bar is on the page, including one swapped in by
+   * refreshPublishBar(), so every handler is delegated from the document.
+   */
+  const api = async (body: Record<string, unknown>) => {
+    const res = await fetch('/admin/api/content/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return (await res.json().catch(() => ({ ok: false, error: 'The server did not answer. Check the connection and try again.' }))) as { ok: boolean; error?: string; problems?: string[] };
+  };
+  const bar = () => document.querySelector<HTMLElement>('[data-pub-bar]');
+  const dialog = () => document.getElementById('pub-review') as HTMLDialogElement | null;
+
+  /** Fetches the bar again, after a change saved without reloading the page. */
+  async function refreshPublishBar() {
+    const res = await fetch('/admin/website/bar/', { headers: { Accept: 'text/html' } });
+    if (!res.ok) return;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = await res.text();
+    const fresh = tpl.content.querySelector('[data-pub-bar]');
+    const old = bar();
+    if (fresh && old) old.replaceWith(fresh);
+    watch();
+  }
+  (window as unknown as { refreshPublishBar: typeof refreshPublishBar }).refreshPublishBar = refreshPublishBar;
+
+  async function loadReview(note = '') {
+    const body = document.querySelector<HTMLElement>('[data-pub-review-body]');
+    if (!body) return;
+    const res = await fetch('/admin/website/review/', { headers: { Accept: 'text/html' } });
+    body.innerHTML = res.ok ? await res.text() : '<div class="a-dialog-main"><p class="a-msg a-msg-error m-0">The changes could not be loaded. Reload the page.</p></div>';
+    if (note) body.querySelector('[data-pub-note]')?.replaceChildren(note);
+  }
+
+  // While a publish is building, ask every few seconds whether it is live.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  function watch() {
+    clearTimeout(timer);
+    const b = bar();
+    if (!b || b.dataset.state !== 'publishing') return;
+    const started = Number(b.dataset.started) || Date.now();
+    const progress = b.querySelector<HTMLElement>('[data-pub-progress]');
+    const tick = async () => {
+      const secs = (Date.now() - started) / 1000;
+      // About a minute is usual; the bar slows down and never claims to be done.
+      if (progress) progress.style.width = `${Math.min(92, 8 + (secs / 75) * 80)}%`;
+      const res = await fetch('/admin/api/content/').catch(() => null);
+      const s = res?.ok ? ((await res.json()) as { live: number; latest: number }) : null;
+      if (s && s.live >= Number(b.dataset.latest)) {
+        await refreshPublishBar();
+        const fresh = bar();
+        if (fresh) {
+          const done = document.createElement('p');
+          done.className = 'a-msg a-msg-ok m-0 w-full';
+          done.setAttribute('role', 'status');
+          done.textContent = 'Live on the website now.';
+          fresh.append(done);
+        }
+        return;
+      }
+      if (secs < 12 * 60) timer = setTimeout(tick, 4000);
+      else refreshPublishBar();
+    };
+    tick();
+  }
+  watch();
+
+  document.addEventListener('click', async (e) => {
+    const t = (e.target as Element).closest<HTMLButtonElement>('[data-pub-review],[data-pub-discard-all],[data-pub-retry],[data-pub-reviews],[data-pub-undo],[data-pub-go],[data-pub-close]');
+    if (!t || t.disabled) return;
+
+    if (t.matches('[data-pub-review]')) {
+      dialog()?.showModal();
+      loadReview();
+      return;
+    }
+    if (t.matches('[data-pub-close]')) {
+      dialog()?.close();
+      return;
+    }
+    if (t.matches('[data-pub-discard-all]')) {
+      if (!confirm('Throw away every change that is not on the website yet? What is live stays as it is.')) return;
+      t.disabled = true;
+      const r = await api({ action: 'discard-all' });
+      if (!r.ok) alert(r.error);
+      location.reload();
+      return;
+    }
+    if (t.matches('[data-pub-retry],[data-pub-reviews]')) {
+      t.disabled = true;
+      t.textContent = 'Starting…';
+      const r = await api({ action: 'redeploy' });
+      if (!r.ok && r.error) alert(r.error);
+      await refreshPublishBar();
+      return;
+    }
+    if (t.matches('[data-pub-undo]')) {
+      const [type, key] = (t.dataset.pubUndo ?? '').split('|');
+      t.disabled = true;
+      const r = await api({ action: 'discard', type, key });
+      if (!r.ok) return alert(r.error);
+      t.closest('article')?.remove();
+      // The page's form shows the draft, so it has to show what is live again.
+      dialog()?.addEventListener('close', () => location.reload(), { once: true });
+      if (!document.querySelector('[data-pub-review-body] article')) dialog()?.close();
+      else loadReview();
+      return;
+    }
+    if (t.matches('[data-pub-go]')) {
+      t.disabled = true;
+      const label = t.querySelector('[data-label]');
+      if (label) label.textContent = 'Publishing…';
+      const r = await api({ action: 'publish' });
+      if (r.ok) {
+        location.reload();
+        return;
+      }
+      await loadReview();
+      const note = document.querySelector('[data-pub-note]');
+      if (note && r.error && !r.problems) note.textContent = r.error;
+    }
+  });
+</script>

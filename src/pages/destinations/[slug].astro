@@ -12,6 +12,7 @@ import { PACKAGES } from '../../data/packages';
 import { SITE } from '../../data/site';
 import { destinationPhoto } from '../../lib/photos';
 import { article, faqPage, touristDestination } from '../../lib/schema';
+import { photoFile } from '../../data/photo-library';
 
 export function getStaticPaths() {
   return DESTINATIONS.map((d) => ({ params: { slug: d.slug }, props: { d } }));
@@ -33,11 +34,11 @@ const desc = `${d.name} travel guide: best time to visit, how many days, top sig
   title={`${d.short ?? d.name} Travel Guide: Best Time, Sights, Taxi`}
   description={desc}
   crumbs={[{ name: 'Destinations', path: '/destinations/' }, { name: d.name, path }]}
-  schema={[touristDestination(d, path), article({ headline: `${d.name} travel guide`, description: desc, path, modified: SITE.destinationsUpdated, image: `/img/${destinationPhoto(d.slug)}-1600.webp` }), faqPage(faqs, path)]}
+  schema={[touristDestination(d, path), article({ headline: `${d.name} travel guide`, description: desc, path, modified: SITE.destinationsUpdated, image: photoFile(destinationPhoto(d), 1600) }), faqPage(faqs, path)]}
   ogType="article"
-  ogImage={`/img/${destinationPhoto(d.slug)}-1600.webp`}
+  ogImage={photoFile(destinationPhoto(d), 1600)}
 >
-  <PageHero slot="hero" image={destinationPhoto(d.slug)} eyebrow={`${d.region} · ${d.altitude}`} title={`${d.name} travel guide`}>
+  <PageHero slot="hero" image={destinationPhoto(d)} edit={`destination:${d.slug}`} eyebrow={`${d.region} · ${d.altitude}`} title={`${d.name} travel guide`}>
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> {d.daysNeeded}</span>
       <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {d.howToReach.split('.')[0]}</span>
@@ -46,14 +47,14 @@ const desc = `${d.name} travel guide: best time to visit, how many days, top sig
 
   <article class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-14">
     <div class="min-w-0">
-      <p class="answer">{d.summary}</p>
+      <p class="answer" data-edit={`destination:${d.slug}:summary`}>{d.summary}</p>
       <dl class="mt-6 grid gap-3 sm:grid-cols-2">
-        <div class="card p-5"><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Best time to visit</dt><dd class="mt-1.5 text-ink">{d.bestTime}</dd></div>
-        <div class="card p-5"><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Days needed</dt><dd class="mt-1.5 text-ink">{d.daysNeeded}</dd></div>
+        <div class="card p-5"><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Best time to visit</dt><dd class="mt-1.5 text-ink" data-edit={`destination:${d.slug}:bestTime`}>{d.bestTime}</dd></div>
+        <div class="card p-5"><dt class="text-xs font-semibold tracking-wide text-muted uppercase">Days needed</dt><dd class="mt-1.5 text-ink" data-edit={`destination:${d.slug}:daysNeeded`}>{d.daysNeeded}</dd></div>
       </dl>
 
       <h2 class="mt-12 text-2xl font-extrabold sm:text-3xl">Top things to see in {d.name}</h2>
-      <ol class="mt-5 grid gap-3 sm:grid-cols-2">
+      <ol class="mt-5 grid gap-3 sm:grid-cols-2" data-edit={`destination:${d.slug}:highlights`}>
         {d.highlights.map((h, i) => (
           <li class="card flex gap-4 p-5">
             <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-sm font-extrabold text-ink">{i + 1}</span>
@@ -64,11 +65,11 @@ const desc = `${d.name} travel guide: best time to visit, how many days, top sig
 
       <div class="prose-site mt-6">
         <h2>How to reach {d.name}</h2>
-        <p>{d.howToReach}</p>
-        {d.permit && (<><h2>Permits</h2><p>{d.permit} See our <a href="/guides/sikkim-permit-guide/">Sikkim permit guide</a>.</p></>)}
+        <p data-edit={`destination:${d.slug}:howToReach`}>{d.howToReach}</p>
+        {d.permit && (<><h2>Permits</h2><p><span data-edit={`destination:${d.slug}:permit`}>{d.permit}</span> See our <a href="/guides/sikkim-permit-guide/">Sikkim permit guide</a>.</p></>)}
       </div>
 
-      <FaqList faqs={faqs} />
+      <FaqList faqs={faqs} edit={`destination:${d.slug}:faqs`} />
     </div>
 
     <aside class="space-y-5 lg:sticky lg:top-24 lg:self-start">
@@ -89,6 +90,6 @@ const desc = `${d.name} travel guide: best time to visit, how many days, top sig
         <div class="grid gap-5 md:grid-cols-3">{packages.slice(0, 3).map((p) => <PackageCard pkg={p} />)}</div>
       </section>
     )}
-    <BookCta waText={`Hi, I am planning a trip to ${d.name}.`} heading={`Plan your ${d.short ?? d.name} trip`} image={destinationPhoto(d.slug)} />
+    <BookCta waText={`Hi, I am planning a trip to ${d.name}.`} heading={`Plan your ${d.short ?? d.name} trip`} image={destinationPhoto(d)} />
   </div>
 </BaseLayout>

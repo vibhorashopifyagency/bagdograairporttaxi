@@ -1,0 +1,12 @@
+---
+/** The publish bar alone, for window.refreshPublishBar() after a change saved without a reload. */
+import PublishBar from '../../../components/admin/PublishBar.astro';
+import { isAdmin } from '../../../server/admin';
+
+export const prerender = false;
+export const partial = true;
+
+if (!isAdmin(Astro.locals.user)) return new Response(null, { status: 403 });
+---
+
+<PublishBar />

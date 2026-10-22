@@ -16,7 +16,7 @@ const altitude = heights.length > 1 ? `Up to ${heights[heights.length - 1]} m` :
 
 {variant === 'poster' ? (
   <a href={`/destinations/${d.slug}/`} class="lift group relative block aspect-[4/5] overflow-hidden rounded-[var(--radius-card)] bg-ink no-underline">
-    <Photo name={destinationPhoto(d.slug)} class="zoom absolute inset-0 h-full w-full object-cover" sizes="(min-width: 1800px) 17vw, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw" alt="" />
+    <Photo name={destinationPhoto(d)} class="zoom absolute inset-0 h-full w-full object-cover" sizes="(min-width: 1800px) 17vw, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw" alt="" />
     <span class="photo-fade absolute inset-x-0 bottom-0 h-3/4" aria-hidden="true"></span>
     <span class="absolute inset-x-0 bottom-0 p-4 text-white sm:p-6">
       <span class="block truncate text-[0.7rem] font-bold tracking-[0.12em] uppercase opacity-80">{altitude}</span>
@@ -27,7 +27,7 @@ const altitude = heights.length > 1 ? `Up to ${heights[heights.length - 1]} m` :
 ) : (
   <a href={`/destinations/${d.slug}/`} class="card lift group flex flex-col overflow-hidden no-underline">
     <span class="relative block aspect-[16/10] overflow-hidden bg-mist">
-      <Photo name={destinationPhoto(d.slug)} class="zoom absolute inset-0 h-full w-full object-cover" alt="" />
+      <Photo name={destinationPhoto(d)} class="zoom absolute inset-0 h-full w-full object-cover" alt="" />
       <span class="absolute top-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-ink shadow-sm">{d.altitude}</span>
     </span>
     <span class="flex flex-1 flex-col p-5">

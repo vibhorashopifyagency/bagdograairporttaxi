@@ -5,7 +5,7 @@ export interface Destination {
   slug: string;
   name: string;
   /** Name for titles. */
-  short?: string;
+  short?: string | null;
   region: string;
   altitude: string;
   /** Answer-first opening paragraph. */
@@ -14,9 +14,11 @@ export interface Destination {
   daysNeeded: string;
   highlights: { name: string; note: string }[];
   howToReach: string;
-  permit?: string;
+  permit?: string | null;
   faqs: Faq[];
   geo: { lat: number; lng: number };
+  /** A photo from the library chosen in the dashboard; otherwise src/lib/photos.ts picks one. */
+  photo?: string | null;
 }
 
 /** The starting copy: a destination changed, added or removed in the dashboard replaces it (see ./published.ts). */

@@ -13,6 +13,7 @@ import { inr } from '../../data/routes';
 import { BUSINESS, POLICY, waLink, SITE } from '../../data/site';
 import { packagePhoto } from '../../lib/photos';
 import { faqPage, tourTrip } from '../../lib/schema';
+import { photoFile } from '../../data/photo-library';
 
 export function getStaticPaths() {
   return PACKAGES.map((pkg) => ({ params: { slug: pkg.slug }, props: { pkg } }));
@@ -40,10 +41,10 @@ const waText = `Hi, I am interested in the ${pkg.name} tour package (${pkg.night
   description={`${pkg.nights}N/${pkg.days}D ${pkg.short} tour from Bagdogra, from ${inr(pkg.fromPrice)} per person. Private car, hotels, day-wise itinerary and clear inclusions.`}
   crumbs={[{ name: 'Tour packages', path: '/tour-packages/' }, { name: pkg.name, path }]}
   schema={[tourTrip(pkg, path), faqPage(faqs, path)]}
-  ogImage={`/img/${packagePhoto(pkg)}-1600.webp`}
+  ogImage={photoFile(packagePhoto(pkg), 1600)}
   modified={SITE.contentUpdated}
 >
-  <PageHero slot="hero" image={packagePhoto(pkg)} eyebrow={`${pkg.nights} nights / ${pkg.days} days · from Bagdogra or NJP`} title={`${pkg.name} tour package`}>
+  <PageHero slot="hero" image={packagePhoto(pkg)} edit={`package:${pkg.slug}`} eyebrow={`${pkg.nights} nights / ${pkg.days} days · from Bagdogra or NJP`} title={`${pkg.name} tour package`}>
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {pkg.places.join(' · ')}</span>
       {pkg.bestFor.map((b) => <span class="chip-light">{b}</span>)}
@@ -52,11 +53,11 @@ const waText = `Hi, I am interested in the ${pkg.name} tour package (${pkg.night
 
   <article class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-14">
     <div class="min-w-0">
-      <p class="answer">{pkg.summary}</p>
+      <p class="answer" data-edit={`package:${pkg.slug}:summary`}>{pkg.summary}</p>
 
       <section id="itinerary" class="mt-12" aria-labelledby="it-h">
         <h2 id="it-h" class="text-2xl font-extrabold sm:text-3xl">Day-wise itinerary</h2>
-        <ol class="mt-6 space-y-5 border-l-2 border-line pl-7">
+        <ol class="mt-6 space-y-5 border-l-2 border-line pl-7" data-edit={`package:${pkg.slug}:itinerary`}>
           {pkg.itinerary.map((d, i) => (
             <li class="relative">
               <span class="absolute -left-[2.55rem] flex h-8 w-8 items-center justify-center rounded-full bg-ink font-[family-name:var(--font-display)] text-sm font-bold text-white ring-4 ring-white">{i + 1}</span>
@@ -70,11 +71,11 @@ const waText = `Hi, I am interested in the ${pkg.name} tour package (${pkg.night
       <section class="mt-12 grid gap-5 md:grid-cols-2" aria-label="Inclusions and exclusions">
         <div class="card p-6">
           <h2 class="text-xl font-bold">Included</h2>
-          <ul class="mt-4 space-y-2.5">{pkg.includes.map((x) => <li class="flex gap-2.5"><Icon name="check" class="mt-0.5 h-5 w-5 shrink-0 text-lime-text" />{x}</li>)}</ul>
+          <ul class="mt-4 space-y-2.5" data-edit={`package:${pkg.slug}:includes`}>{pkg.includes.map((x) => <li class="flex gap-2.5"><Icon name="check" class="mt-0.5 h-5 w-5 shrink-0 text-lime-text" />{x}</li>)}</ul>
         </div>
         <div class="card bg-cream p-6">
           <h2 class="text-xl font-bold">Not included</h2>
-          <ul class="mt-4 space-y-2.5">{pkg.excludes.map((x) => <li class="flex gap-2.5"><span class="w-5 shrink-0 text-center text-muted" aria-hidden="true">–</span>{x}</li>)}</ul>
+          <ul class="mt-4 space-y-2.5" data-edit={`package:${pkg.slug}:excludes`}>{pkg.excludes.map((x) => <li class="flex gap-2.5"><span class="w-5 shrink-0 text-center text-muted" aria-hidden="true">–</span>{x}</li>)}</ul>
         </div>
       </section>
 
@@ -82,14 +83,14 @@ const waText = `Hi, I am interested in the ${pkg.name} tour package (${pkg.night
         <p class="mt-8">Read more about the places on this trip: {dests.map((d, i) => <>{i > 0 && ', '}<a href={`/destinations/${d!.slug}/`}>{d!.name}</a></>)}.</p>
       )}
 
-      <FaqList faqs={faqs} />
+      <FaqList faqs={faqs} edit={`package:${pkg.slug}:faqs`} />
     </div>
 
     <aside class="lg:sticky lg:top-24 lg:self-start">
       <div class="ring-shell">
       <div class="card overflow-hidden">
         <div class="bg-ink p-6 text-white">
-          <p class="text-sm text-white/70">Package price</p>
+          <p class="text-sm text-white/70" data-edit={`package:${pkg.slug}:fromPrice`} data-edit-panel>Package price</p>
           <p class="mt-1 flex items-baseline gap-2"><span class="text-sm text-white/70">from</span><strong class="font-[family-name:var(--font-display)] text-4xl font-extrabold">{inr(pkg.fromPrice)}</strong></p>
           <p class="mt-1 text-sm text-white/70">{pkg.priceNote}</p>
           <GoogleRatingBadge variant="chip" dark class="mt-4" />

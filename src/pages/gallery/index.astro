@@ -8,6 +8,7 @@ import { GALLERY, GALLERY_CATEGORIES } from '../../data/gallery';
 import { PHOTOS } from '../../lib/photos';
 import { SITE, waLink } from '../../data/site';
 import { abs } from '../../lib/schema';
+import { photoFile } from '../../data/photo-library';
 
 const title = 'Photo Gallery: Darjeeling, Sikkim, Dooars and Our Cars';
 const description = `${GALLERY.length} photographs of the places we drive to from Bagdogra Airport: Darjeeling, Gangtok, Tsomgo Lake, Nathula, Pelling, North Sikkim, the Dooars and Bhutan, plus our cars.`;
@@ -19,7 +20,7 @@ const gallery = {
   description,
   image: GALLERY.map((g) => ({
     '@type': 'ImageObject',
-    contentUrl: abs(`/img/${g.photo}-1600.webp`),
+    contentUrl: abs(photoFile(g.photo, 1600)),
     name: `${g.title}, ${g.place}`,
     description: PHOTOS[g.photo].alt,
     creditText: PHOTOS[g.photo].artist,

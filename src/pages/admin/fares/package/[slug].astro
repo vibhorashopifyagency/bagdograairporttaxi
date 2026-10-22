@@ -1,0 +1,307 @@
+---
+/**
+ * One tour package, as in the mock's "Edit a tour package": name and price,
+ * summary, places, the day-by-day plan, what is and is not included, and
+ * questions, beside a preview, the Google snippet and the version history.
+ * /admin/fares/package/new/ adds one. Admin only; saves are drafts until
+ * Publish.
+ */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../../components/admin/PublishBar.astro';
+import WebField from '../../../../components/admin/WebField.astro';
+import RowList from '../../../../components/admin/RowList.astro';
+import PhotoPicker from '../../../../components/admin/PhotoPicker.astro';
+import VersionHistory from '../../../../components/admin/VersionHistory.astro';
+import { isAdmin } from '../../../../server/admin';
+import { discardDraft, getEntry, listEntries, markForRemoval, markForReset, saveDraft } from '../../../../server/content';
+import { missingNumber, packageFromForm, slugify } from '../../../../server/content-forms';
+import { wasNotes } from '../../../../server/content-diff';
+import { defaultPhoto, packagePhoto } from '../../../../lib/photos';
+import type { TourPackage } from '../../../../data/packages';
+import { ipHash } from '../../../../server/security';
+import { photoFile } from '../../../../data/photo-library';
+import '../../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+type Data = Record<string, any>;
+
+const slugParam = Astro.params.slug!;
+const isNew = slugParam === 'new';
+let entry = isNew ? null : await getEntry('package', slugParam);
+if (!isNew && !entry) return Astro.redirect('/admin/fares/?tab=packages', 303);
+
+let error = '';
+let errorField = '';
+let posted: Data | null = null;
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? 'save');
+  const here = (done: string, slug = slugParam) => Astro.redirect(`/admin/fares/package/${slug}/?done=${done}`, 303);
+  if (intent === 'discard') {
+    await discardDraft(ctx, 'package', slugParam);
+    return here('discarded');
+  }
+  if (intent === 'remove') {
+    const r = await markForRemoval(ctx, 'package', slugParam);
+    if (r.ok) return Astro.redirect('/admin/fares/?tab=packages&done=removed', 303);
+    error = r.error;
+  }
+  if (intent === 'reset') {
+    const r = await markForReset(ctx, 'package', slugParam);
+    if (r.ok) return here('reset');
+    error = r.error;
+  }
+  if (intent === 'save') {
+    const slug = isNew ? slugify(String(f.get('slug') ?? '')) || (String(f.get('short') ?? '').trim() ? `${slugify(String(f.get('short')))}-tour-package` : '') : slugParam;
+    posted = packageFromForm(f, slug);
+    const missing = missingNumber(posted, ['nights', 'fromPrice']);
+    if (missing) {
+      error = missing === 'nights' ? 'Write how many nights the trip is.' : 'Write the price per person, in whole rupees.';
+      errorField = missing;
+    } else if (!slug) {
+      error = 'Fill in the short name first: the web address is made from it.';
+      errorField = 'slug';
+    } else {
+      const r = await saveDraft(ctx, 'package', slug, posted);
+      if (r.ok) return here(r.message ? 'same' : 'saved', slug);
+      error = r.error;
+      errorField = r.field ?? '';
+    }
+  }
+}
+
+const destinations = (await listEntries('destination')).filter((d) => d.current);
+entry = isNew ? null : await getEntry('package', slugParam);
+const blank: Data = { name: '', short: '', nights: '', days: '', places: [], fromPrice: '', priceNote: 'per person, two sharing, 3-star hotels', bestFor: [], summary: '', itinerary: [{ title: '', detail: '' }, { title: '', detail: '' }], includes: [], excludes: [], faqs: [], destinations: [] };
+const removed = entry && !entry.current;
+const p: Data = posted ?? (entry?.current as Data | null) ?? (entry?.live as Data | null) ?? blank;
+const live = (entry?.live as Data | null) ?? null;
+const was = entry && live && entry.current ? wasNotes('package', live, entry.current) : {};
+const err = (path: string) => (errorField === path || errorField.startsWith(`${path}.`) ? error : undefined);
+const title = isNew ? 'Add a tour package' : String(p.name || 'Tour package');
+const done = Astro.url.searchParams.get('done');
+const inr = (n: unknown) => (Number.isFinite(Number(n)) && n !== '' ? `₹${Number(n).toLocaleString('en-IN')}` : '₹…');
+const photo = packagePhoto({ ...(p as TourPackage), slug: slugParam, destinations: p.destinations ?? [] });
+const state: [string, string] = isNew
+  ? ['Not saved yet', 'bg-mist text-body']
+  : removed
+    ? ['Off the website', 'bg-[#fde8e7] text-[#b42318]']
+    : entry!.pending === 'delete'
+      ? ['Comes off when you publish', 'bg-[#fde8e7] text-[#b42318]']
+      : entry!.live === null
+        ? ['New, not live yet', 'bg-[#e7f0ff] text-[#1d4ed8]']
+        : entry!.pending
+          ? ['Draft, not live yet', 'bg-[#fff4d6] text-[#8a5300]']
+          : ['Live', 'bg-lime-50 text-[#3f6200]'];
+const icon = { x: '<path d="M18 6 6 18M6 6l12 12"/>' };
+const chipList = (name: string, values: string[], placeholder: string) => ({ name, values, placeholder });
+const chips = [chipList('places', p.places ?? [], 'Darjeeling'), chipList('bestFor', p.bestFor ?? [], 'Families')];
+---
+
+<AdminLayout title={title}>
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+
+    <div class="flex flex-col gap-2">
+      <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 text-sm text-muted">
+        <a href="/admin/fares/" class="font-semibold text-body">Fares and packages</a><span aria-hidden="true">›</span><a href="/admin/fares/?tab=packages" class="font-semibold text-body">Tour packages</a>
+      </nav>
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">{title}</h1>
+        <span class:list={['web-state', state[1]]}>{state[0]}</span>
+        <span class="flex-1"></span>
+        {!isNew && live && <a href={`/tour-packages/${slugParam}/`} target="_blank" rel="noopener" class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Live page</a>}
+      </div>
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish.</p>}
+    {done === 'same' && <p class="a-msg a-msg-ok m-0" role="status">That is what the website already shows, so there was nothing to save.</p>}
+    {done === 'discarded' && <p class="a-msg a-msg-ok m-0" role="status">Draft thrown away. This is what the website shows.</p>}
+    {done === 'reset' && <p class="a-msg a-msg-ok m-0" role="status">It goes back to the starting copy when you publish.</p>}
+    {done === 'restored' && <p class="a-msg a-msg-ok m-0" role="status">The earlier version is back as a draft. Publish to put it live.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+    {removed && <p class="a-msg m-0 bg-[#fde8e7] text-[#8f1d14]">This package is off the website. Put it back from the panel on the right, or put back a version from the history.</p>}
+
+    <div class="flex flex-wrap items-start gap-5">
+      <form method="post" data-web-form class="flex min-w-0 flex-[1_1_620px] flex-col gap-5">
+        <input type="hidden" name="intent" value="save" />
+        <fieldset disabled={Boolean(removed)} class="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">Name and price</h2>
+            <div class="grid gap-3.5 sm:grid-cols-2">
+              <WebField label="Name" name="name" value={p.name} was={was.name} error={err('name')} placeholder="Darjeeling and Gangtok" />
+              <WebField label="Short name, for titles" name="short" value={p.short} was={was.short} error={err('short')} count={[3, 25]} maxlength={30} />
+              <div class="grid grid-cols-2 gap-3.5">
+                <WebField label="Nights" name="nights" inputmode="numeric" value={p.nights} was={was.nights} error={err('nights')} />
+                <div class="flex flex-col gap-1.5">
+                  <span class="text-sm font-semibold">Days</span>
+                  <span class="flex min-h-[2.875rem] items-center rounded-xl bg-mist px-3.5 text-body" data-days aria-live="polite">{Number.isFinite(Number(p.nights)) && p.nights !== '' ? `${Number(p.nights) + 1}, set by the nights` : 'Set by the nights'}</span>
+                </div>
+              </div>
+              <WebField label="Price per person, from" name="fromPrice" inputmode="numeric" prefix="₹" value={Number.isFinite(Number(p.fromPrice)) && p.fromPrice !== '' ? Number(p.fromPrice).toLocaleString('en-IN') : ''} was={was.fromPrice} error={err('fromPrice')} help="The lowest season price" />
+              <WebField label="What the price covers" name="priceNote" value={p.priceNote} was={was.priceNote} error={err('priceNote')} class="sm:col-span-2" />
+              {isNew && <WebField label="Web address" name="slug" value={posted?.slug ?? ''} placeholder="Made from the short name" error={err('slug')} class="sm:col-span-2" help="bagdograairporttaxi.com/tour-packages/… It cannot change once published." />}
+            </div>
+          </section>
+
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6" id="photo">
+            <h2 class="m-0 font-display text-xl font-bold">Photo</h2>
+            <PhotoPicker value={p.photo} usual={defaultPhoto.package({ slug: slugParam, destinations: p.destinations ?? [] })} was={was.photo} />
+          </section>
+
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">Summary</h2>
+            <WebField label="The first thing Google and AI answers quote" name="summary" rows={4} value={p.summary} was={was.summary && 'Changed from what is live'} error={err('summary')} count={[120, 400]} maxlength={600} help="Say where it goes, how long, and what makes it special. A price written here must be the price above." />
+            <div class="grid gap-4 sm:grid-cols-2">
+              {chips.map((c) => (
+                <fieldset class="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
+                  <legend class="mb-1 p-0 text-sm font-semibold">{c.name === 'places' ? 'Places' : 'Best for'}</legend>
+                  {was[c.name] && <span class="wf-was">Changed from what is live</span>}
+                  {err(c.name) && <span class="wf-err">{err(c.name)}</span>}
+                  <div class="web-chips" data-list={c.name} data-max={c.name === 'places' ? 12 : 6}>
+                    {c.values.map((v) => (
+                      <span data-row class="web-chip"><input name={c.name} value={v} aria-label={c.name === 'places' ? 'Place' : 'Tag'} size={Math.max(4, v.length)} /><button type="button" data-remove-row aria-label={`Remove ${v}`}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button></span>
+                    ))}
+                    <template><span data-row class="web-chip"><input name={c.name} placeholder={c.placeholder} aria-label={c.name === 'places' ? 'Place' : 'Tag'} size="10" /><button type="button" data-remove-row aria-label="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button></span></template>
+                  </div>
+                  <button type="button" data-add-row={c.name} class="web-add">+ Add</button>
+                </fieldset>
+              ))}
+            </div>
+          </section>
+
+          <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+            <div class="flex flex-wrap items-baseline justify-between gap-2" id="itinerary">
+              <h2 class="m-0 font-display text-xl font-bold">Day by day</h2>
+              <span class="text-sm text-muted" data-day-count>One plan for each day. Move a day with its arrows.</span>
+            </div>
+            <RowList id="days" noun="day" addLabel="Add a day" max={31} numbered cards was={was.itinerary} error={err('itinerary')} fields={[{ name: 'dayTitle', label: 'Day title', placeholder: 'Darjeeling sightseeing' }, { name: 'dayDetail', label: 'Day plan', rows: 2, placeholder: 'Tiger Hill sunrise, Ghum Monastery and Batasia Loop…' }]} values={(p.itinerary ?? []).map((d: Data) => [d.title, d.detail])} />
+          </section>
+
+          <section class="grid gap-5 lg:grid-cols-2">
+            <div class="a-card flex flex-col gap-3 p-5 lg:p-6">
+              <h2 class="m-0 font-display text-xl font-bold" id="includes">Included</h2>
+              <RowList id="includes" noun="item" addLabel="Add what is included" max={20} was={was.includes} fields={[{ name: 'includes', label: 'Included', rows: 2 }]} values={(p.includes ?? []).map((s: string) => [s])} />
+            </div>
+            <div class="a-card flex flex-col gap-3 p-5 lg:p-6">
+              <h2 class="m-0 font-display text-xl font-bold" id="excludes">Not included</h2>
+              <RowList id="excludes" noun="item" addLabel="Add what is not included" max={20} was={was.excludes} fields={[{ name: 'excludes', label: 'Not included', rows: 2 }]} values={(p.excludes ?? []).map((s: string) => [s])} />
+            </div>
+          </section>
+
+          <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold" id="faqs">Questions travellers ask</h2>
+            <RowList id="faqs" noun="question" addLabel="Add a question" max={10} cards was={was.faqs} fields={[{ name: 'faqQ', label: 'Question', placeholder: 'Can I start this tour from Gangtok instead?' }, { name: 'faqA', label: 'Answer', rows: 3 }]} values={(p.faqs ?? []).map((x: Data) => [x.q, x.a])} />
+          </section>
+
+          <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">Destination guides it links to</h2>
+            {was.destinations && <span class="wf-was">Changed from what is live</span>}
+            <div class="flex flex-wrap gap-2">
+              {destinations.map((d) => (
+                <label class="a-pill"><input type="checkbox" name="destinations" value={d.key} checked={(p.destinations ?? []).includes(d.key)} class="sr-only" /><span>{(d.current as Data).name}</span></label>
+              ))}
+            </div>
+          </section>
+        </fieldset>
+
+        {!removed && (
+          <div class="web-save">
+            <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+            <button type="submit" class="btn-book min-h-12">{isNew ? 'Save the new package' : 'Save as draft'}</button>
+          </div>
+        )}
+      </form>
+
+      <aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-4 xl:max-w-[400px]">
+        <section class="a-card flex flex-col gap-3 p-5" aria-label="On the website">
+          <span class="text-[13px] font-bold tracking-[0.08em] text-muted uppercase">On the website</span>
+          <article class="overflow-hidden rounded-2xl border border-line">
+            <img src={photoFile(photo, 800)} alt="" width="800" height="450" class="aspect-[16/9] h-auto w-full object-cover" data-picker-mirror />
+            <div class="flex flex-col gap-1 p-4">
+              <span class="text-[13px] text-muted" data-pv-meta>{p.nights || '…'} nights, {p.nights !== '' ? Number(p.nights) + 1 : '…'} days · {(p.places ?? []).slice(0, 3).join(', ')}</span>
+              <span class="text-lg leading-snug font-bold" data-pv-name>{p.name || 'Package name'}</span>
+              <span class="text-sm text-body">from <strong data-pv-price>{inr(p.fromPrice)}</strong> per person</span>
+            </div>
+          </article>
+          <span class="text-[13px] text-muted">Change the photo in the form, under Photo.</span>
+        </section>
+        <section class="a-card flex flex-col gap-1 p-5" aria-label="In Google">
+          <span class="mb-1 text-[13px] font-bold tracking-[0.08em] text-muted uppercase">In Google</span>
+          <span class="text-[13px] text-muted">bagdograairporttaxi.com › tour-packages</span>
+          <span class="snip-title text-lg leading-snug" data-pv-gtitle>{p.short || '…'} Tour Package {p.nights || '…'}N/{p.nights !== '' ? Number(p.nights) + 1 : '…'}D from {inr(p.fromPrice)}</span>
+          <span class="text-sm text-body" data-pv-gdesc>{p.nights || '…'}N/{p.nights !== '' ? Number(p.nights) + 1 : '…'}D {p.short || '…'} tour from Bagdogra, from {inr(p.fromPrice)} per person. Private car, hotels, day-wise itinerary and clear inclusions.</span>
+        </section>
+        {!isNew && (
+          <section class="a-card flex flex-col gap-2.5 p-5">
+            <h2 class="m-0 font-display text-lg font-bold">This package</h2>
+            {entry!.pending === 'save' && <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Discard my changes</button></form>}
+            {removed && entry!.state !== 'added' && <form method="post"><input type="hidden" name="intent" value="reset" /><button class="btn-book min-h-11 w-full">Put it back on the website</button></form>}
+            {!removed && entry!.state === 'edited' && (
+              <form method="post" data-confirm="Undo every change made in the dashboard and go back to the starting copy when you publish?"><input type="hidden" name="intent" value="reset" /><button class="btn-ghost min-h-11 w-full">Back to the starting copy</button></form>
+            )}
+            {!removed && entry!.pending !== 'delete' && (
+              <form method="post" data-confirm="Take this package off the website when you publish?"><input type="hidden" name="intent" value="remove" /><button class="btn-ghost min-h-11 w-full text-[#b42318]">Take this package off the website</button></form>
+            )}
+            {entry!.pending === 'delete' && <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Keep it on the website</button></form>}
+          </section>
+        )}
+        {!isNew && <VersionHistory type="package" itemKey={slugParam} />}
+      </aside>
+    </div>
+  </div>
+</AdminLayout>
+
+<style is:global>
+  .snip-title { color: #1a0dab; }
+  [data-theme='dark'] .snip-title { color: #8ab4f8; }
+</style>
+
+<script>
+  import { wireCounters, wireDirty, wireLists } from '../../../../lib/admin-web';
+  wireLists();
+  wireCounters();
+  wireDirty();
+  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((f) =>
+    f.addEventListener('submit', (e) => {
+      if (!confirm(f.dataset.confirm!)) e.preventDefault();
+    }),
+  );
+
+  // Days follow the nights, and the preview and the Google lines follow the boxes.
+  const val = (n: string) => document.querySelector<HTMLInputElement>(`[name="${n}"]`)?.value.trim() ?? '';
+  const inr = (s: string) => {
+    const n = Number(s.replace(/[₹,\s]/g, ''));
+    return s && Number.isFinite(n) ? '₹' + n.toLocaleString('en-IN') : '₹…';
+  };
+  const paint = () => {
+    const nights = Number(val('nights'));
+    const ok = val('nights') !== '' && Number.isInteger(nights) && nights > 0;
+    const days = ok ? nights + 1 : NaN;
+    const set = (sel: string, text: string) => document.querySelector(sel) && (document.querySelector(sel)!.textContent = text);
+    set('[data-days]', ok ? `${days}, set by the nights` : 'Set by the nights');
+    const n = ok ? String(nights) : '…';
+    const d = ok ? String(days) : '…';
+    const places = [...document.querySelectorAll<HTMLInputElement>('[name="places"]')].map((i) => i.value.trim()).filter(Boolean).slice(0, 3).join(', ');
+    set('[data-pv-meta]', `${n} nights, ${d} days · ${places}`);
+    set('[data-pv-name]', val('name') || 'Package name');
+    set('[data-pv-price]', inr(val('fromPrice')));
+    set('[data-pv-gtitle]', `${val('short') || '…'} Tour Package ${n}N/${d}D from ${inr(val('fromPrice'))}`);
+    set('[data-pv-gdesc]', `${n}N/${d}D ${val('short') || '…'} tour from Bagdogra, from ${inr(val('fromPrice'))} per person. Private car, hotels, day-wise itinerary and clear inclusions.`);
+    const rows = document.querySelectorAll('[data-list="days"] > [data-row]').length;
+    const count = document.querySelector('[data-day-count]');
+    if (count) {
+      count.textContent = ok ? (rows === days ? `${days} days for ${nights} nights. Move a day with its arrows.` : `${rows} written, ${days} needed for ${nights} nights.`) : 'One plan for each day. Move a day with its arrows.';
+      count.classList.toggle('text-[#8a5300]', ok && rows !== days);
+      count.classList.toggle('font-semibold', ok && rows !== days);
+    }
+  };
+  document.querySelector('form[data-web-form]')?.addEventListener('input', paint);
+  document.addEventListener('click', () => setTimeout(paint, 0));
+  paint();
+</script>

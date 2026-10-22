@@ -1,0 +1,289 @@
+---
+/**
+ * One taxi route: its names, fares, opening answer, stops, tips and
+ * questions. /admin/fares/route/new/ adds a route. Admin only; saves are
+ * drafts until Publish.
+ */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../../components/admin/PublishBar.astro';
+import WebField from '../../../../components/admin/WebField.astro';
+import RowList from '../../../../components/admin/RowList.astro';
+import PhotoPicker from '../../../../components/admin/PhotoPicker.astro';
+import { defaultPhoto } from '../../../../lib/photos';
+import VersionHistory from '../../../../components/admin/VersionHistory.astro';
+import { isAdmin } from '../../../../server/admin';
+import { discardDraft, getEntry, listEntries, markForRemoval, markForReset, saveDraft } from '../../../../server/content';
+import { fareTextNote, fixLabel, missingNumber, routeFromForm, slugify, type Fares } from '../../../../server/content-forms';
+import { wasNotes } from '../../../../server/content-diff';
+import { ROUTE_GROUPS } from '../../../../data/routes';
+import { VEHICLES } from '../../../../data/vehicles';
+import { ipHash } from '../../../../server/security';
+import '../../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+type Data = Record<string, any>;
+
+const slugParam = Astro.params.slug!;
+const isNew = slugParam === 'new';
+let entry = isNew ? null : await getEntry('route', slugParam);
+if (!isNew && !entry) return Astro.redirect('/admin/fares/', 303);
+
+let error = '';
+let errorField = '';
+let posted: Data | null = null;
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? 'save');
+  const here = (done: string, slug = slugParam) => Astro.redirect(`/admin/fares/route/${slug}/?done=${done}`, 303);
+  if (intent === 'discard') {
+    await discardDraft(ctx, 'route', slugParam);
+    return here('discarded');
+  }
+  if (intent === 'remove') {
+    const r = await markForRemoval(ctx, 'route', slugParam);
+    if (r.ok) return Astro.redirect('/admin/fares/?done=removed', 303);
+    error = r.error;
+  }
+  if (intent === 'reset') {
+    const r = await markForReset(ctx, 'route', slugParam);
+    if (r.ok) return here('reset');
+    error = r.error;
+  }
+  if (intent === 'fixtext' && entry?.current) {
+    const cur = entry.current as Data;
+    const n = fareTextNote(cur, ((entry.live as Data | null)?.fares ?? cur.fares) as Fares);
+    if (n?.fixed) await saveDraft(ctx, 'route', slugParam, { ...cur, ...n.fixed });
+    return here('saved');
+  }
+  if (intent === 'save') {
+    const slug = isNew ? slugify(String(f.get('slug') ?? '')) || slugify(`${f.get('fromShort')} to ${f.get('toShort')} taxi`) : slugParam;
+    posted = routeFromForm(f, slug);
+    const missing = missingNumber(posted, ['km', 'fares.sedan', 'fares.suv', 'fares.innova', 'fares.traveller']);
+    if (missing) {
+      error = missing === 'km' ? 'Write the distance in kilometres.' : 'Every car needs a fare, in whole rupees.';
+      errorField = missing;
+    } else if (!posted.durationIso) {
+      error = 'Write the driving time like "3 to 3.5 hours" or "45 minutes".';
+      errorField = 'duration';
+    } else if (!slug) {
+      error = 'Fill in the short names first: the web address is made from them.';
+      errorField = 'slug';
+    } else {
+      const r = await saveDraft(ctx, 'route', slug, posted);
+      if (r.ok) return here(r.message ? 'same' : 'saved', slug);
+      error = r.error;
+      errorField = r.field ?? '';
+    }
+  }
+}
+
+const [routes, destinations] = await Promise.all([listEntries('route'), listEntries('destination')]);
+entry = isNew ? null : await getEntry('route', slugParam);
+const blank: Data = { from: 'Bagdogra Airport (IXB)', to: '', fromShort: 'Bagdogra Airport', toShort: '', km: '', duration: '', via: '', fares: {}, summary: '', stops: [], tips: [], faqs: [], group: ROUTE_GROUPS[0] };
+const r: Data = posted ?? (entry?.current as Data | null) ?? (entry ? ({ ...(entry.live as Data) } as Data) : blank);
+const removed = entry && !entry.current;
+const shownRoute: Data = removed ? ((entry!.live as Data | null) ?? blank) : r;
+const live = (entry?.live as Data | null) ?? null;
+const was = entry && live ? wasNotes('route', live, entry.current) : {};
+const err = (path: string) => (errorField === path || errorField.startsWith(`${path}.`) ? error : undefined);
+const liveFares = (live?.fares ?? shownRoute.fares) as Fares;
+const note = entry?.current && live ? fareTextNote(entry.current as Data, liveFares) : null;
+const title = isNew ? 'Add a taxi route' : `${shownRoute.fromShort} to ${shownRoute.toShort}`;
+const done = Astro.url.searchParams.get('done');
+const inr = (n: number) => `₹${Number(n).toLocaleString('en-IN')}`;
+const minFare = Math.min(...Object.values((shownRoute.fares ?? {}) as Fares).filter(Number.isFinite));
+const googleTitle = `${shownRoute.fromShort} to ${shownRoute.toShort} Taxi Fare ${Number.isFinite(minFare) ? inr(minFare) : ''} (${shownRoute.km} km)`;
+const googleDesc = `${shownRoute.fromShort} to ${shownRoute.toShort} taxi: sedan ${inr(shownRoute.fares?.sedan ?? 0)}, Innova ${inr(shownRoute.fares?.innova ?? 0)}, ${shownRoute.km} km, ${shownRoute.duration}. Fixed all-inclusive fare, free cancellation.`;
+const state: [string, string] = isNew
+  ? ['Not saved yet', 'bg-mist text-body']
+  : removed
+    ? ['Off the website', 'bg-[#fde8e7] text-[#b42318]']
+    : entry!.pending === 'delete'
+      ? ['Comes off when you publish', 'bg-[#fde8e7] text-[#b42318]']
+      : entry!.live === null
+        ? ['New, not live yet', 'bg-[#e7f0ff] text-[#1d4ed8]']
+        : entry!.pending
+          ? ['Draft, not live yet', 'bg-[#fff4d6] text-[#8a5300]']
+          : ['Live', 'bg-lime-50 text-[#3f6200]'];
+const otherRoutes = routes.filter((x) => x.key !== slugParam && x.current);
+---
+
+<AdminLayout title={title}>
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+
+    <div class="flex flex-col gap-2">
+      <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 text-sm text-muted">
+        <a href="/admin/fares/" class="font-semibold text-body">Fares and packages</a><span aria-hidden="true">›</span><span>Taxi routes</span>
+      </nav>
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">{title}</h1>
+        <span class:list={['web-state', state[1]]}>{state[0]}</span>
+        <span class="flex-1"></span>
+        {!isNew && live && <a href={`/taxi/${slugParam}/`} target="_blank" rel="noopener" class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Live page</a>}
+      </div>
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish.</p>}
+    {done === 'same' && <p class="a-msg a-msg-ok m-0" role="status">That is what the website already shows, so there was nothing to save.</p>}
+    {done === 'discarded' && <p class="a-msg a-msg-ok m-0" role="status">Draft thrown away. This is what the website shows.</p>}
+    {done === 'reset' && <p class="a-msg a-msg-ok m-0" role="status">It goes back to the starting copy when you publish.</p>}
+    {done === 'restored' && <p class="a-msg a-msg-ok m-0" role="status">The earlier version is back as a draft. Publish to put it live.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+    {removed && (
+      <p class="a-msg m-0 bg-[#fde8e7] text-[#8f1d14]">This route is off the website. {entry && entry.state !== 'added' ? 'Put it back as it was in the starting copy, or put back a version from the history.' : 'Put back a version from the history to bring it back.'}</p>
+    )}
+
+    <div class="flex flex-wrap items-start gap-5">
+      <form method="post" data-web-form class="flex min-w-0 flex-[1_1_620px] flex-col gap-5" id="route-form">
+        <input type="hidden" name="intent" value="save" />
+        <fieldset disabled={Boolean(removed)} class="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">The route</h2>
+            <div class="grid gap-3.5 sm:grid-cols-2">
+              <WebField label="From" name="from" value={shownRoute.from} was={was.from} error={err('from')} help="In full, as on the page: Bagdogra Airport (IXB)" />
+              <WebField label="To" name="to" value={shownRoute.to} was={was.to} error={err('to')} />
+              <WebField label="Short name, from" name="fromShort" value={shownRoute.fromShort} was={was.fromShort} error={err('fromShort')} help="For headings and the fare chart" />
+              <WebField label="Short name, to" name="toShort" value={shownRoute.toShort} was={was.toShort} error={err('toShort')} />
+              <WebField label="Distance" name="km" inputmode="numeric" value={shownRoute.km} suffix="km" was={was.km} error={err('km')} />
+              <WebField label="Driving time" name="duration" value={shownRoute.duration} placeholder="3 to 3.5 hours" was={was.duration} error={err('duration')} />
+              <WebField label="The way" name="via" rows={2} value={shownRoute.via} was={was.via} error={err('via')} class="sm:col-span-2" help="The roads and towns it goes through" />
+              <label class="a-field">
+                Group on the fare chart
+                <select name="group">
+                  {ROUTE_GROUPS.map((g) => <option value={g} selected={shownRoute.group === g}>{g}</option>)}
+                </select>
+              </label>
+              {isNew && <WebField label="Web address" name="slug" value={posted?.slug ?? ''} placeholder="Made from the short names" error={err('slug')} help="bagdograairporttaxi.com/taxi/… It cannot change once published." />}
+            </div>
+          </section>
+
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold" id="fares">Fares, one way</h2>
+            <div class="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+              {VEHICLES.map((v) => (
+                <WebField label={v.name} name={v.key} inputmode="numeric" prefix="₹" value={Number.isFinite(shownRoute.fares?.[v.key]) ? Number(shownRoute.fares[v.key]).toLocaleString('en-IN') : ''} was={was[`fares.${v.key}`]} error={err(`fares.${v.key}`)} />
+              ))}
+            </div>
+            <p class="m-0 text-sm text-muted">Fuel, tolls, parking, driver allowance and GST included. The night charge is added on top.</p>
+          </section>
+
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6" id="text">
+            <h2 class="m-0 font-display text-xl font-bold">Opening answer</h2>
+            <WebField label="The first thing Google and AI answers quote" name="summary" rows={4} value={shownRoute.summary} was={was.summary && 'Changed from what is live'} error={err('summary')} count={[160, 400]} maxlength={600} help="Say the fare for a sedan and an Innova, the distance and the time. Any fare written here must be one of the fares above." />
+            {note && (
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-[14px] bg-[#fff4d6] px-3.5 py-3 text-[#5c3a00]">
+                <span class="flex-[1_1_300px]">The text still says <strong>{note.said.join('; ')}</strong>.</span>
+                {note.fixed && <button type="submit" form="fix-text" class="btn-book min-h-10 rounded-[10px] px-3.5 py-1.5 text-sm">{fixLabel(note, entry!.current as Data, liveFares)}</button>}
+              </div>
+            )}
+          </section>
+
+          <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold" id="stops">Stops on the way</h2>
+            <RowList id="stops" noun="stop" addLabel="Add a stop" max={12} was={was.stops} fields={[{ name: 'stops', label: 'Stop', placeholder: 'Kurseong (tea and snacks)' }]} values={(shownRoute.stops ?? []).map((s: string) => [s])} />
+          </section>
+
+          <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold" id="tips">Tips</h2>
+            <RowList id="tips" noun="tip" addLabel="Add a tip" max={8} was={was.tips} fields={[{ name: 'tips', label: 'Tip', rows: 2 }]} values={(shownRoute.tips ?? []).map((s: string) => [s])} />
+          </section>
+
+          <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold" id="faqs">Questions travellers ask</h2>
+            <RowList id="faqs" noun="question" addLabel="Add a question" max={10} cards was={was.faqs} fields={[{ name: 'faqQ', label: 'Question', placeholder: 'Can I stop at Mirik on the way?' }, { name: 'faqA', label: 'Answer', rows: 3 }]} values={(shownRoute.faqs ?? []).map((x: Data) => [x.q, x.a])} />
+          </section>
+
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6" id="photo">
+            <h2 class="m-0 font-display text-xl font-bold">Photo</h2>
+            <PhotoPicker value={shownRoute.photo} usual={defaultPhoto.route({ destination: shownRoute.destination, toShort: String(shownRoute.toShort ?? '') })} was={was.photo} />
+          </section>
+
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">Links on the page</h2>
+            <div class="grid gap-3.5 sm:grid-cols-2">
+              <label class="a-field">
+                Destination guide
+                <select name="destination">
+                  <option value="">None</option>
+                  {destinations.filter((d) => d.current).map((d) => <option value={d.key} selected={shownRoute.destination === d.key}>{(d.current as Data).name}</option>)}
+                </select>
+              </label>
+              <label class="a-field">
+                The route back
+                <select name="returnSlug">
+                  <option value="">None</option>
+                  {otherRoutes.map((x) => <option value={x.key} selected={shownRoute.returnSlug === x.key}>{(x.current as Data).fromShort} to {(x.current as Data).toShort}</option>)}
+                </select>
+              </label>
+            </div>
+          </section>
+        </fieldset>
+
+        {!removed && (
+          <div class="web-save">
+            <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+            <button type="submit" class="btn-book min-h-12">{isNew ? 'Save the new route' : 'Save as draft'}</button>
+          </div>
+        )}
+      </form>
+
+      <aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-4 xl:max-w-[400px]">
+        {!isNew && (
+          <section class="a-card flex flex-col gap-1 p-5" aria-label="In Google">
+            <span class="mb-1 text-[13px] font-bold tracking-[0.08em] text-muted uppercase">In Google</span>
+            <span class="text-[13px] text-muted">bagdograairporttaxi.com › taxi</span>
+            <span class="snip-title text-lg leading-snug">{googleTitle}</span>
+            <span class="text-sm text-body">{googleDesc}</span>
+          </section>
+        )}
+        {!isNew && (
+          <section class="a-card flex flex-col gap-2.5 p-5">
+            <h2 class="m-0 font-display text-lg font-bold">This route</h2>
+            {entry!.pending === 'save' && (
+              <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Discard my changes</button></form>
+            )}
+            {removed && entry!.state !== 'added' && (
+              <form method="post"><input type="hidden" name="intent" value="reset" /><button class="btn-book min-h-11 w-full">Put it back on the website</button></form>
+            )}
+            {!removed && entry!.state === 'edited' && (
+              <form method="post" data-confirm="Undo every change made in the dashboard and go back to the starting copy when you publish?"><input type="hidden" name="intent" value="reset" /><button class="btn-ghost min-h-11 w-full">Back to the starting copy</button></form>
+            )}
+            {!removed && entry!.pending !== 'delete' && (
+              <form method="post" data-confirm="Take this route off the website when you publish? Its page stops working and links to it are checked first."><input type="hidden" name="intent" value="remove" /><button class="btn-ghost min-h-11 w-full text-[#b42318]">Take this route off the website</button></form>
+            )}
+            {entry!.pending === 'delete' && (
+              <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Keep it on the website</button></form>
+            )}
+          </section>
+        )}
+        {!isNew && <VersionHistory type="route" itemKey={slugParam} />}
+      </aside>
+    </div>
+  </div>
+  {note?.fixed && (
+    <form method="post" id="fix-text" hidden><input type="hidden" name="intent" value="fixtext" /></form>
+  )}
+</AdminLayout>
+
+<style is:global>
+  .snip-title { color: #1a0dab; }
+  [data-theme='dark'] .snip-title { color: #8ab4f8; }
+</style>
+
+<script>
+  import { wireCounters, wireDirty, wireLists } from '../../../../lib/admin-web';
+  wireLists();
+  wireCounters();
+  wireDirty();
+  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((f) =>
+    f.addEventListener('submit', (e) => {
+      if (!confirm(f.dataset.confirm!)) e.preventDefault();
+    }),
+  );
+</script>

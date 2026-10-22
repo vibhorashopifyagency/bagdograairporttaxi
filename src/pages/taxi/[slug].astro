@@ -16,6 +16,7 @@ import { VEHICLES } from '../../data/vehicles';
 import { BUSINESS, POLICY, SITE, waLink } from '../../data/site';
 import { routePhoto } from '../../lib/photos';
 import { faqPage, routeService } from '../../lib/schema';
+import { photoFile } from '../../data/photo-library';
 
 export function getStaticPaths() {
   return ROUTES.map((route) => ({ params: { slug: route.slug }, props: { route } }));
@@ -56,10 +57,10 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
   description={description}
   crumbs={[{ name: 'Taxi fares', path: '/taxi/' }, { name: `${route.fromShort} to ${route.toShort}`, path }]}
   schema={[routeService(route, path), faqPage(faqs, path)]}
-  ogImage={`/img/${routePhoto(route)}-1600.webp`}
+  ogImage={photoFile(routePhoto(route), 1600)}
   modified={SITE.contentUpdated}
 >
-  <PageHero slot="hero" image={routePhoto(route)} eyebrow="Fixed fare · one way · all inclusive" title={`${route.from} to ${route.to} taxi`}>
+  <PageHero slot="hero" image={routePhoto(route)} edit={`route:${route.slug}`} eyebrow="Fixed fare · one way · all inclusive" title={`${route.from} to ${route.to} taxi`}>
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {route.km} km</span>
       <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> {route.duration}</span>
@@ -69,9 +70,9 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
 
   <article class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-14">
     <div class="min-w-0">
-      <p class="answer">{route.summary}</p>
+      <p class="answer" data-edit={`route:${route.slug}:summary`}>{route.summary}</p>
 
-      <section id="fares" class="mt-12" aria-labelledby="fares-h">
+      <section id="fares" class="mt-12" aria-labelledby="fares-h" data-edit={`route:${route.slug}:fares`}>
         <h2 id="fares-h" class="mb-4 text-2xl font-extrabold sm:text-3xl">{route.fromShort} to {route.toShort} fare by car</h2>
         <FareTable route={route} />
       </section>
@@ -79,10 +80,10 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
       <div class="prose-site mt-6">
         <h2>Route and stops</h2>
         <p>Your driver takes {route.via}. Short stops are included for tea, photos and rest.</p>
-        <ul>{route.stops.map((s) => <li>{s}</li>)}</ul>
+        <ul data-edit={`route:${route.slug}:stops`}>{route.stops.map((s) => <li>{s}</li>)}</ul>
 
         <h2>Local tips for this trip</h2>
-        <ul>{route.tips.map((t) => <li>{t}</li>)}</ul>
+        <ul data-edit={`route:${route.slug}:tips`}>{route.tips.map((t) => <li>{t}</li>)}</ul>
 
         {dest && (
           <>
@@ -95,7 +96,7 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
         )}
       </div>
 
-      <FaqList faqs={faqs} />
+      <FaqList faqs={faqs} edit={`route:${route.slug}:faqs`} />
     </div>
 
     <aside class="lg:sticky lg:top-24 lg:self-start">

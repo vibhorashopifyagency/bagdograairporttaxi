@@ -95,6 +95,7 @@ RewriteRule ^(.+)\.php$ / [L,R=301]
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
   Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
   Header set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
 </IfModule>

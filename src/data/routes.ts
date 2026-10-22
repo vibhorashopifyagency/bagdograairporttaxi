@@ -43,8 +43,10 @@ export interface Route {
   stops: string[];
   tips: string[];
   faqs: Faq[];
-  destination?: string;
-  returnSlug?: string;
+  destination?: string | null;
+  returnSlug?: string | null;
+  /** A photo from the library chosen in the dashboard; otherwise src/lib/photos.ts picks one. */
+  photo?: string | null;
   group: 'Darjeeling hills' | 'Sikkim' | 'Siliguri and NJP' | 'NJP station' | 'Dooars' | 'Nepal and Bhutan borders';
 }
 

@@ -26,6 +26,7 @@ import { GUIDES_START } from '../data/guides';
 import { PACKAGES_START } from '../data/packages';
 import { CONTENT_VERSION, fingerprint, type ContentType } from '../data/published';
 import { GOOGLE } from '../data/reviews';
+import { PHOTOS_START, photoTitle } from '../data/photo-library';
 import { ROUTES_START } from '../data/routes';
 import { BUSINESS_START, LAUNCH_START, POLICY_START, SITE_TEXT_START } from '../data/site';
 import { VEHICLES_START } from '../data/vehicles';
@@ -65,12 +66,13 @@ type Def = ListDef | OneDef;
 
 const asData = <T>(v: readonly T[]) => v as unknown as readonly Data[];
 
-export const LISTS: Record<'route' | 'package' | 'destination' | 'vehicle' | 'guide', ListDef> = {
+export const LISTS: Record<'route' | 'package' | 'destination' | 'vehicle' | 'guide' | 'photo', ListDef> = {
   route: { kind: 'list', type: 'route', noun: 'route', keyField: 'slug', start: asData(ROUTES_START), schema: S.routeSchema, dates: ['content'] },
   package: { kind: 'list', type: 'package', noun: 'package', keyField: 'slug', start: asData(PACKAGES_START), schema: S.packageSchema, dates: ['content'] },
   destination: { kind: 'list', type: 'destination', noun: 'destination', keyField: 'slug', start: asData(DESTINATIONS_START), schema: S.destinationSchema, dates: ['destinations'] },
   vehicle: { kind: 'list', type: 'vehicle', noun: 'car', keyField: 'key', start: asData(VEHICLES_START), schema: S.vehicleSchema, fixed: true, dates: ['content'] },
   guide: { kind: 'list', type: 'guide', noun: 'guide', keyField: 'slug', start: asData(GUIDES_START), schema: S.guideSchema, fixed: true, dates: [] },
+  photo: { kind: 'list', type: 'photo', noun: 'photo', keyField: 'key', start: asData(PHOTOS_START), schema: S.photoSchema, dates: [] },
 };
 
 const ONES: OneDef[] = [
@@ -94,9 +96,9 @@ const startItem = (def: Def, key: string): Value | undefined =>
   def.kind === 'list' ? def.start.find((d) => String(d[def.keyField]) === key) : def.start;
 
 const isRecord = (v: unknown): v is Data => typeof v === 'object' && v !== null && !Array.isArray(v);
-/** Equal as data, whatever the key order (the database does not keep it). */
+/** Equal as data, whatever the key order (the database does not keep it); an empty field (null) is the same as a missing one. */
 const stable = (v: unknown): unknown =>
-  Array.isArray(v) ? v.map(stable) : isRecord(v) ? Object.fromEntries(Object.keys(v).sort().filter((k) => v[k] !== undefined).map((k) => [k, stable(v[k])])) : v;
+  Array.isArray(v) ? v.map(stable) : isRecord(v) ? Object.fromEntries(Object.keys(v).sort().filter((k) => v[k] !== undefined && v[k] !== null).map((k) => [k, stable(v[k])])) : v;
 const same = (a: unknown, b: unknown) => JSON.stringify(stable(a)) === JSON.stringify(stable(b));
 
 /** Today in India, as 2026-10-22. */
@@ -191,9 +193,15 @@ async function actorIsAdmin(actorId: string): Promise<boolean> {
   return row?.role === 'admin' && !row.banned;
 }
 
+/** Which row of a list a problem is in: "Day 7: A day plan needs at least 10 characters." */
+const ROW_NOUN: Record<string, string> = { itinerary: 'Day', faqs: 'Question', stops: 'Stop', tips: 'Tip', highlights: 'Highlight', includes: 'Included item', excludes: 'Not-included item', registrations: 'Registration', places: 'Place', bestFor: 'Tag', sameAs: 'Profile link' };
+
 function firstIssue(e: { issues: { message: string; path: PropertyKey[] }[] }): { error: string; field: string } {
   const issue = e.issues[0];
-  return { error: issue?.message ?? 'Something in this form is not right.', field: (issue?.path ?? []).join('.') };
+  const path = issue?.path ?? [];
+  const [list, row] = path;
+  const where = typeof list === 'string' && typeof row === 'number' && ROW_NOUN[list] ? `${ROW_NOUN[list]} ${row + 1}: ` : '';
+  return { error: where + (issue?.message ?? 'Something in this form is not right.'), field: path.join('.') };
 }
 
 async function putDraft(ctx: Ctx, type: ContentType, key: string, action: NonNullable<Row['draftAction']>, draft: Value | null) {
@@ -243,11 +251,20 @@ function pick(live: Value | null, like: Value): Value | null {
   return Object.fromEntries(Object.keys(like).map((k) => [k, live[k]]));
 }
 
+/** Throws away every draft at once ("Discard all" on the publish bar). */
+export async function discardAll(ctx: Ctx): Promise<Result & { count?: number }> {
+  if (!(await actorIsAdmin(ctx.actorId))) return { ok: false, error: ADMIN_ONLY };
+  const rows = await getDb().select({ type: schema.contentItems.type, key: schema.contentItems.key }).from(schema.contentItems).where(isNotNull(schema.contentItems.draftAction));
+  for (const r of rows) await discardDraft(ctx, r.type as ContentType, r.key);
+  return { ok: true, count: rows.length };
+}
+
 /** Marks a list item for removal at the next publish. */
 export async function markForRemoval(ctx: Ctx, type: ContentType, key: string): Promise<Result> {
   if (!(await actorIsAdmin(ctx.actorId))) return { ok: false, error: ADMIN_ONLY };
   const def = defFor(type, key);
   if (!def || def.kind !== 'list' || def.fixed) return { ok: false, error: 'This cannot be removed.' };
+  if (type === 'photo' && START_PHOTO_KEYS.has(key)) return { ok: false, error: 'This photo came with the website and pages name it, so it cannot be deleted. Replace it instead.' };
   const e = await getEntry(type, key);
   if (!e || e.live === null) return { ok: false, error: 'It is already removed.' };
   await putDraft(ctx, type, key, 'delete', null);
@@ -299,6 +316,7 @@ function titleOf(def: Def, key: string, v: Value | null | undefined): string {
   if (def.kind !== 'list') return def.noun[0].toUpperCase() + def.noun.slice(1);
   const d = isRecord(v) ? v : isRecord(startItem(def, key)) ? (startItem(def, key) as Data) : {};
   if (def.type === 'route' && d.from && d.to) return `${d.fromShort ?? d.from} to ${d.toShort ?? d.to}`;
+  if (def.type === 'photo') return photoTitle({ key, title: d.title as string | null });
   return String(d.name ?? d.title ?? key);
 }
 
@@ -310,6 +328,138 @@ export async function pendingChanges(): Promise<Pending[]> {
     if (!def || !r.draftAction) return [];
     return [{ type: r.type as ContentType, key: r.key, action: r.draftAction, noun: def.noun, title: titleOf(def, r.key, r.draft ?? r.published), updatedAt: r.updatedAt }];
   });
+}
+
+/** What kind of thing a change is, for the Review popup: "Taxi fare", "Tour package". */
+export function kindLabel(type: ContentType, key: string): string {
+  if (type === 'site') return 'Search and launch';
+  if (type === 'order') return `Order of the ${key}s`;
+  return { business: 'Business details', policy: 'Policies', route: 'Taxi route', package: 'Tour package', destination: 'Destination', vehicle: 'Car', faq: 'General questions', gallery: 'Gallery page', guide: 'Travel guide', photo: 'Photo' }[type] ?? type;
+}
+
+/** Where the admin edits an item. */
+export function editorHref(type: ContentType, key: string): string {
+  switch (type) {
+    case 'business':
+      return '/admin/business/';
+    case 'policy':
+      return '/admin/business/?tab=policies';
+    case 'site':
+      return '/admin/business/?tab=search';
+    case 'route':
+      return `/admin/fares/route/${key}/`;
+    case 'package':
+      return `/admin/fares/package/${key}/`;
+    case 'vehicle':
+      return '/admin/fares/?tab=cars';
+    case 'gallery':
+      return '/admin/photos/?tab=gallery';
+    case 'photo':
+      return `/admin/photos/?photo=${key}`;
+    case 'order':
+      return key === 'package' ? '/admin/fares/?tab=packages' : key === 'route' ? '/admin/fares/' : '/admin/pages/';
+    default:
+      return `/admin/pages/${type}/${key}/`;
+  }
+}
+
+export interface ReviewItem extends Pending {
+  kind: string;
+  href: string;
+  lines: { what: string; from: string; to: string }[];
+}
+
+/** Each draft with what it changes, for the Review and publish popup. */
+export async function reviewChanges(): Promise<ReviewItem[]> {
+  const { diffLines } = await import('./content-diff');
+  const rows = await getDb().select().from(schema.contentItems).where(isNotNull(schema.contentItems.draftAction)).orderBy(desc(schema.contentItems.updatedAt));
+  return rows.flatMap((r) => {
+    const def = defFor(r.type, r.key);
+    if (!def || !r.draftAction) return [];
+    const type = r.type as ContentType;
+    const e = entryOf(def, r.key, r);
+    const base = { type, key: r.key, action: r.draftAction, noun: def.noun, title: titleOf(def, r.key, r.draft ?? r.published), updatedAt: r.updatedAt, kind: kindLabel(type, r.key), href: editorHref(type, r.key) };
+    if (r.draftAction === 'delete') return [{ ...base, lines: [{ what: 'Removed from the website', from: '', to: '' }] }];
+    if (e.live === null) return [{ ...base, lines: [{ what: `New ${def.noun}`, from: '', to: 'added to the website' }] }];
+    const lines = diffLines(type, e.live, e.current);
+    if (r.draftAction === 'reset') lines.unshift({ what: 'Back to the starting copy', from: '', to: '' });
+    return [{ ...base, lines }];
+  });
+}
+
+export interface TextHit {
+  type: ContentType;
+  key: string;
+  title: string;
+  href: string;
+  /** The words around the phrase. */
+  snippet: string;
+  phrase: string;
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The phrase as a whole number: "5 working days" never matches inside "15 working days". */
+const phraseRe = (p: string) => new RegExp(`(?<![\\d,.])${escapeRe(p)}`, 'g');
+
+function strings(v: unknown, out: string[] = []): string[] {
+  if (typeof v === 'string') out.push(v);
+  else if (Array.isArray(v)) v.forEach((x) => strings(x, out));
+  else if (isRecord(v)) Object.values(v).forEach((x) => strings(x, out));
+  return out;
+}
+
+/**
+ * Page text that still says something, such as the old refund days after a
+ * policy changes. Searches what the site shows or will show after Publish,
+ * in routes, packages, destinations and the general questions, but only text
+ * the dashboard holds: the code's copy writes policies in from POLICY, so it
+ * follows a policy change by itself.
+ */
+export async function findText(phrases: string[]): Promise<TextHit[]> {
+  if (!phrases.length) return [];
+  const hits: TextHit[] = [];
+  const look = (type: ContentType, key: string, title: string, value: unknown) => {
+    for (const s of strings(value)) {
+      for (const p of phrases) {
+        const m = phraseRe(p).exec(s);
+        if (!m) continue;
+        const from = Math.max(0, m.index - 50);
+        const to = Math.min(s.length, m.index + p.length + 50);
+        hits.push({ type, key, title, href: editorHref(type, key), phrase: p, snippet: (from > 0 ? '…' : '') + s.slice(from, to).trim() + (to < s.length ? '…' : '') });
+      }
+    }
+  };
+  for (const t of ['route', 'package', 'destination'] as const) {
+    for (const e of await listEntries(t)) if (e.current && (e.state !== 'code' || e.pending)) look(t, e.key, titleOf(LISTS[t], e.key, e.current), e.current);
+  }
+  const faq = await getEntry('faq', 'main');
+  if (faq?.current && (faq.state !== 'code' || faq.pending)) look('faq', 'main', 'General questions', faq.current);
+  return hits;
+}
+
+/** Changes a phrase to another wherever it is written in one item, as a draft. */
+export async function replaceText(ctx: Ctx, type: ContentType, key: string, from: string, to: string): Promise<Result> {
+  const e = await getEntry(type, key);
+  if (!e?.current) return { ok: false, error: 'That part of the website no longer exists.' };
+  const swap = (v: unknown): unknown =>
+    typeof v === 'string' ? v.replace(phraseRe(from), to) : Array.isArray(v) ? v.map(swap) : isRecord(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(x)])) : v;
+  return saveDraft(ctx, type, key, swap(e.current));
+}
+
+/** When the site was last published, and by whom. */
+export async function lastPublished(): Promise<{ at: Date; by: string | null } | null> {
+  const [v] = await recentVersions(1);
+  return v ? { at: v.at, by: v.by } : null;
+}
+
+/** Drafts waiting, by kind of content, for the menu's badges. */
+export async function draftCounts(): Promise<Partial<Record<ContentType, number>>> {
+  const rows = await getDb()
+    .select({ type: schema.contentItems.type, n: sql<number>`count(*)::int` })
+    .from(schema.contentItems)
+    .where(isNotNull(schema.contentItems.draftAction))
+    .groupBy(schema.contentItems.type);
+  return Object.fromEntries(rows.map((r) => [r.type, r.n]));
 }
 
 /* ------------------------------------------------------------------ */
@@ -331,8 +481,11 @@ async function siteAfterPublish() {
     const def = defFor(type, key)!;
     return entryOf(def, key, all.find((r) => r.type === type && r.key === key)).current;
   };
-  return { lists, business: one('business', 'main') as Data, launch: one('site', 'launch') as Data, gallery: (one('gallery', 'main') ?? []) as Data[] };
+  return { lists, business: one('business', 'main') as Data, launch: one('site', 'launch') as Data, gallery: (one('gallery', 'main') ?? []) as Data[], photoRows: byType('photo') };
 }
+
+/** The photos the site started with. Page templates name some of them directly, so they can be replaced but never deleted. */
+export const START_PHOTO_KEYS = new Set(PHOTOS_START.map((p) => p.key));
 
 /** Problems that would break pages or links if published now. Empty when all is well. */
 export async function checkBeforePublish(): Promise<string[]> {
@@ -366,6 +519,22 @@ export async function checkBeforePublish(): Promise<string[]> {
     for (const a of rupeesIn(String(p.summary ?? ''))) {
       if (a !== p.fromPrice) problems.push(`The summary of ${p.name} says ₹${a.toLocaleString('en-IN')}, but its price is ₹${Number(p.fromPrice).toLocaleString('en-IN')}. Change the text to match.`);
     }
+  }
+  // Every photo a page names must be in the library, and described.
+  const photos = new Map(site.lists.photo.map((p) => [String(p.key), p]));
+  const photoName = (k: string) => photoTitle({ key: k, title: (photos.get(k)?.title as string | null) ?? null });
+  const usesPhoto = (k: unknown, where: string) => {
+    if (typeof k === 'string' && k && !photos.has(k)) problems.push(`${where} shows the photo "${k.replace(/-/g, ' ')}", which would no longer be in the library.`);
+  };
+  for (const g of site.gallery) usesPhoto(g.photo, `The gallery item "${g.title}"`);
+  for (const r of site.lists.route) usesPhoto(r.photo, `The route ${r.fromShort} to ${r.toShort}`);
+  for (const p of site.lists.package) usesPhoto(p.photo, `The package ${p.name}`);
+  for (const d of site.lists.destination) usesPhoto(d.photo, `The destination ${d.name}`);
+  for (const p of site.lists.photo) {
+    if (String(p.alt ?? '').trim().length < 10) problems.push(`Describe the photo "${photoName(String(p.key))}" (what it shows, in a sentence) before publishing, or delete it.`);
+  }
+  for (const r of site.photoRows) {
+    if (r.draftAction === 'delete' && START_PHOTO_KEYS.has(r.key)) problems.push(`The photo "${photoName(r.key)}" came with the website and pages name it, so it cannot be deleted. Replace it instead.`);
   }
   if (site.lists.route.length === 0) problems.push('The site needs at least one taxi route.');
   if (site.launch?.preLaunch === false) {
@@ -495,12 +664,15 @@ export async function startDeploy(ctx: Ctx, version: number): Promise<DeployResu
       error = (e as Error).message;
     }
   } else if (import.meta.env.DEV) {
-    result = await new Promise<DeployResult>((resolve) =>
-      execFile(process.execPath, ['--env-file-if-exists=.env', 'scripts/content-pull.mjs'], { timeout: 30_000 }, (err) => {
-        if (err) error = err.message;
-        resolve(err ? 'failed' : 'local');
-      }),
-    );
+    // The pull, then the photo files (scripts/content-photos.mjs), as a build does.
+    const run = (script: string) =>
+      new Promise<boolean>((resolve) =>
+        execFile(process.execPath, ['--env-file-if-exists=.env', script], { timeout: 60_000 }, (err) => {
+          if (err) error = err.message;
+          resolve(!err);
+        }),
+      );
+    result = (await run('scripts/content-pull.mjs')) && (await run('scripts/content-photos.mjs')) ? 'local' : 'failed';
   } else {
     result = 'not-configured';
   }

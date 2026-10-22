@@ -1,0 +1,117 @@
+---
+/**
+ * A travel guide's title, search description and opening answer. The rest
+ * of a guide is written in its page (src/pages/guides/), so it stays as it
+ * is. Admin only; saves are drafts until Publish; Publish dates the guide
+ * "Updated" by itself.
+ */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../../components/admin/PublishBar.astro';
+import WebField from '../../../../components/admin/WebField.astro';
+import VersionHistory from '../../../../components/admin/VersionHistory.astro';
+import { isAdmin } from '../../../../server/admin';
+import { discardDraft, getEntry, markForReset, saveDraft } from '../../../../server/content';
+import { wasNotes } from '../../../../server/content-diff';
+import { ipHash } from '../../../../server/security';
+import '../../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+type Data = Record<string, any>;
+
+const slug = Astro.params.slug!;
+let entry = await getEntry('guide', slug);
+if (!entry?.current) return Astro.redirect('/admin/pages/', 303);
+
+let error = '';
+let errorField = '';
+let posted: Data | null = null;
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? 'save');
+  const here = (done: string) => Astro.redirect(`/admin/pages/guide/${slug}/?done=${done}`, 303);
+  if (intent === 'discard') {
+    await discardDraft(ctx, 'guide', slug);
+    return here('discarded');
+  }
+  if (intent === 'reset') {
+    const r = await markForReset(ctx, 'guide', slug);
+    if (r.ok) return here('reset');
+    error = r.error;
+  }
+  if (intent === 'save') {
+    const s = (k: string) => String(f.get(k) ?? '').trim();
+    posted = { ...(entry.current as Data), title: s('title'), description: s('description'), summary: s('summary') };
+    const r = await saveDraft(ctx, 'guide', slug, posted);
+    if (r.ok) return here(r.message ? 'same' : 'saved');
+    error = r.error;
+    errorField = r.field ?? '';
+  }
+}
+entry = (await getEntry('guide', slug))!;
+const g: Data = posted ?? (entry.current as Data);
+const was = wasNotes('guide', entry.live, entry.current);
+const err = (path: string) => (errorField === path ? error : undefined);
+const done = Astro.url.searchParams.get('done');
+---
+
+<AdminLayout title={String(g.title)}>
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+    <div class="flex flex-col gap-2">
+      <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 text-sm text-muted" data-chrome>
+        <a href="/admin/pages/" class="font-semibold text-body">Edit pages</a><span aria-hidden="true">›</span><span>Travel guides</span>
+      </nav>
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">{g.title}</h1>
+        <span class:list={['web-state', entry.pending ? 'bg-[#fff4d6] text-[#8a5300]' : 'bg-lime-50 text-[#3f6200]']}>{entry.pending ? 'Draft, not live yet' : 'Live'}</span>
+        <span class="flex-1"></span>
+        <span class="flex gap-2" data-chrome>
+          <a href={`/admin/pages/edit/?path=/guides/${slug}/`} class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Edit on the page</a>
+          <a href={`/guides/${slug}/`} target="_blank" rel="noopener" class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Live page</a>
+        </span>
+      </div>
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish, and the guide's "Updated" date moves on by itself.</p>}
+    {done === 'same' && <p class="a-msg a-msg-ok m-0" role="status">That is what the website already shows, so there was nothing to save.</p>}
+    {done === 'discarded' && <p class="a-msg a-msg-ok m-0" role="status">Draft thrown away. This is what the website shows.</p>}
+    {done === 'reset' && <p class="a-msg a-msg-ok m-0" role="status">It goes back to the starting copy when you publish.</p>}
+    {done === 'restored' && <p class="a-msg a-msg-ok m-0" role="status">The earlier version is back as a draft. Publish to put it live.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+
+    <div class="flex flex-wrap items-start gap-5">
+      <form method="post" data-web-form class="flex min-w-0 flex-[1_1_620px] flex-col gap-5">
+        <input type="hidden" name="intent" value="save" />
+        <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+          <WebField label="Title" name="title" value={g.title} was={was.title} error={err('title')} count={[30, 70]} maxlength={90} help="The heading at the top of the guide, and its title in Google." />
+          <WebField label="Search description" name="description" rows={3} value={g.description} was={was.description && 'Changed from what is live'} error={err('description')} count={[70, 160]} maxlength={170} help="Shown under the title in Google." />
+          <WebField label="The short answer" name="summary" rows={5} value={g.summary} was={was.summary && 'Changed from what is live'} error={err('summary')} count={[160, 500]} maxlength={700} help="The answer at the top of the guide, which Google and AI answers quote. Once it is changed here, the page shows this text in place of its own." />
+          <p class="m-0 rounded-2xl bg-mist p-4 text-sm text-body">The rest of the guide, its sections and tables, is part of the page's design and changes with the website's code.</p>
+        </section>
+        <div class="web-save">
+          <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+          <button type="submit" class="btn-book min-h-12">Save as draft</button>
+        </div>
+      </form>
+      <aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-4 xl:max-w-[400px]" data-chrome>
+        {(entry.pending || entry.state === 'edited') && (
+          <section class="a-card flex flex-col gap-2.5 p-5">
+            {entry.pending === 'save' && <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Discard my changes</button></form>}
+            {entry.state === 'edited' && <form method="post"><input type="hidden" name="intent" value="reset" /><button class="btn-ghost min-h-11 w-full">Back to the starting copy</button></form>}
+          </section>
+        )}
+        <VersionHistory type="guide" itemKey={slug} />
+      </aside>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { wireCounters, wireDirty } from '../../../../lib/admin-web';
+  wireCounters();
+  wireDirty();
+</script>

@@ -1,0 +1,61 @@
+---
+/**
+ * Every published version of one item, newest first, each with "Put this
+ * back" (it comes back as a draft, to publish like any other change).
+ */
+import type { ContentType } from '../../data/published';
+import { history } from '../../server/content';
+
+interface Props {
+  type: ContentType;
+  itemKey: string;
+}
+const { type, itemKey } = Astro.props;
+const versions = await history(type, itemKey, 30);
+const when = (d: Date) =>
+  new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+    .format(d)
+    .replace(/\s?([ap])m/i, ' $1m')
+    .toLowerCase();
+const what = { save: 'Published', delete: 'Taken off the website', reset: 'Back to the starting copy' } as const;
+---
+
+<section class="a-card flex flex-col gap-3 p-5" aria-labelledby={`vh-${itemKey}`}>
+  <h2 id={`vh-${itemKey}`} class="m-0 font-display text-lg font-bold">Version history</h2>
+  {versions.length === 0 ? (
+    <p class="m-0 text-sm text-muted">Not changed from the dashboard yet. Each publish is kept here, and any of them can be put back.</p>
+  ) : (
+    <ol class="m-0 flex list-none flex-col p-0">
+      {versions.map((v, i) => (
+        <li class="flex items-center gap-3 border-t border-[#f0f1f3] py-2.5 first:border-t-0">
+          <span class:list={['h-2.5 w-2.5 shrink-0 rounded-full', i === 0 ? 'bg-lime' : 'bg-[#d0d4dc]']} aria-hidden="true"></span>
+          <span class="flex min-w-0 flex-1 flex-col leading-snug">
+            <span class="text-sm font-semibold">{i === 0 ? 'Live now' : what[v.action]}</span>
+            <span class="text-[13px] text-muted">{when(v.at)}{v.by ? ` · ${v.by.split(' ')[0]}` : ''}{i === 0 && v.action !== 'save' ? ` · ${what[v.action].toLowerCase()}` : ''}</span>
+          </span>
+          {i > 0 && (
+            <button type="button" data-restore={v.id} class="btn-ghost min-h-9 rounded-[10px] px-3 py-1 text-[13px]">Put this back</button>
+          )}
+        </li>
+      ))}
+    </ol>
+  )}
+</section>
+
+<script>
+  document.addEventListener('click', async (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('[data-restore]');
+    if (!b) return;
+    b.disabled = true;
+    const res = await fetch('/admin/api/content/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'restore', id: Number(b.dataset.restore) }) });
+    const r = await res.json().catch(() => ({ ok: false, error: 'The server did not answer.' }));
+    if (!r.ok) {
+      b.disabled = false;
+      alert(r.error);
+      return;
+    }
+    const url = new URL(location.href);
+    url.searchParams.set('done', 'restored');
+    location.href = url.toString();
+  });
+</script>

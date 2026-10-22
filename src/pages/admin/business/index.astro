@@ -1,0 +1,517 @@
+---
+/**
+ * Business details, policies, and search and launch: the facts every page,
+ * the footer, the WhatsApp buttons and Google's business data are built from.
+ * Admin only. Each Save keeps a draft; nothing changes on the website until
+ * Publish on the bar at the top (src/components/admin/PublishBar.astro).
+ * Follows the mock's "Business details and policies" screen.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../components/admin/PublishBar.astro';
+import WebField from '../../../components/admin/WebField.astro';
+import TimeField from '../../../components/admin/TimeField.astro';
+import { isAdmin } from '../../../server/admin';
+import { checkBeforePublish, findText, getEntry, replaceText, saveDraft, type TextHit } from '../../../server/content';
+import { wasNotes } from '../../../server/content-diff';
+import type { ContentType } from '../../../data/published';
+import { GOOGLE } from '../../../data/reviews';
+import { ipHash } from '../../../server/security';
+import '../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+
+const TABS = [
+  { id: 'contact', label: 'Contact and address' },
+  { id: 'policies', label: 'Policies' },
+  { id: 'search', label: 'Search and launch' },
+] as const;
+type Tab = (typeof TABS)[number]['id'];
+let tab: Tab = TABS.find((t) => t.id === Astro.url.searchParams.get('tab'))?.id ?? 'contact';
+
+type Data = Record<string, any>;
+let error = '';
+let errorField = '';
+/** What was typed, shown again when a save is refused. */
+let posted: { intent: string; data: Data } | null = null;
+
+/** Any way of writing an Indian mobile number, as the ten digits. */
+const tenDigits = (raw: string) => {
+  let d = raw.replace(/\D/g, '');
+  if (d.length === 12 && d.startsWith('91')) d = d.slice(2);
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  return d.length === 10 ? d : '';
+};
+const spaced = (d: string) => `+91 ${d.slice(0, 5)} ${d.slice(5)}`;
+
+/** What must be true before the website leaves pre-launch, as the build checks it (scripts/verify-build.mjs). */
+async function launchChecks() {
+  const [bNow, problems] = await Promise.all([getEntry('business', 'main'), checkBeforePublish()]);
+  const bc = (bNow?.current ?? {}) as Data;
+  const fares = problems.filter((x) => /not one of its fares|but its price is/.test(x));
+  return [
+    { ok: !/00000 00000|910000000000/.test(`${bc.phone} ${bc.whatsapp}`), text: 'Phone and WhatsApp are real numbers' },
+    { ok: fares.length === 0, text: fares.length ? `${fares.length} page${fares.length === 1 ? '' : 's'} still write a fare that is not on the chart` : 'Every fare in a page’s text matches the chart', notes: fares },
+    { ok: !GOOGLE.isSample, text: GOOGLE.isSample ? 'The reviews are still samples: the real Google reviews must be fetched first' : 'Google reviews are the real ones from the listing' },
+  ];
+}
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? '');
+  const s = (k: string) => String(f.get(k) ?? '').trim();
+  const num = (k: string) => {
+    const v = s(k).replace(/[,₹\s%]/g, '');
+    return v === '' ? NaN : Number(v);
+  };
+  let type: ContentType | null = null;
+  let key = 'main';
+  let data: Data | null = null;
+
+  if (intent === 'business') {
+    tab = 'contact';
+    const phone = tenDigits(s('phone'));
+    const wa = tenDigits(s('whatsapp'));
+    const regNames = f.getAll('regName').map((v) => String(v).trim());
+    const regIds = f.getAll('regId').map((v) => String(v).trim());
+    type = 'business';
+    data = {
+      legalName: s('legalName'),
+      tagline: s('tagline'),
+      placeId: s('placeId'),
+      foundingYear: s('foundingYear'),
+      phone: phone ? spaced(phone) : s('phone'),
+      phoneHref: phone ? `tel:+91${phone}` : '',
+      whatsapp: wa ? `91${wa}` : s('whatsapp'),
+      email: s('email'),
+      address: { street: s('street'), locality: s('locality'), district: s('district'), region: s('region'), postalCode: s('postalCode'), country: 'IN' },
+      geo: { lat: num('lat'), lng: num('lng') },
+      mapsUrl: s('mapsUrl'),
+      hours: s('hours'),
+      gstin: s('gstin').toUpperCase(),
+      sameAs: f.getAll('sameAs').map((v) => String(v).trim()).filter(Boolean),
+      registrations: regNames.flatMap((name, i) => (name ? [regIds[i] ? { name, id: regIds[i] } : { name }] : [])),
+    };
+    if (Number.isNaN(data.geo.lat) || Number.isNaN(data.geo.lng)) {
+      error = 'The map pin needs both numbers. Copy them from Google Maps: press and hold the office, then copy the two numbers shown.';
+      errorField = 'geo.lat';
+    }
+  } else if (intent === 'policy') {
+    tab = 'policies';
+    type = 'policy';
+    data = {
+      advancePercent: num('advancePercent'),
+      freeWaitMinutes: num('freeWaitMinutes'),
+      freeCancelHours: num('freeCancelHours'),
+      lateCancelRefundPercent: num('lateCancelRefundPercent'),
+      refundDays: num('refundDays'),
+      nightChargeFrom: s('nightChargeFrom'),
+      nightChargeTo: s('nightChargeTo'),
+      nightCharge: num('nightCharge'),
+    };
+    const blank = Object.entries(data).find(([, v]) => typeof v === 'number' && Number.isNaN(v));
+    if (blank) {
+      error = 'Every policy needs a number.';
+      errorField = blank[0];
+    }
+  } else if (intent === 'site') {
+    tab = 'search';
+    type = 'site';
+    data = { name: s('name'), title: s('title'), description: s('description') };
+  } else if (intent === 'launch') {
+    tab = 'search';
+    type = 'site';
+    key = 'launch';
+    data = { preLaunch: f.get('preLaunch') === 'on' };
+    if (!data.preLaunch) {
+      const blockers = (await launchChecks()).filter((c) => !c.ok);
+      if (blockers.length) {
+        error = `The website cannot leave pre-launch yet: ${blockers.map((c) => c.text.charAt(0).toLowerCase() + c.text.slice(1)).join('; ')}.`;
+        errorField = 'launch';
+      } else if (!(f.get('tickFares') && f.get('tickName'))) {
+        error = 'Tick both boxes first: every fare and price checked, and the registered name and year started right.';
+        errorField = 'launch';
+      }
+    }
+  } else if (intent === 'fix') {
+    tab = 'policies';
+    const r = await replaceText(ctx, s('type') as ContentType, s('key'), s('from'), s('to'));
+    if (r.ok) return Astro.redirect('/admin/business/?tab=policies&done=fixed', 303);
+    error = r.error;
+  }
+
+  if (type && data && !error) {
+    const r = await saveDraft(ctx, type, key, data);
+    if (r.ok) return Astro.redirect(`/admin/business/?tab=${tab}&done=${r.message ? 'same' : 'saved'}`, 303);
+    error = r.error;
+    errorField = r.field ?? '';
+  }
+  if (data) posted = { intent, data };
+}
+
+const [biz, pol, siteText, launch] = await Promise.all([getEntry('business', 'main'), getEntry('policy', 'main'), getEntry('site', 'main'), getEntry('site', 'launch')]);
+const shown = (intent: string, saved: unknown) => (posted?.intent === intent ? posted.data : (saved as Data));
+const b = shown('business', biz!.current);
+const p = shown('policy', pol!.current);
+const st = shown('site', siteText!.current);
+const lc = shown('launch', launch!.current);
+const bWas = wasNotes('business', biz!.live, biz!.current);
+const pWas = wasNotes('policy', pol!.live, pol!.current);
+const sWas = wasNotes('site', siteText!.live, siteText!.current);
+const err = (path: string) => (errorField === path || errorField.startsWith(`${path}.`) ? error : undefined);
+const done = Astro.url.searchParams.get('done');
+
+/* ---------- Policies: where each one shows, and text that still says the old value ---------- */
+const POLICY_FIELDS = [
+  { k: 'advancePercent', label: 'Advance to confirm', suffix: '% of the fare', phrase: (v: number) => `${v}%`, where: 'The booking page, every taxi and package page, the home page, the terms, the footer and llms.txt' },
+  { k: 'freeWaitMinutes', label: 'Free waiting', suffix: 'minutes after landing', phrase: (v: number) => `${v} minutes`, where: 'Every taxi route page, the home page, the booking page, the refund policy, the terms, the footer, customer trip pages and llms.txt' },
+  { k: 'freeCancelHours', label: 'Free cancellation', suffix: 'hours before pickup', phrase: (v: number) => `${v} hours`, where: 'Every taxi route page, the home page, the booking page, the refund policy, the footer and llms.txt' },
+  { k: 'lateCancelRefundPercent', label: 'Late cancellation refund', suffix: '% of the advance', phrase: (v: number) => `${v}%`, where: 'The refund policy, every taxi route page and llms.txt' },
+  { k: 'refundDays', label: 'Refund reaches them in', suffix: 'working days', phrase: (v: number) => `${v} working days`, where: 'The refund policy, every taxi route page, the home page, the footer and llms.txt' },
+  { k: 'nightCharge', label: 'Night charge', prefix: '₹', suffix: 'a trip', phrase: (v: number) => `₹${v.toLocaleString('en-IN')}`, where: 'The fare chart, the booking page and its price, the home page, the terms, the footer and llms.txt' },
+] as const;
+const polLive = pol!.live as Data;
+const polNow = pol!.current as Data;
+const changedPolicies = POLICY_FIELDS.filter((x) => polLive[x.k] !== polNow[x.k]);
+const timeChanged = ['nightChargeFrom', 'nightChargeTo'].filter((k) => polLive[k] !== polNow[k]);
+let hits: (TextHit & { to: string })[] = [];
+if (tab === 'policies' && (changedPolicies.length || timeChanged.length)) {
+  const pairs = [
+    ...changedPolicies.map((x) => [x.phrase(polLive[x.k]), x.phrase(polNow[x.k])] as const),
+    ...timeChanged.map((k) => [String(polLive[k]), String(polNow[k])] as const),
+  ];
+  const found = await findText(pairs.map(([from]) => from));
+  hits = found.map((h) => ({ ...h, to: pairs.find(([from]) => from === h.phrase)![1] }));
+}
+
+/* ---------- Search and launch ---------- */
+const autoChecks = tab === 'search' ? await launchChecks() : [];
+const fareProblems = autoChecks.flatMap((c) => c.notes ?? []);
+const canLaunch = autoChecks.every((c) => c.ok);
+const preLaunch = Boolean(lc.preLaunch);
+const liveLaunch = Boolean((launch!.live as Data).preLaunch);
+
+/** "Google Business Profile" for a Maps link, "Facebook" for facebook.com, and so on. */
+const profileName = (url: string) => {
+  try {
+    const h = new URL(url).hostname.replace(/^www\./, '');
+    if (/(^|\.)google\.|goo\.gl$|maps\.app\.goo\.gl/.test(h)) return 'Google Business Profile';
+    const known: Record<string, string> = { 'facebook.com': 'Facebook', 'instagram.com': 'Instagram', 'tripadvisor.in': 'TripAdvisor', 'tripadvisor.com': 'TripAdvisor', 'justdial.com': 'Justdial', 'youtube.com': 'YouTube', 'x.com': 'X', 'twitter.com': 'X', 'linkedin.com': 'LinkedIn' };
+    return known[h] ?? h;
+  } catch {
+    return 'Link';
+  }
+};
+const waShown = /^91\d{10}$/.test(String(b.whatsapp)) ? spaced(String(b.whatsapp).slice(2)) : String(b.whatsapp);
+const icon = {
+  warn: '<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  tick: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+};
+---
+
+<AdminLayout title="Business details">
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+
+    <div class="flex flex-col gap-3.5">
+      <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">Business details</h1>
+      <nav aria-label="What to edit" class="flex flex-wrap gap-1.5 self-start rounded-[14px] border border-line bg-white p-1">
+        {TABS.map((t) => (
+          <a href={t.id === 'contact' ? '/admin/business/' : `/admin/business/?tab=${t.id}`} aria-current={tab === t.id ? 'page' : undefined} class:list={['rounded-[10px] px-4 py-2 no-underline', tab === t.id ? 'bg-ink font-semibold text-white' : 'font-medium text-body hover:bg-mist']}>
+            {t.label}
+          </a>
+        ))}
+      </nav>
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish.</p>}
+    {done === 'same' && <p class="a-msg a-msg-ok m-0" role="status">That is what the website already shows, so there was nothing to save.</p>}
+    {done === 'fixed' && <p class="a-msg a-msg-ok m-0" role="status">Changed. The text waits as a draft with the policy, and both go live together.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+
+    {tab === 'contact' && (
+      <form method="post" data-web-form class="flex flex-col gap-5">
+        <input type="hidden" name="intent" value="business" />
+        <div class="flex items-start gap-3.5 rounded-2xl bg-[#fff4d6] px-4 py-3.5 text-[#5c3a00]">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8a5300" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="shrink-0" set:html={icon.warn} />
+          <span>These show on every page, in the footer, on the WhatsApp buttons and in Google's business data. Keep them exactly as on the Google Business Profile, or local search trusts the listing less.</span>
+        </div>
+
+        <div class="flex flex-wrap items-start gap-5">
+          <section class="a-card flex min-w-0 flex-[1_1_520px] flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">How customers reach you</h2>
+            <div class="grid gap-3.5 sm:grid-cols-2">
+              <WebField label="Phone" name="phone" type="tel" inputmode="tel" value={b.phone} was={bWas.phone} error={err('phone')} help="Shown on every page and used by the Call buttons" />
+              <WebField label="WhatsApp" name="whatsapp" type="tel" inputmode="tel" value={waShown} was={bWas.whatsapp && `was +${String((biz!.live as Data).whatsapp).replace(/^91(\d{5})(\d{5})$/, '91 $1 $2')}`} error={err('whatsapp')} help={'Every "Book on WhatsApp" button opens this'} />
+              <WebField label="Email" name="email" type="email" inputmode="email" value={b.email} was={bWas.email} error={err('email')} class="sm:col-span-2" help="Where a copy of each booking goes" />
+              <WebField label="Opening hours" name="hours" value={b.hours} was={bWas.hours} error={err('hours')} class="sm:col-span-2" help="As on the Google Business Profile, for example: Open 24 hours, every day" />
+            </div>
+            <h2 class="m-0 mt-2 font-display text-xl font-bold">Office address</h2>
+            <div class="grid gap-3.5 sm:grid-cols-2">
+              <WebField label="Street" name="street" value={b.address?.street} was={bWas['address.street']} error={err('address.street')} class="sm:col-span-2" />
+              <WebField label="Town" name="locality" value={b.address?.locality} was={bWas['address.locality']} error={err('address.locality')} />
+              <WebField label="PIN code" name="postalCode" inputmode="numeric" maxlength={6} value={b.address?.postalCode} was={bWas['address.postalCode']} error={err('address.postalCode')} />
+              <WebField label="District" name="district" value={b.address?.district} was={bWas['address.district']} error={err('address.district')} />
+              <WebField label="State" name="region" value={b.address?.region} was={bWas['address.region']} error={err('address.region')} />
+              <WebField label="Google Maps link" name="mapsUrl" type="url" inputmode="url" value={b.mapsUrl} was={bWas.mapsUrl} error={err('mapsUrl')} class="sm:col-span-2" help="The Share link of the office on Google Maps" />
+            </div>
+          </section>
+
+          <section class="a-card flex min-w-0 flex-[1_1_380px] flex-col gap-4 p-5 lg:p-6">
+            <h2 class="m-0 font-display text-xl font-bold">The company</h2>
+            <WebField label="Registered name" name="legalName" value={b.legalName} was={bWas.legalName} error={err('legalName')} help="Exactly as on the registration certificate" />
+            <WebField label="Tagline" name="tagline" value={b.tagline} was={bWas.tagline} error={err('tagline')} />
+            <div class="grid grid-cols-2 gap-3.5">
+              <WebField label="Year started" name="foundingYear" inputmode="numeric" maxlength={4} value={b.foundingYear} was={bWas.foundingYear} error={err('foundingYear')} />
+              <WebField label="GSTIN" name="gstin" value={b.gstin} was={bWas.gstin} error={err('gstin')} placeholder="Shown when filled in" maxlength={15} />
+            </div>
+
+            <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+              <legend class="mb-1 p-0 text-sm font-semibold text-ink">Registrations</legend>
+              <span class="text-sm text-muted">Shown on About and in the footer. Only add one you hold a certificate for.</span>
+              {bWas.registrations && <span class="wf-was">Changed from what is live</span>}
+              <div data-list="reg" class="flex flex-col gap-2" data-max="10">
+                {(b.registrations ?? []).map((r: Data) => (
+                  <div data-row class="flex items-start gap-2">
+                    <input name="regName" value={r.name} aria-label="Registration" placeholder="West Bengal Tourism registered tour operator" class="wf-input flex-[2_1_0]" />
+                    <input name="regId" value={r.id ?? ''} aria-label="Its number" placeholder="Number" class="wf-input flex-[1_1_0]" />
+                    <button type="button" data-remove-row class="a-icon-btn" aria-label="Remove this registration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+                  </div>
+                ))}
+                <template>
+                  <div data-row class="flex items-start gap-2">
+                    <input name="regName" aria-label="Registration" placeholder="West Bengal Tourism registered tour operator" class="wf-input flex-[2_1_0]" />
+                    <input name="regId" aria-label="Its number" placeholder="Number" class="wf-input flex-[1_1_0]" />
+                    <button type="button" data-remove-row class="a-icon-btn" aria-label="Remove this registration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+                  </div>
+                </template>
+              </div>
+              <button type="button" data-add-row="reg" class="web-add">+ Add a registration</button>
+            </fieldset>
+
+            <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+              <legend class="mb-1 p-0 text-sm font-semibold text-ink">Profiles elsewhere</legend>
+              <span class="text-sm text-muted">Google uses these to tie the website to the business. Paste the full link of each page.</span>
+              {bWas.sameAs && <span class="wf-was">Changed from what is live</span>}
+              <div data-list="same" class="flex flex-col gap-2" data-max="10">
+                {(b.sameAs ?? []).map((u: string) => (
+                  <div data-row class="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1.5 rounded-xl bg-mist p-2 pl-3">
+                    <span class="truncate text-sm font-semibold">{profileName(u)}</span>
+                    <button type="button" data-remove-row class="a-icon-btn row-span-2 h-10 w-10" aria-label={`Remove ${profileName(u)}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+                    <input name="sameAs" type="url" value={u} aria-label={`${profileName(u)} link`} class="wf-input min-h-10 text-sm" />
+                  </div>
+                ))}
+                <template>
+                  <div data-row class="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1.5 rounded-xl bg-mist p-2 pl-3">
+                    <span class="truncate text-sm font-semibold">New link</span>
+                    <button type="button" data-remove-row class="a-icon-btn row-span-2 h-10 w-10" aria-label="Remove this link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+                    <input name="sameAs" type="url" placeholder="https://www.facebook.com/..." aria-label="Profile link" class="wf-input min-h-10 text-sm" />
+                  </div>
+                </template>
+              </div>
+              <button type="button" data-add-row="same" class="web-add">+ Facebook, Instagram, TripAdvisor</button>
+            </fieldset>
+
+            <details class="web-more" open={Boolean(err('geo') || err('placeId') || bWas['geo.lat'] || bWas['geo.lng'] || bWas.placeId)}>
+              <summary>Map pin and Google listing</summary>
+              <div class="mt-3 grid grid-cols-2 gap-3.5">
+                <WebField label="Latitude" name="lat" inputmode="decimal" value={b.geo?.lat} was={bWas['geo.lat']} error={err('geo.lat')} />
+                <WebField label="Longitude" name="lng" inputmode="decimal" value={b.geo?.lng} was={bWas['geo.lng']} error={err('geo.lng')} />
+                <WebField label="Google Place ID" name="placeId" value={b.placeId} was={bWas.placeId} error={err('placeId')} class="col-span-2" help="Opens Google's review box for the listing. Change it only if the listing itself changes." />
+              </div>
+            </details>
+          </section>
+        </div>
+        <div class="web-save" data-save-bar>
+          <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+          <button type="submit" class="btn-book min-h-12">Save as draft</button>
+        </div>
+      </form>
+    )}
+
+    {tab === 'policies' && (
+      <form method="post" data-web-form class="flex flex-col gap-5">
+        <input type="hidden" name="intent" value="policy" />
+        <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+          <div class="flex flex-wrap items-baseline justify-between gap-2.5">
+            <h2 class="m-0 font-display text-xl font-bold">The promises beside every Book button</h2>
+            <span class="text-[13px] text-muted">Keep them true: customers hold you to them.</span>
+          </div>
+          <div class="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
+            {POLICY_FIELDS.map((x) => (
+              <WebField label={x.label} name={x.k} inputmode="numeric" value={p[x.k]} prefix={'prefix' in x ? x.prefix : undefined} suffix={x.suffix} was={pWas[x.k]} error={err(x.k)} />
+            ))}
+            <div class="flex flex-col gap-1.5">
+              <TimeField label="Night charge from" name="nightChargeFrom" value={p.nightChargeFrom} />
+              {pWas.nightChargeFrom && <span class="wf-was">{pWas.nightChargeFrom}</span>}
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <TimeField label="Night charge until" name="nightChargeTo" value={p.nightChargeTo} />
+              {pWas.nightChargeTo && <span class="wf-was">{pWas.nightChargeTo}</span>}
+            </div>
+          </div>
+
+          {(changedPolicies.length > 0 || timeChanged.length > 0) && (
+            <div class="flex flex-col gap-2.5 rounded-2xl bg-mist p-4">
+              {changedPolicies.map((x) => (
+                <>
+                  <span class="font-bold">Where "{x.phrase(polNow[x.k])}" will show</span>
+                  <span class="flex items-start gap-2.5 text-sm text-body">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f6200" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mt-0.5 shrink-0" set:html={icon.tick} />
+                    {x.where} change by themselves.
+                  </span>
+                </>
+              ))}
+              {timeChanged.length > 0 && (
+                <span class="flex items-start gap-2.5 text-sm text-body">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f6200" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mt-0.5 shrink-0" set:html={icon.tick} />
+                  The night-charge hours on the fare chart, the booking page, the terms and llms.txt change by themselves.
+                </span>
+              )}
+              {hits.map((h, i) => (
+                <span class="flex flex-wrap items-start gap-2.5 text-sm text-body">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a5300" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mt-0.5 shrink-0" set:html={icon.warn} />
+                  <span class="min-w-0 flex-[1_1_300px]">
+                    Written text still says <strong>{h.phrase}</strong>: <a href={h.href} class="font-semibold">{h.title}</a>, "{h.snippet}"
+                  </span>
+                  <button type="submit" form={`fix-${i}`} class="btn-ghost min-h-9 rounded-[10px] px-3 py-1 text-[13px] whitespace-nowrap">Change it to {h.to}</button>
+                </span>
+              ))}
+              {hits.length > 0 && <span class="text-[13px] text-muted">Only change the ones that are about this policy. "60 minutes" can also be a driving time.</span>}
+            </div>
+          )}
+        </section>
+        <div class="web-save" data-save-bar>
+          <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+          <button type="submit" class="btn-book min-h-12">Save as draft</button>
+        </div>
+      </form>
+    )}
+    {tab === 'policies' && hits.map((h, i) => (
+      <form method="post" id={`fix-${i}`} hidden>
+        <input type="hidden" name="intent" value="fix" />
+        <input type="hidden" name="type" value={h.type} />
+        <input type="hidden" name="key" value={h.key} />
+        <input type="hidden" name="from" value={h.phrase} />
+        <input type="hidden" name="to" value={h.to} />
+      </form>
+    ))}
+
+    {tab === 'search' && (
+      <>
+        <form method="post" data-web-form class="flex flex-col gap-5">
+          <input type="hidden" name="intent" value="site" />
+          <div class="flex flex-wrap items-start gap-5">
+            <section class="a-card flex min-w-0 flex-[1_1_480px] flex-col gap-4 p-5 lg:p-6">
+              <h2 class="m-0 font-display text-xl font-bold">How the home page shows in Google</h2>
+              <WebField label="Site name" name="name" value={st.name} was={sWas.name} error={err('name')} help="Google shows it above the title" />
+              <WebField label="Search title" name="title" value={st.title} was={sWas.title} error={err('title')} count={[30, 70]} maxlength={75} help="Lead with what people search for and a price. A phone shows about the first 60 characters, so put the important words first." />
+              <WebField label="Search description" name="description" rows={3} value={st.description} was={sWas.description} error={err('description')} count={[70, 160]} maxlength={170} help="One or two sentences: the price, the places, a reason to trust you, then what to do." />
+            </section>
+            <section class="a-card flex min-w-0 flex-[1_1_360px] flex-col gap-3 p-5 lg:p-6" aria-label="Preview in Google">
+              <span class="text-[13px] font-bold tracking-[0.08em] text-muted uppercase">Preview in Google</span>
+              <div class="flex flex-col gap-1 rounded-2xl border border-line p-4">
+                <span class="flex items-center gap-2.5">
+                  <img src="/favicon-32.png" alt="" width="26" height="26" class="h-[26px] w-[26px] rounded-full border border-line bg-white p-0.5" />
+                  <span class="flex min-w-0 flex-col leading-tight">
+                    <span data-snip-name class="truncate text-sm text-ink">{st.name}</span>
+                    <span class="truncate text-xs text-muted">https://bagdograairporttaxi.com</span>
+                  </span>
+                </span>
+                <span data-snip-title class="snip-title mt-1.5 text-xl leading-snug [overflow-wrap:anywhere]">{st.title}</span>
+                <span data-snip-desc class="text-sm leading-normal text-body">{st.description}</span>
+              </div>
+              <span class="text-[13px] text-muted">Google may show other words from the page instead, but these are what it is offered.</span>
+            </section>
+          </div>
+          <div class="web-save" data-save-bar>
+            <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+            <button type="submit" class="btn-book min-h-12">Save as draft</button>
+          </div>
+        </form>
+
+        <form method="post" data-web-form class="flex flex-wrap gap-x-8 gap-y-5 rounded-[20px] bg-ink p-5 text-white lg:p-6" data-launch-form>
+          <input type="hidden" name="intent" value="launch" />
+          <div class="flex min-w-0 flex-[1_1_340px] flex-col gap-2.5">
+            <label class="flex cursor-pointer items-center gap-3.5">
+              <input type="checkbox" name="preLaunch" role="switch" class="peer sr-only" checked={preLaunch} data-locked={preLaunch && !canLaunch ? '' : undefined} data-launch-switch />
+              <span class="web-switch" aria-hidden="true"><span></span></span>
+              <span class="font-display text-xl font-bold" data-launch-label>{preLaunch ? 'Pre-launch: hidden from Google' : 'Launched: open to Google'}</span>
+            </label>
+            <span class="text-sm text-[#c9ced8]">
+              While this is on, search engines are asked not to list the website. Switch it off on launch day. It cannot go off until everything on the right is ticked.
+            </span>
+            {preLaunch !== liveLaunch && (
+              <span class="text-sm font-semibold text-amber">
+                Saved as a draft: {preLaunch ? 'the website goes back to pre-launch' : 'the website opens to Google'} when you publish.
+              </span>
+            )}
+            <button type="submit" class="btn-lime mt-1 min-h-11 self-start px-5">Save</button>
+          </div>
+          <div class="flex min-w-0 flex-[1_1_340px] flex-col gap-2.5 text-sm">
+            {autoChecks.map((c) => (
+              <span class:list={['flex items-start gap-2.5', !c.ok && 'text-[#ffd27a]']}>
+                {c.ok ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mt-px shrink-0" set:html={icon.tick} />
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffb300" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mt-px shrink-0" set:html={icon.warn} />
+                )}
+                {c.text}
+              </span>
+            ))}
+            {fareProblems.map((x) => <span class="pl-7 text-[13px] text-[#c9ced8]">{x}</span>)}
+            <label class="flex items-start gap-2.5 text-[#ffd27a]"><input type="checkbox" name="tickFares" class="mt-0.5 h-[18px] w-[18px] shrink-0 accent-lime" />I have checked every fare and package price</label>
+            <label class="flex items-start gap-2.5 text-[#ffd27a]"><input type="checkbox" name="tickName" class="mt-0.5 h-[18px] w-[18px] shrink-0 accent-lime" />The registered name and year started are right</label>
+            {!canLaunch && preLaunch && <span class="text-[13px] text-[#c9ced8]">The switch unlocks once the checks above are green.</span>}
+          </div>
+        </form>
+      </>
+    )}
+  </div>
+</AdminLayout>
+
+<style is:global>
+  .web-switch { position: relative; flex-shrink: 0; width: 56px; height: 32px; border-radius: 999px; background: #3a4049; transition: background 0.15s; }
+  .web-switch span { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+  .peer:checked + .web-switch { background: var(--color-amber); }
+  .peer:checked + .web-switch span { transform: translateX(24px); background: #111; }
+  .peer:focus-visible + .web-switch { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  .peer[data-locked] + .web-switch { opacity: 0.55; cursor: not-allowed; }
+  .snip-title { color: #1a0dab; }
+  [data-theme='dark'] .snip-title { color: #8ab4f8; }
+</style>
+
+<script>
+  import { wireCounters, wireDirty, wireLists } from '../../../lib/admin-web';
+  wireLists();
+  wireCounters();
+  wireDirty();
+
+  // The Google preview follows the boxes as you type.
+  const bind = (name: string, sel: string) => {
+    const input = document.querySelector<HTMLInputElement>(`[name="${name}"]`);
+    const out = document.querySelector(sel);
+    input?.addEventListener('input', () => out && (out.textContent = input.value));
+  };
+  bind('name', '[data-snip-name]');
+  bind('title', '[data-snip-title]');
+  bind('description', '[data-snip-desc]');
+
+  // The switch's words follow it.
+  const sw = document.querySelector<HTMLInputElement>('[data-launch-switch]');
+  const label = document.querySelector('[data-launch-label]');
+  sw?.addEventListener('click', (e) => {
+    if (sw.hasAttribute('data-locked')) {
+      e.preventDefault();
+      alert('The website cannot leave pre-launch until the checks beside the switch are green.');
+    }
+  });
+  sw?.addEventListener('change', () => {
+    if (label) label.textContent = sw.checked ? 'Pre-launch: hidden from Google' : 'Launched: open to Google';
+  });
+</script>

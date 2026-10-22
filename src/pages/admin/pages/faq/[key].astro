@@ -1,0 +1,111 @@
+---
+/**
+ * The general questions, shown on the home page and /faq/ and in llms.txt.
+ * While the code's copy is used, its answers follow the policies by
+ * themselves; once edited here, they are the admin's own words (the
+ * Policies tab points out any that still say an old number).
+ * Admin only; saves are drafts until Publish.
+ */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../../components/admin/PublishBar.astro';
+import RowList from '../../../../components/admin/RowList.astro';
+import VersionHistory from '../../../../components/admin/VersionHistory.astro';
+import { isAdmin } from '../../../../server/admin';
+import { discardDraft, getEntry, markForReset, saveDraft } from '../../../../server/content';
+import { faqsFromForm } from '../../../../server/content-forms';
+import { ipHash } from '../../../../server/security';
+import '../../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+if (Astro.params.key !== 'main') return Astro.redirect('/admin/pages/faq/main/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+
+let error = '';
+let posted: { q: string; a: string }[] | null = null;
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? 'save');
+  const here = (done: string) => Astro.redirect(`/admin/pages/faq/main/?done=${done}`, 303);
+  if (intent === 'discard') {
+    await discardDraft(ctx, 'faq', 'main');
+    return here('discarded');
+  }
+  if (intent === 'reset') {
+    const r = await markForReset(ctx, 'faq', 'main');
+    if (r.ok) return here('reset');
+    error = r.error;
+  }
+  if (intent === 'save') {
+    posted = faqsFromForm(f);
+    const r = await saveDraft(ctx, 'faq', 'main', posted);
+    if (r.ok) return here(r.message ? 'same' : 'saved');
+    const row = /^(\d+)/.exec(r.field ?? '');
+    error = row ? `Question ${Number(row[1]) + 1}: ${r.error}` : r.error;
+  }
+}
+const entry = (await getEntry('faq', 'main'))!;
+const faqs = posted ?? (entry.current as { q: string; a: string }[]);
+const done = Astro.url.searchParams.get('done');
+---
+
+<AdminLayout title="General questions">
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+    <div class="flex flex-col gap-2">
+      <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 text-sm text-muted" data-chrome>
+        <a href="/admin/pages/" class="font-semibold text-body">Edit pages</a><span aria-hidden="true">›</span><span>General questions</span>
+      </nav>
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">General questions</h1>
+        <span class:list={['web-state', entry.pending ? 'bg-[#fff4d6] text-[#8a5300]' : 'bg-lime-50 text-[#3f6200]']}>{entry.pending ? 'Draft, not live yet' : 'Live'}</span>
+        <span class="flex-1"></span>
+        <span class="flex gap-2" data-chrome>
+          <a href="/admin/pages/edit/?path=/faq/" class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Edit on the page</a>
+          <a href="/faq/" target="_blank" rel="noopener" class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Live page</a>
+        </span>
+      </div>
+      <p class="m-0 max-w-3xl text-body">Shown on the home page and the questions page, and read by AI answers. Answer first, in one or two sentences.</p>
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish.</p>}
+    {done === 'same' && <p class="a-msg a-msg-ok m-0" role="status">That is what the website already shows, so there was nothing to save.</p>}
+    {done === 'discarded' && <p class="a-msg a-msg-ok m-0" role="status">Draft thrown away. This is what the website shows.</p>}
+    {done === 'reset' && <p class="a-msg a-msg-ok m-0" role="status">The questions go back to the starting copy when you publish, and follow the policies by themselves again.</p>}
+    {done === 'restored' && <p class="a-msg a-msg-ok m-0" role="status">The earlier version is back as a draft. Publish to put it live.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+    {entry.state === 'code' && !entry.pending && (
+      <p class="a-msg m-0 bg-mist text-body">These answers fill in the policies (refund days, free waiting, the night charge) by themselves. Once you save them here, they are your own words and no longer change with the policies.</p>
+    )}
+
+    <div class="flex flex-wrap items-start gap-5">
+      <form method="post" data-web-form class="flex min-w-0 flex-[1_1_620px] flex-col gap-4">
+        <input type="hidden" name="intent" value="save" />
+        <section class="a-card flex flex-col gap-3 p-5 lg:p-6">
+          <RowList id="faqs" noun="question" addLabel="Add a question" max={30} numbered cards fields={[{ name: 'faqQ', label: 'Question' }, { name: 'faqA', label: 'Answer', rows: 3 }]} values={faqs.map((x) => [x.q, x.a])} />
+        </section>
+        <div class="web-save">
+          <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+          <button type="submit" class="btn-book min-h-12">Save as draft</button>
+        </div>
+      </form>
+      <aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-4 xl:max-w-[400px]" data-chrome>
+        {(entry.pending || entry.state === 'edited') && (
+          <section class="a-card flex flex-col gap-2.5 p-5">
+            {entry.pending === 'save' && <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Discard my changes</button></form>}
+            {entry.state === 'edited' && <form method="post"><input type="hidden" name="intent" value="reset" /><button class="btn-ghost min-h-11 w-full">Back to the starting copy</button></form>}
+          </section>
+        )}
+        <VersionHistory type="faq" itemKey="main" />
+      </aside>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { wireDirty, wireLists } from '../../../../lib/admin-web';
+  wireLists();
+  wireDirty();
+</script>

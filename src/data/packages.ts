@@ -30,6 +30,8 @@ export interface TourPackage {
   excludes: string[];
   faqs: Faq[];
   destinations: string[];
+  /** A photo from the library chosen in the dashboard; otherwise src/lib/photos.ts picks one. */
+  photo?: string | null;
 }
 
 const COMMON_INCLUDES = [

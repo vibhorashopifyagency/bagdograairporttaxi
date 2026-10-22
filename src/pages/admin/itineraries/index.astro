@@ -18,6 +18,7 @@ import { ipHash } from '../../../server/security';
 import { deleteItinerary, tripPath } from '../../../server/trip';
 import { dateRange } from '../../../lib/itinerary-text';
 import { and, eq, gte, lt, lte, sql } from 'drizzle-orm';
+import { photoFile } from '../../../data/photo-library';
 
 export const prerender = false;
 
@@ -56,7 +57,7 @@ const live = await liveUploads(list.rows.flatMap((r) => itineraryKeys(r.draft)))
 const rows = list.rows.map((r) => ({ ...r, draft: withoutMissing(r.draft, live) }));
 const thumb = (key: string) => {
   const id = uploadIdOf(key);
-  return id ? adminFileSrc(id) : `/img/${key}-400.webp`;
+  return id ? adminFileSrc(id) : photoFile(key, 400);
 };
 await audit({ actorId: user.id, action: 'view_itineraries', entity: 'itineraries', detail: { count: rows.length, from: from ?? undefined, to: to ?? undefined }, ipHash: ipHash(Astro.request) });
 

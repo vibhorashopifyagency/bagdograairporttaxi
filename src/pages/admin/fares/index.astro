@@ -1,0 +1,594 @@
+---
+/**
+ * Fares and packages: the taxi fare grid (routes by car, saved as you type),
+ * the tour packages and the cars. Admin only. Everything saves as a draft
+ * and goes live with Publish on the bar at the top. Follows the mock's
+ * "Fares, laptop" and "Fares, phone" screens.
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../components/admin/PublishBar.astro';
+import WebField from '../../../components/admin/WebField.astro';
+import { isAdmin } from '../../../server/admin';
+import { getEntry, listEntries, saveDraft, type Entry } from '../../../server/content';
+import { fareTextNote, fixLabel, type Fares } from '../../../server/content-forms';
+import { wasNotes } from '../../../server/content-diff';
+import { ROUTE_GROUPS } from '../../../data/routes';
+import { POLICY } from '../../../data/site';
+import { packagePhoto } from '../../../lib/photos';
+import { photoFile } from '../../../data/photo-library';
+import type { TourPackage } from '../../../data/packages';
+import { ipHash } from '../../../server/security';
+import '../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+type Data = Record<string, any>;
+
+const TABS = ['taxi', 'packages', 'cars'] as const;
+let tab: (typeof TABS)[number] = TABS.find((t) => t === Astro.url.searchParams.get('tab')) ?? 'taxi';
+let error = '';
+let errorCar = '';
+let errorField = '';
+let postedCars: Record<string, Data> | null = null;
+
+const CARS = ['sedan', 'suv', 'innova', 'traveller'] as const;
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  if (f.get('intent') === 'cars') {
+    tab = 'cars';
+    postedCars = {};
+    for (const k of CARS) {
+      const s = (n: string) => String(f.get(`${k}.${n}`) ?? '').trim();
+      postedCars[k] = { key: k, name: s('name'), models: s('models'), seats: Number(s('seats')), bags: s('bags'), bestFor: s('bestFor') };
+    }
+    for (const k of CARS) {
+      const r = await saveDraft(ctx, 'vehicle', k, postedCars[k]);
+      if (!r.ok) {
+        error = r.error;
+        errorCar = k;
+        errorField = r.field ?? '';
+        break;
+      }
+    }
+    if (!error) return Astro.redirect('/admin/fares/?tab=cars&done=saved', 303);
+  }
+}
+
+const [routes, packages, vehicles] = await Promise.all([listEntries('route'), listEntries('package'), listEntries('vehicle')]);
+const liveRoutes = routes.filter((r) => r.current);
+const offRoutes = routes.filter((r) => !r.current);
+const livePackages = packages.filter((p) => p.current);
+const offPackages = packages.filter((p) => !p.current);
+const carInfo = Object.fromEntries(vehicles.map((v) => [v.key, v.current as Data]));
+const fmt = (n: number) => n.toLocaleString('en-IN');
+const inr = (n: number) => `₹${fmt(n)}`;
+
+const stateChip = (e: Entry): [string, string] | null => {
+  if (e.pending === 'delete') return ['Comes off when you publish', 'bg-[#fde8e7] text-[#b42318]'];
+  if (e.live === null && e.current) return ['New, not live yet', 'bg-[#e7f0ff] text-[#1d4ed8]'];
+  if (e.pending) return ['Draft', 'bg-[#fff4d6] text-[#8a5300]'];
+  return null;
+};
+
+const groups = ROUTE_GROUPS.map((g) => ({ name: g, rows: liveRoutes.filter((r) => (r.current as Data).group === g) })).filter((g) => g.rows.length);
+const rowOf = (e: Entry) => {
+  const r = e.current as Data;
+  const liveFares = ((e.live as Data | null)?.fares ?? r.fares) as Fares;
+  const note = e.pending ? fareTextNote(r, liveFares) : null;
+  return { e, r, liveFares, note, label: note ? fixLabel(note, r, liveFares) : '', chip: stateChip(e) };
+};
+const done = Astro.url.searchParams.get('done');
+const icon = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  bulk: '<path d="M7 17 17 7M9 7h8v8"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  warn: '<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  up: '<path d="m18 15-6-6-6 6"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+};
+const vWas = Object.fromEntries(vehicles.map((v) => [v.key, wasNotes('vehicle', v.live, v.current)]));
+---
+
+<AdminLayout title="Fares and packages">
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+
+    <div class="flex flex-col gap-3.5">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div class="flex max-w-3xl flex-col gap-1">
+          <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">Fares and packages</h1>
+          <p class="m-0 text-body">
+            {tab === 'taxi' && 'One-way fare per car, with fuel, tolls, parking, driver allowance and GST included. A new fare waits as a draft until you publish it.'}
+            {tab === 'packages' && 'Price, plan and inclusions of each tour package. The first ones in the list show first on the website.'}
+            {tab === 'cars' && 'What each kind of car is. Fares are set per kind of car, so the four kinds stay; their names and details can change.'}
+          </p>
+        </div>
+        {tab === 'taxi' && (
+          <div class="flex flex-wrap gap-2.5">
+            <button type="button" data-open="dlg-bulk" class="btn-ghost min-h-11 px-4">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.bulk} />
+              Change many at once
+            </button>
+            <a href="/admin/fares/route/new/" class="btn-book min-h-11 px-4">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" set:html={icon.plus} />
+              Add a route
+            </a>
+          </div>
+        )}
+        {tab === 'packages' && (
+          <a href="/admin/fares/package/new/" class="btn-book min-h-11 px-4">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a1e005" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" set:html={icon.plus} />
+            Add a package
+          </a>
+        )}
+      </div>
+      <nav aria-label="What to edit" class="flex flex-wrap gap-1.5 self-start rounded-[14px] border border-line bg-white p-1">
+        {[
+          ['taxi', `Taxi fares · ${liveRoutes.length} routes`],
+          ['packages', `Tour packages · ${livePackages.length}`],
+          ['cars', 'Cars · 4'],
+        ].map(([id, label]) => (
+          <a href={id === 'taxi' ? '/admin/fares/' : `/admin/fares/?tab=${id}`} aria-current={tab === id ? 'page' : undefined} class:list={['rounded-[10px] px-4 py-2 no-underline', tab === id ? 'bg-ink font-semibold text-white' : 'font-medium text-body hover:bg-mist']}>
+            {label}
+          </a>
+        ))}
+      </nav>
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish.</p>}
+    {done === 'bulk' && <p class="a-msg a-msg-ok m-0" role="status">{Astro.url.searchParams.get('n')} routes changed as drafts. Check them below, then publish.</p>}
+    {done === 'removed' && <p class="a-msg a-msg-ok m-0" role="status">It comes off the website when you publish.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+
+    {tab === 'taxi' && (
+      <>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <div class="flex flex-wrap gap-2" role="group" aria-label="Show routes">
+            <button type="button" data-chip="" aria-pressed="true" class="fare-chip">All · {liveRoutes.length}</button>
+            {groups.map((g) => (
+              <button type="button" data-chip={g.name} aria-pressed="false" class="fare-chip">{g.name} · {g.rows.length}</button>
+            ))}
+          </div>
+          <span class="flex-1"></span>
+          <span class="flex items-center gap-2 rounded-xl border border-line bg-white px-3 py-2 text-sm text-body">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.moon} />
+            Night charge {inr(POLICY.nightCharge)}, {POLICY.nightChargeFrom} to {POLICY.nightChargeTo} · <a href="/admin/business/?tab=policies" class="font-semibold">Policies</a>
+          </span>
+        </div>
+
+        <section class="a-card fare-grid" aria-label="Taxi fares">
+          <div class="fare-row fare-head" aria-hidden="true">
+            <span>Route</span>
+            <span>Km</span>
+            {CARS.map((c) => (
+              <span>{carInfo[c]?.name}<br /><span class="font-normal">{carInfo[c]?.seats} seats</span></span>
+            ))}
+            <span></span>
+          </div>
+          {groups.map((g) => (
+            <div class="fare-group" data-group={g.name}>
+              <h2 class="fare-group-title">{g.name} <span>{g.rows.length} {g.rows.length === 1 ? 'route' : 'routes'}</span></h2>
+              {g.rows.map(rowOf).map(({ e, r, liveFares, note, label, chip }) => (
+                <div class="fare-item" data-route={e.key} data-live={JSON.stringify(liveFares)}>
+                  <div class="fare-row">
+                    <span class="fare-name">
+                      <a href={`/admin/fares/route/${e.key}/`} class="font-semibold text-ink no-underline hover:underline">{r.fromShort} to {r.toShort}</a>
+                      <span class="text-[13px] text-muted">{r.duration} <span class="md:hidden">· {r.km} km</span></span>
+                      {chip && <span class:list={['a-badge mt-1 self-start', chip[1]]} data-chip-state>{chip[0]}</span>}
+                    </span>
+                    <span class="fare-km">{r.km}</span>
+                    {CARS.map((c) => {
+                      const changed = liveFares[c] !== r.fares[c];
+                      return (
+                        <span class="fare-cell">
+                          <label class:list={['fare-box', changed && 'is-changed']}>
+                            <span class="fare-car md:sr-only">{carInfo[c]?.name}</span>
+                            <span class="flex items-center gap-1">
+                              <span class="text-muted">₹</span>
+                              <input value={fmt(r.fares[c])} data-car={c} inputmode="numeric" autocomplete="off" aria-label={`${carInfo[c]?.name} fare, ${r.fromShort} to ${r.toShort}`} />
+                            </span>
+                          </label>
+                          <span class="fare-was" data-was={c}>{changed ? `was ${inr(liveFares[c])}` : ''}</span>
+                        </span>
+                      );
+                    })}
+                    <span class="fare-links">
+                      <a href={`/taxi/${e.key}/`} target="_blank" rel="noopener" class="text-sm font-semibold" aria-label={`Live page, ${r.fromShort} to ${r.toShort}`}>Page</a>
+                      <span data-saved class="text-[12px] text-[#3f6200]" role="status"></span>
+                    </span>
+                  </div>
+                  <div class="fare-note" data-note hidden={!note}>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-[14px] bg-[#fff4d6] px-3.5 py-3 text-[#5c3a00]">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8a5300" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.warn} />
+                      <span class="flex-[1_1_320px]" data-note-text>
+                        {note && (
+                          <>
+                            The page's text still says <strong>{note.said.join('; ')}</strong>.{' '}
+                            {note.blocks ? 'Google and AI answers quote the opening answer, so it has to match before you can publish.' : 'Answers on the page should match the new fare.'}
+                          </>
+                        )}
+                      </span>
+                      <button type="button" data-fix class="btn-book min-h-10 rounded-[10px] px-3.5 py-1.5 text-sm" hidden={!note?.fixed}>{label}</button>
+                      <a href={`/admin/fares/route/${e.key}/#text`} class="text-sm font-semibold">Edit the text myself</a>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </section>
+        <p class="m-0 text-sm text-muted">Each fare also shows on the booking form, the fare chart, the home page and in Google's data, so they always match. Press Enter or leave a box to save it.</p>
+
+        {offRoutes.length > 0 && (
+          <section class="a-card flex flex-col gap-2 p-5">
+            <h2 class="m-0 font-display text-lg font-bold">Off the website</h2>
+            {offRoutes.map((e) => (
+              <a href={`/admin/fares/route/${e.key}/`} class="text-body">{e.key.replace(/-taxi$/, '').replace(/-/g, ' ')}</a>
+            ))}
+          </section>
+        )}
+
+        <dialog id="dlg-bulk" class="a-dialog" aria-labelledby="bulk-h">
+          <form class="a-dialog-body" data-bulk>
+            <header class="a-dialog-head">
+              <h2 id="bulk-h" class="m-0 font-display text-xl font-bold">Change many fares at once</h2>
+              <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+            </header>
+            <div class="a-dialog-main flex flex-col gap-4">
+              <label class="a-field">
+                Which routes
+                <select name="group">
+                  <option value="">All {liveRoutes.length} routes</option>
+                  {groups.map((g) => <option value={g.name}>{g.name} ({g.rows.length})</option>)}
+                </select>
+              </label>
+              <fieldset class="m-0 flex flex-wrap gap-2 border-0 p-0">
+                <legend class="mb-1.5 p-0 text-sm font-semibold text-body">Which cars</legend>
+                {CARS.map((c) => (
+                  <label class="a-pill"><input type="checkbox" name="cars" value={c} checked class="sr-only" /><span>{carInfo[c]?.name}</span></label>
+                ))}
+              </fieldset>
+              <div class="grid gap-3 sm:grid-cols-[1.3fr_1fr]">
+                <label class="a-field">
+                  Change
+                  <select name="how">
+                    <option value="up-percent">Raise by a percentage</option>
+                    <option value="down-percent">Lower by a percentage</option>
+                    <option value="up-amount">Raise by an amount in ₹</option>
+                    <option value="down-amount">Lower by an amount in ₹</option>
+                  </select>
+                </label>
+                <label class="a-field">
+                  By
+                  <input name="by" inputmode="decimal" placeholder="10" required />
+                </label>
+              </div>
+              <label class="a-field">
+                Round each fare to the nearest
+                <select name="round">
+                  <option value="50">₹50</option>
+                  <option value="100">₹100</option>
+                  <option value="10">₹10</option>
+                </select>
+              </label>
+              <div class="flex flex-col gap-1.5 rounded-2xl bg-mist p-4 text-sm" aria-live="polite">
+                <span class="font-bold" data-bulk-count>Type how much to change them by.</span>
+                <ul class="m-0 flex list-none flex-col gap-1 p-0 text-body" data-bulk-preview></ul>
+              </div>
+              <p class="m-0 text-[13px] text-muted">Each route's text that quotes an old fare is changed to the new one where that is clear. Everything waits as a draft until you publish.</p>
+              <p class="a-msg a-msg-error m-0" data-bulk-error hidden></p>
+            </div>
+            <footer class="a-dialog-foot">
+              <button type="button" data-close class="btn-ghost">Cancel</button>
+              <button type="submit" class="btn-book" data-bulk-go disabled>Change the fares</button>
+            </footer>
+          </form>
+        </dialog>
+        <script type="application/json" id="fare-data" set:html={JSON.stringify(liveRoutes.map((e) => ({ key: e.key, name: `${(e.current as Data).fromShort} to ${(e.current as Data).toShort}`, group: (e.current as Data).group, fares: (e.current as Data).fares })))} />
+      </>
+    )}
+
+    {tab === 'packages' && (
+      <>
+        <ul class="m-0 grid list-none gap-3 p-0 md:grid-cols-2 2xl:grid-cols-3" data-pkg-list>
+          {livePackages.map((e, i) => {
+            const p = e.current as unknown as TourPackage;
+            const chip = stateChip(e);
+            return (
+              <li class="a-card flex overflow-hidden" data-pkg={e.key}>
+                <img src={photoFile(packagePhoto(p), 400)} alt="" width="132" height="132" loading="lazy" class="h-auto w-[112px] shrink-0 object-cover sm:w-[132px]" />
+                <div class="flex min-w-0 flex-1 flex-col gap-1 p-4">
+                  <span class="text-[13px] text-muted">{p.nights} nights, {p.days} days · {p.places.slice(0, 3).join(', ')}</span>
+                  <a href={`/admin/fares/package/${e.key}/`} class="text-[17px] leading-snug font-bold text-ink no-underline hover:underline">{p.name}</a>
+                  <span class="text-sm text-body">from <strong>{inr(p.fromPrice)}</strong> {p.priceNote.replace(/^per person,?\s*/, 'per person, ')}</span>
+                  {chip && <span class:list={['a-badge self-start', chip[1]]}>{chip[0]}</span>}
+                  <div class="mt-auto flex items-center gap-2 pt-2">
+                    <a href={`/admin/fares/package/${e.key}/`} class="btn-ghost min-h-10 px-3.5 py-1 text-sm">Edit</a>
+                    <a href={`/tour-packages/${e.key}/`} target="_blank" rel="noopener" class="text-sm font-semibold">Page</a>
+                    <span class="flex-1"></span>
+                    <button type="button" data-pkg-move="up" class="a-icon-btn h-10 w-10" aria-label={`Move ${p.name} up`} disabled={i === 0}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.up} /></button>
+                    <button type="button" data-pkg-move="down" class="a-icon-btn h-10 w-10" aria-label={`Move ${p.name} down`} disabled={i === livePackages.length - 1}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.down} /></button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        {offPackages.length > 0 && (
+          <section class="a-card flex flex-col gap-2 p-5">
+            <h2 class="m-0 font-display text-lg font-bold">Off the website</h2>
+            {offPackages.map((e) => (
+              <a href={`/admin/fares/package/${e.key}/`} class="text-body">{e.key.replace(/-/g, ' ')}</a>
+            ))}
+          </section>
+        )}
+      </>
+    )}
+
+    {tab === 'cars' && (
+      <form method="post" data-web-form class="flex flex-col gap-5">
+        <input type="hidden" name="intent" value="cars" />
+        <div class="grid gap-4 lg:grid-cols-2">
+          {CARS.map((k) => {
+            const v = postedCars?.[k] ?? carInfo[k];
+            const was = vWas[k] ?? {};
+            const err = (f: string) => (errorCar === k && errorField === f ? error : undefined);
+            return (
+              <section class="a-card flex flex-col gap-3.5 p-5">
+                <div class="flex items-center gap-3">
+                  <img src={photoFile(`car-${k}`, 400)} alt="" width="88" height="58" class="h-[58px] w-[88px] rounded-xl object-cover" />
+                  <h2 class="m-0 font-display text-xl font-bold">{v.name}</h2>
+                </div>
+                <div class="grid gap-3.5 sm:grid-cols-2">
+                  <WebField label="Name" name={`${k}.name`} value={v.name} was={was.name} error={err('name')} />
+                  <WebField label="Seats" name={`${k}.seats`} inputmode="numeric" value={v.seats} was={was.seats} error={err('seats')} suffix="passengers" />
+                  <WebField label="Models" name={`${k}.models`} value={v.models} was={was.models} error={err('models')} class="sm:col-span-2" />
+                  <WebField label="Luggage" name={`${k}.bags`} value={v.bags} was={was.bags} error={err('bags')} class="sm:col-span-2" />
+                  <WebField label="Best for" name={`${k}.bestFor`} rows={2} value={v.bestFor} was={was.bestFor} error={err('bestFor')} class="sm:col-span-2" />
+                </div>
+              </section>
+            );
+          })}
+        </div>
+        <div class="web-save">
+          <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+          <button type="submit" class="btn-book min-h-12">Save as draft</button>
+        </div>
+      </form>
+    )}
+  </div>
+</AdminLayout>
+
+<style is:global>
+  .fare-chip { min-height: 2.5rem; border-radius: 999px; padding: 0.35rem 0.9rem; font-size: 0.875rem; font-weight: 600; border: 1px solid var(--color-line); background: #fff; color: var(--color-body); }
+  .fare-chip[aria-pressed='true'] { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
+  [data-theme='dark'] .fare-chip { background: var(--a-surface); border-color: var(--a-edge); }
+  [data-theme='dark'] .fare-chip[aria-pressed='true'] { background: var(--color-lime); border-color: var(--color-lime); color: #111; }
+  /* clip, not hidden: hidden makes the card a scroll box and the sticky head would never stick. */
+  .fare-grid { overflow: clip; }
+  .fare-row { display: grid; grid-template-columns: minmax(220px, 1fr) 56px repeat(4, minmax(112px, 136px)) 64px; gap: 0 0.5rem; align-items: start; padding: 0.625rem 1.25rem; }
+  /* The car names stay on screen while the routes scroll under them, until the grid ends. */
+  .fare-head { position: sticky; top: 0; z-index: 5; align-items: end; padding-top: 0.875rem; font-size: 0.8125rem; font-weight: 600; color: #5c6373; background: #fff; box-shadow: 0 1px 0 #f0f1f3; transition: box-shadow 0.15s; }
+  .fare-head.is-stuck { box-shadow: 0 1px 0 #e3e6ea, 0 8px 16px -10px rgb(16 24 40 / 25%); }
+  [data-theme='dark'] .fare-head { background: var(--a-surface); box-shadow: 0 1px 0 #262b32; }
+  [data-theme='dark'] .fare-head.is-stuck { box-shadow: 0 1px 0 var(--a-edge), 0 8px 16px -10px rgb(0 0 0 / 70%); }
+  .fare-group-title { margin: 0; padding: 1.1rem 1.25rem 0.4rem; border-top: 1px solid #f0f1f3; font-family: var(--font-display); font-size: 1.0625rem; font-weight: 700; }
+  .fare-group-title span { font-family: var(--font-sans); font-size: 0.8125rem; font-weight: 500; color: #5c6373; }
+  .fare-item { border-top: 1px solid #f0f1f3; }
+  .fare-name { display: flex; flex-direction: column; padding-top: 0.15rem; min-width: 0; }
+  .fare-km { padding-top: 0.6rem; color: var(--color-body); }
+  .fare-cell { display: flex; flex-direction: column; min-width: 0; }
+  .fare-box { display: flex; flex-direction: column; justify-content: center; height: 2.625rem; padding: 0 0.625rem; border-radius: 10px; border: 1px solid var(--color-line); background: #f9fafb; }
+  .fare-box:focus-within { outline: 3px solid var(--color-lime); outline-offset: 1px; background: #fff; }
+  .fare-box.is-changed { background: var(--color-lime-50); border: 2px solid var(--color-lime); }
+  .fare-box input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-weight: 600; color: var(--color-ink); padding: 0; scroll-margin-top: 5.5rem; }
+  .fare-box.is-bad { border: 2px solid #b42318; }
+  .fare-was { min-height: 0; font-size: 0.75rem; color: #3f6200; margin-top: 3px; padding-left: 4px; }
+  .fare-links { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 0.6rem; }
+  .fare-note { padding: 0 1.25rem 0.875rem; }
+  .fare-note[hidden] { display: none; }
+  .fare-car { font-size: 0.8125rem; font-weight: 600; color: var(--color-body); }
+  [data-theme='dark'] .fare-box { background: var(--a-input); border-color: var(--a-edge); }
+  [data-theme='dark'] .fare-box.is-changed { background: #1f2a0b; border-color: var(--color-lime); }
+  [data-theme='dark'] .fare-group-title, [data-theme='dark'] .fare-item { border-color: #262b32; }
+  [data-theme='dark'] .fare-was { color: #b8ee3a; }
+  /* Phone and small laptop: each route is a card with its four fares two by two, as in the mock. */
+  @media (max-width: 1099px) {
+    .fare-head { display: none; }
+    .fare-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 0.625rem; padding: 0.875rem 1rem; }
+    .fare-name { grid-column: 1 / -1; }
+    .fare-km { display: none; }
+    .fare-box { height: auto; min-height: 3.5rem; padding: 0.35rem 0.75rem; }
+    .fare-box input { font-size: 1.0625rem; font-weight: 700; }
+    .fare-links { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; padding-top: 0; }
+    .fare-group-title { padding: 1rem 1rem 0.3rem; }
+    .fare-note { padding: 0 1rem 0.875rem; }
+  }
+  @media (min-width: 1100px) { .fare-car { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
+</style>
+
+<script>
+  import { openDialogs } from '../../../lib/admin-client';
+  import { wireDirty } from '../../../lib/admin-web';
+  openDialogs();
+  wireDirty();
+
+  type Note = { said: string[]; fixed: unknown; blocks: boolean; label: string } | null;
+  const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
+  const num = (s: string) => {
+    const t = s.replace(/[₹,\s]/g, '');
+    return /^\d+$/.test(t) ? Number(t) : NaN;
+  };
+  const api = async (body: Record<string, unknown>) => {
+    const res = await fetch('/admin/api/content/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return res.json().catch(() => ({ ok: false, error: 'The server did not answer. Check the connection and try again.' }));
+  };
+  const refreshBar = () => (window as unknown as { refreshPublishBar?: () => Promise<void> }).refreshPublishBar?.();
+
+  /* ---------- Group chips ---------- */
+  document.querySelectorAll<HTMLButtonElement>('[data-chip]').forEach((chip) =>
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('[data-chip]').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      document.querySelectorAll<HTMLElement>('[data-group]').forEach((g) => (g.hidden = Boolean(chip.dataset.chip) && g.dataset.group !== chip.dataset.chip));
+    }),
+  );
+
+  /* ---------- Shadow under the head once it sticks ---------- */
+  const head = document.querySelector<HTMLElement>('.fare-head');
+  if (head)
+    new IntersectionObserver(([e]) => head.classList.toggle('is-stuck', e.intersectionRatio < 1 && e.boundingClientRect.top < 1), { rootMargin: '-1px 0px 0px 0px', threshold: [1] }).observe(head);
+
+  /* ---------- The fare grid: each row saves on its own ---------- */
+  function paintNote(item: HTMLElement, note: Note) {
+    const box = item.querySelector<HTMLElement>('[data-note]')!;
+    box.hidden = !note;
+    if (!note) return;
+    const text = box.querySelector('[data-note-text]')!;
+    text.replaceChildren(
+      "The page's text still says ",
+      Object.assign(document.createElement('strong'), { textContent: note.said.join('; ') }),
+      `. ${note.blocks ? 'Google and AI answers quote the opening answer, so it has to match before you can publish.' : 'Answers on the page should match the new fare.'}`,
+    );
+    const fix = box.querySelector<HTMLButtonElement>('[data-fix]')!;
+    fix.hidden = !note.fixed;
+    fix.textContent = note.label;
+  }
+  function paintRow(item: HTMLElement, fares: Record<string, number>) {
+    const live = JSON.parse(item.dataset.live || '{}') as Record<string, number>;
+    item.querySelectorAll<HTMLInputElement>('input[data-car]').forEach((input) => {
+      const car = input.dataset.car!;
+      const changed = live[car] !== fares[car];
+      input.closest('.fare-box')!.classList.toggle('is-changed', changed);
+      input.closest('.fare-box')!.classList.remove('is-bad');
+      input.value = fares[car].toLocaleString('en-IN');
+      item.querySelector(`[data-was="${car}"]`)!.textContent = changed ? `was ${inr(live[car])}` : '';
+    });
+  }
+  async function saveRow(item: HTMLElement, fixText = false) {
+    const fares: Record<string, number> = {};
+    let bad: HTMLInputElement | null = null;
+    item.querySelectorAll<HTMLInputElement>('input[data-car]').forEach((input) => {
+      const n = num(input.value);
+      if (!Number.isFinite(n)) bad ??= input;
+      else fares[input.dataset.car!] = n;
+    });
+    const saved = item.querySelector<HTMLElement>('[data-saved]')!;
+    if (bad) {
+      (bad as HTMLInputElement).closest('.fare-box')!.classList.add('is-bad');
+      saved.textContent = 'Numbers only';
+      saved.style.color = '#b42318';
+      return;
+    }
+    saved.style.color = '';
+    saved.textContent = 'Saving…';
+    const r = await api({ action: 'route-fares', key: item.dataset.route, fares, fixText });
+    if (!r.ok) {
+      saved.textContent = '';
+      alert(r.error);
+      return;
+    }
+    paintRow(item, r.fares);
+    paintNote(item, r.note);
+    saved.textContent = 'Saved';
+    setTimeout(() => (saved.textContent = ''), 2500);
+    refreshBar();
+  }
+  document.querySelectorAll<HTMLElement>('[data-route]').forEach((item) => {
+    const before = new Map<HTMLInputElement, string>();
+    item.querySelectorAll<HTMLInputElement>('input[data-car]').forEach((input) => {
+      input.addEventListener('focus', () => before.set(input, input.value));
+      input.addEventListener('change', () => {
+        if (num(input.value) !== num(before.get(input) ?? '')) saveRow(item);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') {
+          input.value = before.get(input) ?? input.value;
+          input.blur();
+        }
+      });
+    });
+    item.querySelector('[data-fix]')?.addEventListener('click', () => saveRow(item, true));
+  });
+
+  /* ---------- Change many at once ---------- */
+  const form = document.querySelector<HTMLFormElement>('[data-bulk]');
+  const all = JSON.parse(document.getElementById('fare-data')?.textContent || '[]') as { key: string; name: string; group: string; fares: Record<string, number> }[];
+  const plan = () => {
+    if (!form) return null;
+    const fd = new FormData(form);
+    const group = String(fd.get('group'));
+    const cars = fd.getAll('cars').map(String);
+    const [dir, mode] = String(fd.get('how')).split('-');
+    const by = Number(String(fd.get('by')).replace(/[₹,%\s]/g, ''));
+    const round = Number(fd.get('round'));
+    if (!cars.length || !Number.isFinite(by) || by <= 0) return null;
+    const value = dir === 'down' ? -by : by;
+    const routes = all.filter((r) => !group || r.group === group);
+    const next = (f: number) => Math.max(round, Math.round((mode === 'percent' ? f * (1 + value / 100) : f + value) / round) * round);
+    return { keys: routes.map((r) => r.key), cars, mode, value, round, routes, next };
+  };
+  const paintPlan = () => {
+    const p = plan();
+    const count = form!.querySelector('[data-bulk-count]')!;
+    const list = form!.querySelector('[data-bulk-preview]')!;
+    const go = form!.querySelector<HTMLButtonElement>('[data-bulk-go]')!;
+    list.replaceChildren();
+    go.disabled = !p;
+    if (!p) {
+      count.textContent = 'Type how much to change them by.';
+      return;
+    }
+    count.textContent = `${p.routes.length} routes, ${p.cars.length} ${p.cars.length === 1 ? 'car' : 'cars'} each. For example:`;
+    for (const r of p.routes.slice(0, 3)) {
+      const li = document.createElement('li');
+      const c = p.cars[0];
+      li.textContent = `${r.name}, ${c}: ${inr(r.fares[c])} → ${inr(p.next(r.fares[c]))}`;
+      list.append(li);
+    }
+    go.textContent = `Change ${p.routes.length * p.cars.length} fares`;
+  };
+  form?.addEventListener('input', paintPlan);
+  form?.addEventListener('change', paintPlan);
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const p = plan();
+    if (!p) return;
+    const go = form.querySelector<HTMLButtonElement>('[data-bulk-go]')!;
+    go.disabled = true;
+    go.textContent = 'Changing…';
+    const r = await api({ action: 'bulk-fares', keys: p.keys, cars: p.cars, mode: p.mode, value: p.value, round: p.round });
+    if (!r.ok && !r.changed) {
+      const err = form.querySelector<HTMLElement>('[data-bulk-error]')!;
+      err.hidden = false;
+      err.textContent = (r.errors?.join(' ') || r.error) ?? 'Nothing was changed.';
+      go.disabled = false;
+      paintPlan();
+      return;
+    }
+    location.href = `/admin/fares/?done=bulk&n=${r.changed}`;
+  });
+
+  /* ---------- Package order ---------- */
+  document.querySelectorAll<HTMLButtonElement>('[data-pkg-move]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const li = b.closest<HTMLElement>('[data-pkg]')!;
+      const list = li.parentElement!;
+      if (b.dataset.pkgMove === 'up' && li.previousElementSibling) list.insertBefore(li, li.previousElementSibling);
+      if (b.dataset.pkgMove === 'down' && li.nextElementSibling) list.insertBefore(li.nextElementSibling, li);
+      const items = [...list.querySelectorAll<HTMLElement>('[data-pkg]')];
+      items.forEach((x, i) => {
+        x.querySelector<HTMLButtonElement>('[data-pkg-move="up"]')!.disabled = i === 0;
+        x.querySelector<HTMLButtonElement>('[data-pkg-move="down"]')!.disabled = i === items.length - 1;
+      });
+      b.focus();
+      const r = await api({ action: 'order', type: 'package', keys: items.map((x) => x.dataset.pkg) });
+      if (!r.ok) alert(r.error);
+      refreshBar();
+    }),
+  );
+</script>
