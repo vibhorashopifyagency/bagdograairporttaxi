@@ -28,7 +28,7 @@ import { audit } from './admin';
 import { STATUS_LABEL, todayIST } from './dashboard';
 import { getDb, schema } from './db';
 import { advanceOf } from './fares';
-import { deleteBookingFiles, sweepUnusedFiles } from './files';
+import { deleteBookingFiles, forgetDeletedFiles, sweepUnusedFiles } from './files';
 import { summarise } from './payments';
 
 export const RETENTION_MONTHS = 24;
@@ -132,8 +132,10 @@ export async function purgeExpired({ now = new Date(), budgetMs = 10_000 } = {})
     result.customers += due.length;
   }
 
-  // 3. Pictures uploaded but never used (a cancelled Record payment, a photo taken out of an itinerary).
+  // 3. Pictures uploaded but never used (a cancelled Record payment, a photo taken out of an itinerary),
+  //    and rows of pictures someone deleted in Vercel's file browser.
   if (Date.now() - started <= budgetMs) result.files += await sweepUnusedFiles();
+  if (Date.now() - started <= budgetMs) result.files += await forgetDeletedFiles();
 
   // 4. The access log is kept for the same 24 months, and old logins are tidied away.
   if (Date.now() - started <= budgetMs) {

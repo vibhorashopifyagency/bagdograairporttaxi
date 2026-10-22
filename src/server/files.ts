@@ -15,11 +15,16 @@
  * details phones keep in photos. The `files` table records the booking each
  * belongs to, so the 24-month clean-up and "Remove their details" delete the
  * pictures with the booking's other personal data (src/server/retention.ts).
+ *
+ * A picture deleted straight from Vercel's file browser is noticed the first
+ * time anything asks for it, and every night: its row goes too, so no page
+ * links to it again (a payment shows "Add the screenshot" once more, an
+ * itinerary drops the photo). Pages also hide one that fails to load.
  */
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { del, get, put } from '@vercel/blob';
+import { del, get, list, put } from '@vercel/blob';
 import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { getDb, schema } from './db';
 import { env, isProduction, requireEnv } from './env';
@@ -74,7 +79,7 @@ async function deleteStored(pathnames: string[]): Promise<void> {
 const notFound = () => new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
 
 /** The picture itself, for /admin/files/ and /trip/photo/. `cache` is the Cache-Control to send. */
-export async function fileResponse(row: Pick<FileRow, 'pathname' | 'kind'>, request: Request, cache: string): Promise<Response> {
+export async function fileResponse(row: Pick<FileRow, 'id' | 'pathname' | 'kind'>, request: Request, cache: string): Promise<Response> {
   const headers: Record<string, string> = {
     'Content-Type': 'image/jpeg',
     'Cache-Control': cache,
@@ -85,12 +90,13 @@ export async function fileResponse(row: Pick<FileRow, 'pathname' | 'kind'>, requ
   const s = store();
   if (s === 'blob') {
     const r = await get(row.pathname, { access: 'private', ifNoneMatch: request.headers.get('if-none-match') ?? undefined });
-    if (!r) return notFound();
+    if (!r) return forget([row.id], 'asked for').then(notFound);
     headers.ETag = r.blob.etag;
     return r.statusCode === 304 ? new Response(null, { status: 304, headers }) : new Response(r.stream, { headers });
   }
   if (s === 'local') {
-    const bytes = await readFile(localPath(row.pathname)).catch(() => null);
+    const bytes = await readFile(localPath(row.pathname)).catch((e: NodeJS.ErrnoException) => (e.code === 'ENOENT' ? 'gone' : null));
+    if (bytes === 'gone') return forget([row.id], 'asked for').then(notFound);
     return bytes ? new Response(bytes, { headers }) : notFound();
   }
   return notFound();
@@ -178,6 +184,24 @@ export function photoIdFromToken(token: string): string | null {
   return want.length === got.length && timingSafeEqual(want, got) ? m[1]! : null;
 }
 
+/** Every photo key an itinerary uses. */
+export const itineraryKeys = (d: { photos: string[]; days: { photo: string }[] }) => [...d.photos, ...d.days.map((x) => x.photo)];
+
+/** Which of these keys are uploaded photos that still exist. Library photos are not uploads and are not checked. */
+export async function liveUploads(keys: string[]): Promise<Set<string>> {
+  const ids = [...new Set(keys.map(uploadIdOf).filter((x): x is string => Boolean(x)))];
+  if (!ids.length) return new Set();
+  const f = schema.files;
+  const rows = await getDb().select({ id: f.id }).from(f).where(and(inArray(f.id, ids), eq(f.kind, 'itinerary')));
+  return new Set(rows.map((r) => uploadKey(r.id)));
+}
+
+/** The itinerary without uploaded photos that no longer exist. */
+export function withoutMissing<T extends { photos: string[]; days: { photo: string }[] }>(d: T, live: Set<string>): T {
+  const ok = (k: string) => !uploadIdOf(k) || live.has(k);
+  return { ...d, photos: d.photos.filter(ok), days: d.days.map((x) => (ok(x.photo) ? x : { ...x, photo: '' })) };
+}
+
 /** Where an itinerary photo key's picture is: the website's own copy, or an upload (the customer's signed address, or the admin's in a preview). */
 export function photoSrc(key: string, width: 800 | 1600, forStaff = false): string {
   const id = uploadIdOf(key);
@@ -186,6 +210,48 @@ export function photoSrc(key: string, width: 800 | 1600, forStaff = false): stri
 }
 
 /* ---------------- Removing them ---------------- */
+
+/** Pictures the store no longer has: their rows go, so no page links to them again. */
+async function forget(ids: string[], why: string): Promise<void> {
+  if (!ids.length) return;
+  await getDb().delete(schema.files).where(inArray(schema.files.id, ids));
+  console.warn(`[files] ${ids.length} ${ids.length === 1 ? 'picture was' : 'pictures were'} missing from the store (${why}), so ${ids.length === 1 ? 'it is' : 'they are'} forgotten`);
+}
+
+/**
+ * Nightly: pictures deleted in Vercel's file browser since the last run.
+ * One listing of the store (an operation per 1,000 pictures). A store that
+ * suddenly lacks most of them is more likely the wrong store connected than
+ * a clean-out, so then nothing is forgotten and the log says so.
+ */
+export async function forgetDeletedFiles(): Promise<number> {
+  const s = store();
+  if (!s) return 0;
+  const f = schema.files;
+  // Not the last few minutes: an upload writes the picture first, then its row.
+  const rows = await getDb().select({ id: f.id, pathname: f.pathname }).from(f).where(lt(f.createdAt, sql`now() - interval '10 minutes'`));
+  if (!rows.length) return 0;
+  let missing: string[];
+  if (s === 'blob') {
+    const have = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const page = await list({ cursor, limit: 1000 });
+      for (const b of page.blobs) have.add(b.pathname);
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+    missing = rows.filter((r) => !have.has(r.pathname)).map((r) => r.id);
+  } else {
+    const found = await Promise.all(rows.map((r) => access(localPath(r.pathname)).then(() => true, () => false)));
+    missing = rows.filter((_, i) => !found[i]).map((r) => r.id);
+  }
+  if (missing.length > 10 && missing.length > rows.length / 2) {
+    console.error(`[alert] ${missing.length} of ${rows.length} pictures are missing from the photo store. Check which Blob store is connected in Vercel (Storage). Nothing was changed.`);
+    return 0;
+  }
+  await forget(missing, 'nightly check');
+  return missing.length;
+}
 
 /**
  * Deletes these bookings' pictures from the store. Their rows are deleted

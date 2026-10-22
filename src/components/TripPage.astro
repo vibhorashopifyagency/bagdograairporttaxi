@@ -98,7 +98,7 @@ const tick = '<path d="M20 6 9 17l-5-5"/>';
       </header>
 
       <section class="relative h-[300px] text-white sm:h-[340px]">
-        <img src={photoSrc(cover, 1600, preview)} srcset={coverUploaded ? undefined : `/img/${cover}-800.webp 800w, /img/${cover}-1600.webp 1600w`} sizes={coverUploaded ? undefined : '(min-width: 720px) 720px, 100vw'} alt={photoAlt(cover)} class="absolute inset-0 h-full w-full object-cover" />
+        <img src={photoSrc(cover, 1600, preview)} srcset={coverUploaded ? undefined : `/img/${cover}-800.webp 800w, /img/${cover}-1600.webp 1600w`} sizes={coverUploaded ? undefined : '(min-width: 720px) 720px, 100vw'} alt={photoAlt(cover)} onerror={coverUploaded ? "this.onerror=null;this.src='/img/hero-1600.webp'" : undefined} class="absolute inset-0 h-full w-full object-cover" />
         <div class="absolute inset-0 bg-[linear-gradient(180deg,rgb(17_17_17/0.05)_30%,rgb(17_17_17/0.84)_100%)]"></div>
         <div class="absolute right-5 bottom-5 left-5 flex flex-col gap-1.5 sm:right-7 sm:left-7">
           <span class:list={['self-start rounded-full px-2.5 py-0.5 text-xs font-bold text-ink', cancelled ? 'bg-[#fde8e7]' : confirmed ? 'bg-lime' : 'bg-amber']}>
@@ -159,7 +159,7 @@ const tick = '<path d="M20 6 9 17l-5-5"/>';
                   <div class="flex min-w-0 flex-1 flex-col gap-1.5 pb-6">
                     {dayDate(d.start, i) && <span class="text-xs font-bold tracking-[0.06em] text-lime-text uppercase">{dayDate(d.start, i)}</span>}
                     <span class="text-[17px] leading-snug font-bold">{day.title}</span>
-                    {day.photo && <img src={photoSrc(day.photo, 800, preview)} alt={photoAlt(day.photo)} loading="lazy" width="800" height="533" class="h-[150px] w-full rounded-[14px] object-cover sm:h-[220px]" />}
+                    {day.photo && <img src={photoSrc(day.photo, 800, preview)} alt={photoAlt(day.photo)} onerror={uploadIdOf(day.photo) ? 'this.remove()' : undefined} loading="lazy" width="800" height="533" class="h-[150px] w-full rounded-[14px] object-cover sm:h-[220px]" />}
                     {day.detail && <span class="text-sm text-body">{day.detail}</span>}
                     {day.stay && <span class="text-[13px] text-muted">{day.stay}</span>}
                   </div>

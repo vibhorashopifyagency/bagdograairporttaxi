@@ -13,6 +13,7 @@ import { advanceOf } from '../../server/fares';
 import { getUpi, paymentsFor, summarise } from '../../server/payments';
 import { LIMITS, rateLimit, tooManyPage } from '../../server/rate-limit';
 import { ipHash } from '../../server/security';
+import { itineraryKeys, liveUploads, withoutMissing } from '../../server/files';
 import { bookingForToken, itineraryFromBooking, looksLikeTripToken, photoAlt, tripPlace } from '../../server/trip';
 import { eq } from 'drizzle-orm';
 
@@ -38,10 +39,12 @@ if (!gone) {
     getUpi(),
   ]);
   const amount = Number(Astro.url.searchParams.get('amount') ?? '');
+  // Uploaded photos deleted from storage since it was sent are left out.
+  const data = itinerary?.published ?? itineraryFromBooking(booking);
   page = {
     ref: booking.ref,
     status: booking.status,
-    data: itinerary?.published ?? itineraryFromBooking(booking),
+    data: withoutMissing(data, await liveUploads(itineraryKeys(data))),
     hasPlan: Boolean(itinerary?.published),
     place: tripPlace(booking),
     pay: summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments, booking.kind),

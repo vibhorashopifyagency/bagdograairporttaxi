@@ -8,6 +8,9 @@
  */
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import ItineraryDialog from '../../../../components/admin/ItineraryDialog.astro';
+import DateField from '../../../../components/admin/DateField.astro';
+import TimeField from '../../../../components/admin/TimeField.astro';
+import { POLICY } from '../../../../data/site';
 import { vehicleByKey } from '../../../../data/vehicles';
 import { audit, isAdmin } from '../../../../server/admin';
 import { REF_RE } from '../../../../server/bookings';
@@ -27,7 +30,7 @@ import {
   summarise,
   type PaymentForm,
 } from '../../../../server/payments';
-import { adminFileSrc, filesReady, itineraryUploads, screenshotsFor, uploadKey } from '../../../../server/files';
+import { adminFileSrc, filesReady, itineraryUploads, screenshotsFor, uploadKey, withoutMissing } from '../../../../server/files';
 import { ipHash } from '../../../../server/security';
 import { allTemplates, deleteItinerary, itineraryFromBooking, tripPath, tripPlace, LIBRARY } from '../../../../server/trip';
 import DriverFields from '../../../../components/admin/DriverFields.astro';
@@ -53,6 +56,8 @@ const today = todayIST();
 let open = Astro.url.searchParams.get('do') ?? '';
 let error = '';
 const blankPayment = (): PaymentForm => ({ amount: '', method: 'upi', collector: 'office', receivedOn: today, receivedBy: user.name, upiRef: '', note: '', screenshot: '' });
+/** On a taxi booking the times in the night-charge window say so in the time list. */
+const night = { from: POLICY.nightChargeFrom, to: POLICY.nightChargeTo, tag: `+${inr(POLICY.nightCharge)} night charge` };
 let payDraft = blankPayment();
 let refundDraft = blankPayment();
 /** Set when the payment form came back with an error, so its choices are kept. */
@@ -213,8 +218,9 @@ const removed = !booking.customerPhone;
 const handler = team.find((t) => t.id === booking.handledBy)?.name;
 const tripUrl = new URL(tripPath(booking), Astro.url.origin).href;
 // The booking says who drives; the itinerary always opens with that driver.
+// Uploaded photos deleted from storage are left out of the popup.
 const draft = {
-  ...(itinerary?.draft ?? itineraryFromBooking(booking)),
+  ...withoutMissing(itinerary?.draft ?? itineraryFromBooking(booking), new Set(uploads.map((f) => uploadKey(f.id)))),
   driverId: booking.driverId ?? '',
   driver: booking.driverName ?? '',
   driverPhone: booking.driverPhone ?? '',
@@ -531,8 +537,8 @@ const facts: [string, string][] = [
       </header>
       <div class="a-dialog-main grid gap-4 sm:grid-cols-2">
         {error && open === 'edit' && <p class="a-msg a-msg-error m-0 sm:col-span-2" role="alert">{error}</p>}
-        <label class="a-field">Pickup date<input name="pickupDate" type="date" required value={edit.pickupDate} /></label>
-        <label class="a-field">Pickup time<input name="pickupTime" type="time" required value={edit.pickupTime} /></label>
+        <DateField label="Pickup date" name="pickupDate" value={edit.pickupDate} min={addDays(today, -400)} max={addDays(today, 400)} required />
+        <TimeField label="Pickup time" name="pickupTime" value={edit.pickupTime} night={booking.kind === 'taxi' ? night : undefined} required />
         <label class="a-field">Flight or train<input name="flight" maxlength="40" value={edit.flight} autocapitalize="characters" /></label>
         <label class="a-field">Travellers<input name="pax" type="number" min="1" max="50" required value={edit.pax} /></label>
         <label class="a-field sm:col-span-2">Pickup or drop address<input name="dropAddress" maxlength="200" value={edit.dropAddress} /></label>
@@ -620,7 +626,7 @@ const facts: [string, string][] = [
             ))}
           </fieldset>
           <div class="grid gap-4 sm:grid-cols-2">
-            <label class="a-field">Date<input name="receivedOn" type="date" required value={x.d.receivedOn} max={addDays(today, 1)} /></label>
+            <DateField label="Date" name="receivedOn" value={x.d.receivedOn} min={addDays(today, -400)} max={addDays(today, 1)} quick={[0, -1]} required />
             <label class="a-field" data-office-only>{x.intent === 'refund' ? 'Paid back by' : 'Received by'}<input name="receivedBy" maxlength="80" value={x.d.receivedBy} /></label>
           </div>
           {x.intent === 'payment' && booking.driverId && (
@@ -752,6 +758,7 @@ const facts: [string, string][] = [
       </header>
       <div class="a-dialog-main flex justify-center">
         <img data-shot-img alt="The payment screenshot" class="h-auto max-h-[70dvh] w-auto max-w-full rounded-xl border border-line" />
+        <p class="a-msg m-0 w-full bg-mist text-body" data-shot-gone hidden>This screenshot is no longer in storage. Reload the page to add it again.</p>
       </div>
       <footer class="a-dialog-foot">
         <a data-shot-open target="_blank" rel="noopener" class="btn-ghost">Open full size</a>
@@ -849,6 +856,13 @@ const facts: [string, string][] = [
       clear.hidden = !src;
       choose.textContent = src ? 'Choose another' : 'Choose screenshot';
     };
+    // Deleted from storage meanwhile (Vercel's file browser): ask for it again rather than show a broken picture.
+    preview.addEventListener('error', () => {
+      if (!id.value) return;
+      id.value = '';
+      show('');
+      say('That screenshot is no longer in storage. Choose it again.', true);
+    });
     if (id.value) show(`/admin/files/${id.value}.jpg`);
     choose.addEventListener('click', () => input.click());
     clear.addEventListener('click', () => {
@@ -897,14 +911,27 @@ const facts: [string, string][] = [
   });
 
   const viewer = document.getElementById('dlg-shot') as HTMLDialogElement | null;
-  document.querySelectorAll<HTMLButtonElement>('[data-shot]').forEach((b) =>
-    b.addEventListener('click', () => {
-      if (!viewer) return;
-      viewer.querySelector<HTMLImageElement>('[data-shot-img]')!.src = b.dataset.shot!;
-      viewer.querySelector<HTMLAnchorElement>('[data-shot-open]')!.href = b.dataset.shot!;
-      viewer.showModal();
-    }),
-  );
+  if (viewer) {
+    const img = viewer.querySelector<HTMLImageElement>('[data-shot-img]')!;
+    const open = viewer.querySelector<HTMLAnchorElement>('[data-shot-open]')!;
+    const gone = viewer.querySelector<HTMLElement>('[data-shot-gone]')!;
+    // Deleted from storage (Vercel's file browser): say so instead of a broken picture. The page then offers "Add the screenshot" again.
+    img.addEventListener('error', () => {
+      img.hidden = true;
+      open.hidden = true;
+      gone.hidden = false;
+    });
+    document.querySelectorAll<HTMLButtonElement>('[data-shot]').forEach((b) =>
+      b.addEventListener('click', () => {
+        img.hidden = false;
+        open.hidden = false;
+        gone.hidden = true;
+        img.src = b.dataset.shot!;
+        open.href = b.dataset.shot!;
+        viewer.showModal();
+      }),
+    );
+  }
 
   // Driver: picking one fills the car number and what the trip earns them;
   // "Add a new driver" shows the fields for one. A pay typed by hand stays.
@@ -1074,6 +1101,7 @@ const facts: [string, string][] = [
   [data-upi-only][hidden], [data-office-only][hidden], [data-driver-only][hidden] { display: none; }
   .a-shot { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2.25rem; margin-top: 0.15rem; padding: 0; border: 0; background: none; font: inherit; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
   .a-shot:disabled { opacity: 0.6; cursor: default; }
+  [data-shot-open][hidden] { display: none; }
   .a-celebrate { position: relative; overflow: hidden; display: flex; align-items: center; gap: 0.9rem; padding: 1rem 1.25rem; border-radius: 20px; background: var(--color-ink); }
   .a-burst { position: absolute; left: 1.6rem; top: 50%; width: 0; height: 0; }
   .a-burst i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--color-lime); opacity: 0; animation: a-pop 900ms ease-out 150ms forwards; }

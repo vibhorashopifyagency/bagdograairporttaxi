@@ -12,6 +12,8 @@ import type { ItineraryData } from '../../server/db/schema';
 import type { LibraryPhoto } from '../../server/trip';
 import type { Template } from '../../lib/itinerary-text';
 import { firstName, phoneLabel } from '../../lib/itinerary-text';
+import DateField from './DateField.astro';
+import TimeField from './TimeField.astro';
 
 interface Props {
   booking: { id: string; ref: string };
@@ -83,9 +85,9 @@ const field = 'a-field it-field';
           </div>
           <div class="it-trip-fields grid grid-cols-2 gap-3 lg:grid-cols-4">
             <label class={`${field} col-span-2 lg:col-span-4`}>Trip title<input data-k="title" value={draft.title} maxlength="120" /></label>
-            <label class={field}>Start<input data-k="start" type="date" value={draft.start} /></label>
-            <label class={field}>End<input data-k="end" type="date" value={draft.end} /></label>
-            <label class={field}>Pickup time<input data-k="time" type="time" value={draft.time} /></label>
+            <DateField label="Start" k="start" value={draft.start} placeholder="Not set" clearable class="it-field" />
+            <DateField label="End" k="end" value={draft.end} placeholder="Not set" after="start" quick={[]} clearable class="it-field" />
+            <TimeField label="Pickup time" k="time" value={draft.time} placeholder="Not set" clearable class="it-field" />
             <label class={field}>Travellers<input data-k="pax" type="number" min="1" max="50" value={draft.pax} /></label>
             <label class={`${field} col-span-2`}>Pickup point<input data-k="pickup" value={draft.pickup} maxlength="160" /></label>
             <label class={`${field} col-span-2`}>Flight or train<input data-k="flight" value={draft.flight} maxlength="60" /></label>
@@ -366,6 +368,24 @@ const field = 'a-field it-field';
       render();
     };
 
+    // An uploaded photo deleted from storage (in Vercel's file browser) since
+    // the page loaded: take it out of the itinerary rather than show a broken picture.
+    const missing = new Set<string>();
+    function dropMissing(key: string) {
+      if (missing.has(key)) return;
+      missing.add(key);
+      cfg.uploads = cfg.uploads.filter((u) => u.key !== key);
+      d.photos = d.photos.filter((k) => k !== key);
+      for (const day of d.days) if (day.photo === key) day.photo = '';
+      picker!.querySelector(`[data-uploads] [data-pick="${key}"]`)?.closest('li')?.remove();
+      changed();
+      renderDays();
+      renderPhotos();
+    }
+    const watch = (img: HTMLImageElement, key: string) => {
+      img.onerror = key.startsWith('u:') ? () => dropMissing(key) : null;
+    };
+
     /* ---------- Simple fields ---------- */
     root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-k]').forEach((input) => {
       input.addEventListener('input', () => {
@@ -407,7 +427,7 @@ const field = 'a-field it-field';
           const row = el('div', 'flex items-start gap-3');
           const img = el('img', 'it-day-img') as HTMLImageElement;
           img.alt = titleOf(day.photo);
-          if (day.photo) img.src = srcOf(day.photo, 400);
+          if (day.photo) { watch(img, day.photo); img.src = srcOf(day.photo, 400); }
           else img.classList.add('is-empty');
           const text = el('div', 'flex min-w-0 flex-1 flex-col gap-0.5');
           text.append(
@@ -487,6 +507,7 @@ const field = 'a-field it-field';
       const tiles = d.photos.map((key, i) => {
         const tile = el('div', 'it-photo');
         const img = el('img') as HTMLImageElement;
+        watch(img, key);
         img.src = srcOf(key, 400);
         img.alt = titleOf(key);
         const rm = el('button', 'it-photo-x') as HTMLButtonElement;
@@ -549,6 +570,7 @@ const field = 'a-field it-field';
       b.dataset.pick = u.key;
       b.setAttribute('aria-pressed', String(pickFor.day !== undefined ? d.days[pickFor.day]?.photo === u.key : d.photos.includes(u.key)));
       const img = el('img') as HTMLImageElement;
+      watch(img, u.key);
       img.src = u.src;
       img.alt = '';
       img.loading = 'lazy';
@@ -648,7 +670,7 @@ const field = 'a-field it-field';
       const cover = d.photos[0] ?? d.days.find((x) => x.photo)?.photo ?? '';
       const img = $<HTMLImageElement>('[data-card-img]');
       img.hidden = !cover;
-      if (cover) { img.src = srcOf(cover, 800); img.alt = titleOf(cover); }
+      if (cover) { watch(img, cover); img.src = srcOf(cover, 800); img.alt = titleOf(cover); }
       const range = shortRange(d.start, d.end);
       $('[data-card-title]').textContent = `${firstName(d.name) ? `${firstName(d.name)}'s ` : ''}${cfg.place} trip${range ? `, ${range}` : ''}`;
       $('[data-card-host]').textContent = new URL(cfg.tripUrl).host;
@@ -791,8 +813,8 @@ const field = 'a-field it-field';
   .it-details > summary::after { content: '+'; margin-left: auto; font-weight: 700; font-size: 1.25rem; }
   .it-details[open] > summary::after { content: '−'; }
   .it-field { font-size: 0.8125rem; }
-  .it-field input, .it-field textarea { min-height: 2.75rem; font-size: 0.95rem; }
-  @media (max-width: 1023px) { .it-field input, .it-field textarea { min-height: 3rem; font-size: 1rem; } }
+  .it-field input, .it-field textarea, .it-field .af-trigger { min-height: 2.75rem; font-size: 0.95rem; }
+  @media (max-width: 1023px) { .it-field input, .it-field textarea, .it-field .af-trigger { min-height: 3rem; font-size: 1rem; } }
   .it-phone { display: flex; align-items: center; gap: 0.5rem; border: 1px solid #0f7a4e; border-radius: 0.75rem; padding-right: 0.75rem; background: #fff; }
   .it-phone.is-bad { border-color: #d5d9e0; }
   .it-phone input { flex: 1 1 auto; min-width: 0; border: 0 !important; outline: 0 !important; }

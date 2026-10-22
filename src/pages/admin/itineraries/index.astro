@@ -13,6 +13,7 @@ import { audit } from '../../../server/admin';
 import { TONE, todayIST } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { cursorField, dateFilter, listHref, pageFrom, pageQuery, pageResult, rowsFor, withParams, type SortKey } from '../../../server/paging';
+import { adminFileSrc, itineraryKeys, liveUploads, uploadIdOf, withoutMissing } from '../../../server/files';
 import { ipHash } from '../../../server/security';
 import { deleteItinerary, tripPath } from '../../../server/trip';
 import { dateRange } from '../../../lib/itinerary-text';
@@ -50,7 +51,13 @@ const fetched = await getDb()
   .orderBy(...pq.orderBy)
   .limit(pq.limit);
 const list = pageResult(fetched, page, listHref('/admin/itineraries/', { show, from, to }), size);
-const rows = list.rows;
+// Uploaded photos deleted from storage are left out, so no card shows a broken picture.
+const live = await liveUploads(list.rows.flatMap((r) => itineraryKeys(r.draft)));
+const rows = list.rows.map((r) => ({ ...r, draft: withoutMissing(r.draft, live) }));
+const thumb = (key: string) => {
+  const id = uploadIdOf(key);
+  return id ? adminFileSrc(id) : `/img/${key}-400.webp`;
+};
 await audit({ actorId: user.id, action: 'view_itineraries', entity: 'itineraries', detail: { count: rows.length, from: from ?? undefined, to: to ?? undefined }, ipHash: ipHash(Astro.request) });
 
 const atFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -98,7 +105,7 @@ const origin = Astro.url.origin;
           const cover = r.draft.photos[0] ?? r.draft.days.find((x) => x.photo)?.photo;
           return (
             <li class="a-card flex overflow-hidden">
-              {cover ? <img src={`/img/${cover}-400.webp`} alt="" width="400" height="267" loading="lazy" class="w-[104px] shrink-0 object-cover sm:w-[128px]" /> : <span class="w-[104px] shrink-0 bg-mist sm:w-[128px]"></span>}
+              {cover ? <img src={thumb(cover)} alt="" width="400" height="267" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:this.className+' bg-mist'}))" class="w-[104px] shrink-0 object-cover sm:w-[128px]" /> : <span class="w-[104px] shrink-0 bg-mist sm:w-[128px]"></span>}
               <div class="flex min-w-0 flex-1 flex-col gap-1 p-4">
                 <span class="flex flex-wrap items-center gap-2">
                   <a href={`/admin/bookings/${r.ref}/`} class="font-mono text-sm font-bold text-ink">{r.ref}</a>

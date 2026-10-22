@@ -8,6 +8,7 @@ import { REF_RE } from '../../../../server/bookings';
 import { getDb, schema } from '../../../../server/db';
 import { advanceOf } from '../../../../server/fares';
 import { getUpi, paymentsFor, summarise } from '../../../../server/payments';
+import { itineraryKeys, liveUploads, withoutMissing } from '../../../../server/files';
 import { itineraryFromBooking, photoAlt, tripPlace } from '../../../../server/trip';
 import { eq } from 'drizzle-orm';
 
@@ -21,12 +22,14 @@ const [[itinerary], payments, upi] = await Promise.all([
   paymentsFor(booking.id),
   getUpi(),
 ]);
+const draft = itinerary?.draft ?? itineraryFromBooking(booking);
+const data = withoutMissing(draft, await liveUploads(itineraryKeys(draft)));
 ---
 
 <TripPage
   ref={booking.ref}
   status={booking.status}
-  data={itinerary?.draft ?? itineraryFromBooking(booking)}
+  data={data}
   hasPlan={true}
   place={tripPlace(booking)}
   pay={summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments, booking.kind)}
