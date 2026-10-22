@@ -1,0 +1,209 @@
+---
+/**
+ * A date box for the admin's forms, in place of the browser's own date input,
+ * which looks different on every phone and cannot be styled. It opens the
+ * same calendar as the lists' date range picker: one month under the box on
+ * a laptop, a sheet from the bottom on a phone. One tap on a day picks it.
+ * Quick picks (Today, Tomorrow ...) sit under the month.
+ *
+ * The form still receives a plain YYYY-MM-DD value in a hidden input, so the
+ * server and the page scripts see exactly what they did before. Dates are
+ * Indian dates: "today" is today in India, wherever the computer is.
+ *
+ * Keyboard: arrows move a day or a week, Home and End go to the start and end
+ * of the week, Page Up and Page Down a month, Enter picks, Esc closes.
+ */
+import { fieldDay, istToday, shiftDay } from '../../lib/date-range';
+import '../../styles/admin-picker.css';
+
+interface Props {
+  label: string;
+  /** The form field's name. */
+  name?: string;
+  /** For a popup that reads its fields by data-k (the itinerary). */
+  k?: string;
+  value?: string;
+  /** The earliest and latest days that can be picked, YYYY-MM-DD. */
+  min?: string;
+  max?: string;
+  /** Quick picks under the month, as days from today: 0 Today, 1 Tomorrow, -1 Yesterday. */
+  quick?: (0 | 1 | -1)[];
+  required?: boolean;
+  /** Offers "Clear" for a date that may be left empty. */
+  clearable?: boolean;
+  /** The data-k or name of the start date this one cannot come before (an itinerary's end date). */
+  after?: string;
+  placeholder?: string;
+  class?: string;
+}
+const { label, name, k, value = '', min, max, quick = [0, 1], required = false, clearable = false, after, placeholder = 'Choose a date', class: cls } = Astro.props;
+const today = istToday();
+const id = `af-${Math.random().toString(36).slice(2, 8)}`;
+const QUICK_LABEL = { 0: 'Today', 1: 'Tomorrow', '-1': 'Yesterday' } as const;
+const calendar = '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/>';
+const svg = (d: string, size = 18) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+---
+
+<div
+  class:list={['a-field af', cls]}
+  data-af-date
+  data-af-key={k ?? name}
+  data-placeholder={placeholder}
+  data-min={min}
+  data-max={max}
+  data-after={after}
+  data-required={required ? '' : undefined}
+>
+  <span id={`${id}-label`}>{label}</span>
+  <input type="hidden" name={name} data-k={k} value={value} />
+  <button type="button" class="af-trigger" id={`${id}-btn`} popovertarget={`${id}-pop`} aria-haspopup="dialog" aria-labelledby={`${id}-label ${id}-btn`} data-af-trigger>
+    <span class="af-icon" set:html={svg(calendar)} />
+    <span class:list={['af-value', !value && 'is-empty']} data-af-value>{value ? fieldDay(value, today) : placeholder}</span>
+    <span class="af-caret" set:html={svg('<path d="m6 9 6 6 6-6"/>', 16)} />
+  </button>
+  <span class="af-error" data-af-error hidden>Choose the {label.toLowerCase()}.</span>
+
+  <div id={`${id}-pop`} popover class="af-pop" role="dialog" aria-labelledby={`${id}-label`} data-af-pop>
+    <div class="af-head">
+      <span class="af-title">{label}</span>
+      <button type="button" class="af-close" popovertarget={`${id}-pop`} popovertargetaction="hide" aria-label="Close" set:html={svg('<path d="M18 6 6 18M6 6l12 12"/>', 20)} />
+    </div>
+    <div class="af-cal"><div class="drp-month" data-af-month></div></div>
+    {(quick.length > 0 || clearable) && (
+      <div class="af-quick" role="group" aria-label="Quick picks">
+        {quick.map((n) => <button type="button" class="af-chip" data-af-quick={n} data-day={shiftDay(today, n)} aria-pressed={value === shiftDay(today, n) ? 'true' : 'false'}>{QUICK_LABEL[n]}</button>)}
+        {clearable && <button type="button" class="af-chip af-chip-clear" data-af-clear>Clear</button>}
+      </div>
+    )}
+  </div>
+</div>
+
+<script>
+  import { pickerField } from '../../lib/admin-picker';
+  import { dayNumber, fieldDay, istToday, longDay, monthEnd, monthStart, monthTitle, shiftDay, shiftMonth, weekday, type Day } from '../../lib/date-range';
+
+  const DOW = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  const arrow = (d: string) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  /** The same day in a month n months away, kept inside that month (31 Jan + 1 month = 28 Feb). */
+  const sameDayInMonth = (d: Day, n: number) => {
+    const m = shiftMonth(d, n);
+    return shiftDay(m, Math.min(dayNumber(d), dayNumber(monthEnd(m))) - 1);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-af-date]').forEach((root) => {
+    const month = root.querySelector<HTMLElement>('[data-af-month]')!;
+    const quick = [...root.querySelectorAll<HTMLButtonElement>('[data-af-quick]')];
+    const { min, max, after } = root.dataset;
+    const scope = root.closest('dialog, form') ?? document;
+    const start = after ? scope.querySelector<HTMLInputElement>(`[data-af-date][data-af-key="${after}"] input[type=hidden]`) : null;
+
+    let today = istToday();
+    let view = monthStart(today);
+    let focusDay = today;
+
+    /** The first day that can be picked: the later of `min` and the start date. */
+    const lowest = () => [min, start?.value].filter((d): d is Day => Boolean(d)).sort().pop();
+    const allowed = (d: Day) => !(d < (lowest() ?? '')) && !(max && d > max);
+    const clamp = (d: Day) => {
+      const lo = lowest();
+      return lo && d < lo ? lo : max && d > max ? max : d;
+    };
+
+    const f = pickerField(root, {
+      label: (v) => fieldDay(v, istToday()),
+      prepare() {
+        today = istToday();
+        for (const q of quick) {
+          q.dataset.day = shiftDay(today, Number(q.dataset.afQuick));
+          q.disabled = !allowed(q.dataset.day);
+        }
+        focusDay = clamp(f.input.value || start?.value || today);
+        view = monthStart(focusDay);
+        render();
+      },
+      focus: () => month.querySelector<HTMLElement>('[tabindex="0"]'),
+      sync(v) {
+        for (const q of quick) q.setAttribute('aria-pressed', String(Boolean(v) && v === q.dataset.day));
+      },
+    });
+
+    function render() {
+      const v = f.input.value;
+      const from = start?.value;
+      // An end date shows its trip: the band from the start date to it.
+      const band = Boolean(from && v && v > from);
+      const end = monthEnd(view);
+      const lo = lowest();
+      let html = '<div class="drp-month-head">';
+      html += `<button type="button" class="drp-nav" data-nav="-1" aria-label="Previous month"${lo && view <= lo ? ' disabled' : ''}>${arrow('m15 18-6-6 6-6')}</button>`;
+      html += `<span class="drp-month-title" aria-live="polite">${monthTitle(view)}</span>`;
+      html += `<button type="button" class="drp-nav" data-nav="1" aria-label="Next month"${max && end >= max ? ' disabled' : ''}>${arrow('m9 18 6-6-6-6')}</button>`;
+      html += `</div><div class="drp-grid">${DOW.map((d) => `<span class="drp-dow" aria-hidden="true">${d}</span>`).join('')}`;
+      html += '<span></span>'.repeat(weekday(view));
+      for (let d = view; d <= end; d = shiftDay(d, 1)) {
+        const c = ['drp-day'];
+        if (weekday(d) === 0 || d === view) c.push('is-row-start');
+        if (weekday(d) === 6 || d === end) c.push('is-row-end');
+        if (d === today) c.push('is-today');
+        if (band) {
+          if (d === from) c.push('is-start', 'band-right');
+          else if (d === v) c.push('is-end', 'band-left');
+          else if (d > from! && d < v) c.push('is-in');
+        } else if (d === v) c.push('is-sel');
+        html += `<button type="button" class="${c.join(' ')}" data-day="${d}" tabindex="${d === focusDay ? 0 : -1}"`
+          + ` aria-label="${esc(longDay(d))}${d === today ? ', today' : ''}" aria-pressed="${d === v}"${allowed(d) ? '' : ' disabled'}><span>${dayNumber(d)}</span></button>`;
+      }
+      month.innerHTML = `${html}</div>`;
+    }
+
+    month.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      const nav = t.closest<HTMLButtonElement>('[data-nav]');
+      if (nav) {
+        const n = Number(nav.dataset.nav);
+        view = shiftMonth(view, n);
+        focusDay = clamp(sameDayInMonth(focusDay, n));
+        render();
+        // At the first or last month the arrow turns itself off; keep the keyboard in the calendar.
+        const again = month.querySelector<HTMLButtonElement>(`[data-nav="${n}"]`)!;
+        (again.disabled ? month.querySelector<HTMLElement>('[tabindex="0"]') : again)?.focus();
+        return;
+      }
+      const day = t.closest<HTMLButtonElement>('[data-day]');
+      if (day && !day.disabled) f.set(day.dataset.day!, true);
+    });
+
+    month.addEventListener('keydown', (e) => {
+      const d = (e.target as HTMLElement).dataset?.day;
+      if (!d) return;
+      const step: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+      let next: Day | null = null;
+      if (e.key in step) next = shiftDay(d, step[e.key]!);
+      else if (e.key === 'Home') next = shiftDay(d, -weekday(d));
+      else if (e.key === 'End') next = shiftDay(d, 6 - weekday(d));
+      else if (e.key === 'PageUp') next = sameDayInMonth(d, -1);
+      else if (e.key === 'PageDown') next = sameDayInMonth(d, 1);
+      if (!next) return;
+      e.preventDefault();
+      focusDay = clamp(next);
+      if (monthStart(focusDay) !== view) {
+        view = monthStart(focusDay);
+        render();
+      } else {
+        month.querySelectorAll('[tabindex="0"]').forEach((b) => b.setAttribute('tabindex', '-1'));
+        month.querySelector(`[data-day="${focusDay}"]`)?.setAttribute('tabindex', '0');
+      }
+      month.querySelector<HTMLElement>(`[data-day="${focusDay}"]`)?.focus();
+    });
+
+    for (const q of quick) q.addEventListener('click', () => f.set(q.dataset.day!, true));
+    root.querySelector('[data-af-clear]')?.addEventListener('click', () => f.set('', true));
+
+    // A start date moved past this one takes it along, so the trip never ends before it begins.
+    start?.addEventListener('change', () => {
+      if (f.input.value && start.value && f.input.value < start.value) f.set(start.value);
+    });
+  });
+</script>

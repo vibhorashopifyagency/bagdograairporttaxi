@@ -5,6 +5,8 @@
  * with source 'staff', so it is never mixed up with a website request.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import DateField from '../../../components/admin/DateField.astro';
+import TimeField from '../../../components/admin/TimeField.astro';
 import { PACKAGES } from '../../../data/packages';
 import { ROUTES } from '../../../data/routes';
 import { POLICY } from '../../../data/site';
@@ -134,6 +136,8 @@ const fareData = {
   packages: Object.fromEntries(PACKAGES.map((p) => [p.slug, p.fromPrice])),
   night: { from: POLICY.nightChargeFrom, to: POLICY.nightChargeTo, charge: POLICY.nightCharge },
 };
+/** The times in the night-charge window say so in the time list. */
+const night = { from: POLICY.nightChargeFrom, to: POLICY.nightChargeTo, tag: `+₹${POLICY.nightCharge.toLocaleString('en-IN')} night charge` };
 const kinds = [
   ['taxi', 'Taxi route'],
   ['package', 'Tour package'],
@@ -183,8 +187,8 @@ const kinds = [
             </select>
           </label>
           <label class="a-field">Travellers<input name="pax" type="number" min="1" max="50" required value={draft.pax} /></label>
-          <label class="a-field">Pickup date<input name="date" type="date" required value={draft.date} /></label>
-          <label class="a-field">Pickup time<input name="time" type="time" required value={draft.time} /></label>
+          <DateField label="Pickup date" name="date" value={draft.date} min={addDays(today, -60)} max={addDays(today, 400)} required />
+          <TimeField label="Pickup time" name="time" value={draft.time} night={night} required />
         </div>
         <label class="a-field"><span>Flight or train <span class="font-normal text-muted">(optional)</span></span><input name="flight" value={draft.flight} maxlength="40" placeholder="6E 5321" autocapitalize="characters" /></label>
         <label class="a-field"><span>Pickup or drop address <span class="font-normal text-muted">(optional)</span></span><input name="drop" value={draft.drop} maxlength="200" /></label>

@@ -37,7 +37,7 @@
 [data-theme='dark'] body { background: var(--a-page); color: var(--color-ink); }
 [data-theme='dark'] .bg-white, [data-theme='dark'] .a-card, [data-theme='dark'] .card,
 [data-theme='dark'] .a-dialog, [data-theme='dark'] .a-dialog-foot, [data-theme='dark'] .a-sheet,
-[data-theme='dark'] .drp-pop, [data-theme='dark'] .ta-pop, [data-theme='dark'] .drp-field, [data-theme='dark'] .fs-field,
+[data-theme='dark'] .drp-pop, [data-theme='dark'] .af-pop, [data-theme='dark'] .ta-pop, [data-theme='dark'] .drp-field, [data-theme='dark'] .fs-field,
 [data-theme='dark'] .it-day, [data-theme='dark'] .it-phone { background-color: var(--a-surface); }
 [data-theme='dark'] .card { box-shadow: none; }
 [data-theme='dark'] [class~='bg-[#f7f8fa]'], [data-theme='dark'] [class~='bg-[#eef0f3]'], [data-theme='dark'] [class~='bg-[#e3e6ea]'], [data-theme='dark'] .a-drop { background-color: var(--a-raised); }
@@ -50,7 +50,8 @@
 
 /* Selected states drawn in ink (pills, tabs, rows-per-page, status chips) become lime. */
 [data-theme='dark'] [aria-current].bg-ink, [data-theme='dark'] [aria-pressed='true'].bg-ink,
-[data-theme='dark'] .a-pill input:checked + span, [data-theme='dark'] .drp-day.is-start > span, [data-theme='dark'] .drp-day.is-end > span {
+[data-theme='dark'] .a-pill input:checked + span, [data-theme='dark'] .drp-day.is-start > span, [data-theme='dark'] .drp-day.is-end > span,
+[data-theme='dark'] .drp-day.is-sel > span, [data-theme='dark'] .af-opt[aria-pressed='true'] {
   background-color: var(--color-lime); border-color: var(--color-lime); color: #111;
 }
 [data-theme='dark'] [aria-current].bg-ink * { color: #111; }
@@ -67,7 +68,7 @@
 [data-theme='dark'] .btn-book[class~='bg-[#b42318]']:hover { background-color: #d03a2d; }
 [data-theme='dark'] .btn-ghost, [data-theme='dark'] .a-icon-btn, [data-theme='dark'] .a-pill span, [data-theme='dark'] .a-chip,
 [data-theme='dark'] .it-chip, [data-theme='dark'] .it-chip-x, [data-theme='dark'] .it-mini, [data-theme='dark'] .it-dashed, [data-theme='dark'] .it-photo-add,
-[data-theme='dark'] .drp-nav, [data-theme='dark'] .drp-close, [data-theme='dark'] .a-act {
+[data-theme='dark'] .drp-nav, [data-theme='dark'] .drp-close, [data-theme='dark'] .af-close, [data-theme='dark'] .af-chip:not(.af-chip-clear), [data-theme='dark'] .a-act {
   background-color: var(--a-surface); border-color: var(--a-edge);
 }
 [data-theme='dark'] .btn-ghost:hover, [data-theme='dark'] .a-icon-btn:hover, [data-theme='dark'] .a-chip:hover, [data-theme='dark'] .a-act:hover:not(:disabled) { border-color: var(--color-muted); }
@@ -75,15 +76,21 @@
 [data-theme='dark'] .a-icon-btn-wa, [data-theme='dark'] .a-act-wa { background: #0f7a4e; border-color: #0f7a4e; color: #fff; }
 [data-theme='dark'] .drp-seg button[aria-pressed='true'] { background: var(--a-surface); box-shadow: none; }
 [data-theme='dark'] .drp-day.is-hover-end > span { background: var(--a-surface); }
-[data-theme='dark'] .drp-preset[aria-pressed='true'] { color: #c4f25a; }
+[data-theme='dark'] .drp-preset[aria-pressed='true'], [data-theme='dark'] .af-chip[aria-pressed='true'] { color: #c4f25a; }
+[data-theme='dark'] .af-chip[aria-pressed='true'] { background-color: var(--color-lime-50); border-color: var(--color-lime-100); }
+[data-theme='dark'] .af-chip-clear { background-color: transparent; }
+[data-theme='dark'] .af-opt[aria-pressed='true'] .af-note, [data-theme='dark'] .af-opt[aria-pressed='true'] .af-tag { color: rgb(17 17 17 / 70%); }
 [data-theme='dark'] input[type='radio'], [data-theme='dark'] input[type='checkbox'] { accent-color: var(--color-lime); }
 
 /* ---------- Text and lines ---------- */
 [data-theme='dark'] [class~='text-[#5c6373]'] { color: var(--color-muted); }
 [data-theme='dark'] svg[stroke='#5c6373'] { stroke: var(--color-muted); }
-[data-theme='dark'] .a-field input, [data-theme='dark'] .a-field select, [data-theme='dark'] .a-field textarea { background: var(--a-input); border-color: var(--a-edge); }
+[data-theme='dark'] .a-field input, [data-theme='dark'] .a-field select, [data-theme='dark'] .a-field textarea, [data-theme='dark'] .af-trigger { background: var(--a-input); border-color: var(--a-edge); }
+[data-theme='dark'] .af-trigger:hover, [data-theme='dark'] .af.is-open .af-trigger { border-color: var(--color-muted); }
+[data-theme='dark'] .af.is-invalid .af-trigger { border-color: #ff8f86; }
+[data-theme='dark'] .af-error { color: #ff8f86; }
 [data-theme='dark'] [class~='border-[#f0f1f3]'], [data-theme='dark'] [class~='border-[#eceef1]'], [data-theme='dark'] [class~='border-[#e3e6ea]'],
-[data-theme='dark'] .a-table td, [data-theme='dark'] .a-dialog-head, [data-theme='dark'] .a-dialog-foot, [data-theme='dark'] .drp-body, [data-theme='dark'] .drp-presets, [data-theme='dark'] .drp-foot,
+[data-theme='dark'] .a-table td, [data-theme='dark'] .a-dialog-head, [data-theme='dark'] .a-dialog-foot, [data-theme='dark'] .drp-body, [data-theme='dark'] .drp-presets, [data-theme='dark'] .drp-foot, [data-theme='dark'] .af-quick,
 [data-theme='dark'] .it-chip, [data-theme='dark'] .it-chip-x, [data-theme='dark'] .it-mini { border-color: #262b32; }
 
 /* Whatever sits on lime or amber keeps dark text. */

@@ -35,6 +35,20 @@ export const monthTitle = (d: Day) => fMonth.format(asDate(d));
 export const longDay = (d: Day) => fLong.format(asDate(d));
 export const dayNumber = (d: Day) => Number(d.slice(8, 10));
 
+const fIst = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
+/** Today in India, wherever the computer is. */
+export const istToday = (now = new Date()): Day => fIst.format(now);
+
+const fWd = fmt({ weekday: 'short' });
+/**
+ * A single date on a form field: "Today, Thu 22 Oct", "Mon 2 Nov", and the
+ * year only when it is not this year ("Mon 4 Jan 2027").
+ */
+export function fieldDay(d: Day, today: Day): string {
+  const near = d === today ? 'Today, ' : d === shiftDay(today, 1) ? 'Tomorrow, ' : d === shiftDay(today, -1) ? 'Yesterday, ' : '';
+  return `${near}${fWd.format(asDate(d))} ${(d.slice(0, 4) === today.slice(0, 4) ? fDM : fDMY).format(asDate(d))}`;
+}
+
 /** "11 Sept 2026", "11–12 Sept 2026", "28 Sept – 3 Oct 2026", "From 11 Sept 2026", or "" for no dates. */
 export function rangeLabel(from: Day | null, to: Day | null): string {
   if (from && to) {

@@ -1,0 +1,161 @@
+---
+/**
+ * A time box for the admin's forms, in place of the browser's own time
+ * input: the same list as the booking page, the day's times 15 minutes apart.
+ * Tap a time and it is chosen. It opens on the time already chosen, or on the
+ * next one coming up in India. Times in the night-charge window say so on the
+ * row. A time saved off the 15-minute steps keeps its own row.
+ *
+ * The form still receives a 24-hour HH:MM value in a hidden input, as the
+ * server and the night-charge check expect. On a laptop, typing jumps along
+ * the list ("7p" for 7:00 PM, "1030" for 10:30); arrows, Home and End move,
+ * Enter picks.
+ */
+import { inWindow, timeLabel, timeSlots } from '../../lib/time-slots';
+import '../../styles/admin-picker.css';
+
+interface Props {
+  label: string;
+  /** The form field's name. */
+  name?: string;
+  /** For a popup that reads its fields by data-k (the itinerary). */
+  k?: string;
+  value?: string;
+  required?: boolean;
+  /** Offers "Clear" for a time that may be left empty. */
+  clearable?: boolean;
+  /** A night-charge window as 24-hour HH:MM times; the times inside it carry `nightTag`. */
+  night?: { from: string; to: string; tag: string };
+  placeholder?: string;
+  class?: string;
+}
+const { label, name, k, value = '', required = false, clearable = false, night, placeholder = 'Choose a time', class: cls } = Astro.props;
+const id = `af-${Math.random().toString(36).slice(2, 8)}`;
+const slots = timeSlots(value).map((v) => ({
+  value: v,
+  text: timeLabel(v, false),
+  note: v === '00:00' ? 'midnight' : v === '12:00' ? 'noon' : '',
+  night: night && inWindow(v, night.from, night.to),
+}));
+const clock = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
+const svg = (d: string, size = 18) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+---
+
+<div class:list={['a-field af', cls]} data-af-time data-placeholder={placeholder} data-required={required ? '' : undefined}>
+  <span id={`${id}-label`}>{label}</span>
+  <input type="hidden" name={name} data-k={k} value={value} />
+  <button type="button" class="af-trigger" id={`${id}-btn`} popovertarget={`${id}-pop`} aria-haspopup="dialog" aria-labelledby={`${id}-label ${id}-btn`} data-af-trigger>
+    <span class="af-icon" set:html={svg(clock)} />
+    <span class:list={['af-value', !value && 'is-empty']} data-af-value>{value ? timeLabel(value) : placeholder}</span>
+    <span class="af-caret" set:html={svg('<path d="m6 9 6 6 6-6"/>', 16)} />
+  </button>
+  <span class="af-error" data-af-error hidden>Choose the {label.toLowerCase()}.</span>
+
+  <div id={`${id}-pop`} popover class="af-pop af-pop-time" role="dialog" aria-labelledby={`${id}-label`} data-af-pop>
+    <div class="af-head">
+      <span class="af-title">{label}</span>
+      <button type="button" class="af-close" popovertarget={`${id}-pop`} popovertargetaction="hide" aria-label="Close" set:html={svg('<path d="M18 6 6 18M6 6l12 12"/>', 20)} />
+    </div>
+    <div class="af-list" role="group" aria-labelledby={`${id}-label`} data-af-list>
+      {slots.map((s) => (
+        <button type="button" class="af-opt" data-tp={s.value} aria-pressed={s.value === value ? 'true' : 'false'} tabindex="-1">
+          <span>{s.text}{s.note && <span class="af-note"> ({s.note})</span>}</span>
+          {s.night && <span class="af-tag">{night!.tag}</span>}
+        </button>
+      ))}
+    </div>
+    {clearable && (
+      <div class="af-quick">
+        <button type="button" class="af-chip af-chip-clear" data-af-clear>Clear</button>
+      </div>
+    )}
+  </div>
+</div>
+
+<script>
+  import { pickerField } from '../../lib/admin-picker';
+  import { timeLabel } from '../../lib/time-slots';
+
+  const istNow = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  /** "7:30 PM (noon)" as ["730", "pm"]: typing "7", "73", "730" or "7p" finds it. */
+  const typed = (b: HTMLElement) => {
+    const t = b.firstElementChild!.textContent!.toLowerCase().replace(/\(.*?\)/, '');
+    return [t.replace(/\D/g, ''), t.replace(/[^apm]/g, '')] as const;
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-af-time]').forEach((root) => {
+    const list = root.querySelector<HTMLElement>('[data-af-list]')!;
+    const opts = () => [...list.querySelectorAll<HTMLButtonElement>('[data-tp]')];
+    let at: HTMLButtonElement | undefined;
+
+    /** Puts the keyboard on a row, scrolled into the middle of the list when `centre`. */
+    function move(to: HTMLButtonElement, centre = false) {
+      at = to;
+      for (const b of opts()) b.tabIndex = b === to ? 0 : -1;
+      if (centre) list.scrollTop = to.offsetTop - (list.clientHeight - to.offsetHeight) / 2;
+      else to.scrollIntoView({ block: 'nearest' });
+    }
+
+    const f = pickerField(root, {
+      label: (v) => timeLabel(v),
+      prepare() {
+        const v = f.input.value;
+        // The chosen time, or else the next quarter hour coming up in India.
+        const all = opts();
+        let to = all.find((b) => b.dataset.tp === v);
+        if (!to) {
+          const now = istNow.format(new Date());
+          to = all.find((b) => b.dataset.tp! >= now) ?? all[0]!;
+        }
+        for (const b of all) b.setAttribute('aria-pressed', String(b.dataset.tp === v));
+        at = to;
+        for (const b of all) b.tabIndex = b === to ? 0 : -1;
+      },
+      focus() {
+        // The list has its height once the panel shows: centre the time in it.
+        if (at) move(at, true);
+        return at;
+      },
+    });
+
+    list.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-tp]');
+      if (b) f.set(b.dataset.tp!, true);
+    });
+
+    let buffer = '';
+    let timer = 0;
+    list.addEventListener('keydown', (e) => {
+      const all = opts();
+      const i = at ? all.indexOf(at) : 0;
+      const step: Record<string, number> = { ArrowUp: -1, ArrowDown: 1, PageUp: -4, PageDown: 4, Home: -i, End: all.length - 1 - i };
+      if (e.key in step) {
+        e.preventDefault();
+        const to = all[Math.max(0, Math.min(all.length - 1, i + step[e.key]!))]!;
+        move(to);
+        to.focus({ preventScroll: true });
+        return;
+      }
+      // Typing jumps to the next time that starts that way: digits for the time, then a or p.
+      if (!/^[0-9apm]$/i.test(e.key) || e.metaKey || e.ctrlKey || e.altKey) return;
+      clearTimeout(timer);
+      timer = window.setTimeout(() => (buffer = ''), 900);
+      buffer += e.key.toLowerCase();
+      if (!/^\d*[apm]*$/.test(buffer)) buffer = e.key.toLowerCase();
+      const [digits, half] = [buffer.replace(/\D/g, ''), buffer.replace(/\d/g, '')];
+      const from = buffer.length === 1 ? i + 1 : i;
+      const order = [...all.slice(from), ...all.slice(0, from)];
+      const to = order.find((b) => {
+        const [d, h] = typed(b);
+        return d.startsWith(digits) && h.startsWith(half);
+      });
+      if (to) {
+        move(to, true);
+        to.focus({ preventScroll: true });
+      }
+    });
+
+    root.querySelector('[data-af-clear]')?.addEventListener('click', () => f.set('', true));
+  });
+</script>

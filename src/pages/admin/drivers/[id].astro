@@ -7,6 +7,7 @@
  * payments; only the admin reverses one.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import DateField from '../../../components/admin/DateField.astro';
 import DriverFields from '../../../components/admin/DriverFields.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { isAdmin } from '../../../server/admin';
@@ -320,7 +321,7 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
             ))}
           </fieldset>
           <div class="grid gap-4 sm:grid-cols-2">
-            <label class="a-field">Date<input name="paidOn" type="date" required value={payout.paidOn} max={addDays(today, 1)} /></label>
+            <DateField label="Date" name="paidOn" value={payout.paidOn} min={addDays(today, -400)} max={addDays(today, 1)} quick={[0, -1]} required />
             <label class="a-field"><span>Reference <span class="font-normal text-muted">(optional)</span></span><input name="reference" maxlength="60" value={payout.reference} autocomplete="off" /></label>
           </div>
           <label class="a-field"><span>Note <span class="font-normal text-muted">(optional)</span></span><input name="note" maxlength="300" value={payout.note} placeholder="Trips up to 20 Oct" /></label>
