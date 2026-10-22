@@ -1,0 +1,88 @@
+---
+/**
+ * The welcome popup: one card, 15 seconds after a visitor arrives, with the
+ * happy photo, the promise and the two ways to book. A native <dialog>, so
+ * it sits above everything and Escape closes it. It shows once a day per
+ * browser, never over another open popup or the phone menu, and the booking
+ * form leaves it out (BaseLayout `welcome={false}`). Add ?welcome to any
+ * page address to see it straight away. Its words are the "Welcome popup"
+ * page words in the dashboard (Edit pages).
+ */
+import Icon from './Icon.astro';
+import Photo from './Photo.astro';
+import Words from './Words.astro';
+import { waLink } from '../data/site';
+---
+
+<dialog id="welcome" class="hi-dlg" aria-labelledby="hi-title">
+  <div class="hi-photo">
+    <Photo name="happy-travellers" class="h-full w-full object-cover" sizes="(min-width: 640px) 34rem, 100vw" />
+    <button type="button" class="hi-x" data-hi-close aria-label="Close">
+      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+  </div>
+  <div class="hi-body">
+    <Words page="welcome" field="eyebrow" as="p" class="hi-eyebrow" />
+    <Words page="welcome" field="title" as="h2" id="hi-title" class="hi-title" />
+    <Words page="welcome" field="text" as="p" class="hi-text" />
+    <div class="hi-actions">
+      <a class="btn-lime" href="/book/"><Words page="welcome" field="bookButton" /> <Icon name="arrow" /></a>
+      <a class="btn-wa" href={waLink('Hi, I would like to book a taxi from Bagdogra.')} rel="noopener"><Icon name="whatsapp" /> <Words page="welcome" field="whatsappButton" /></a>
+      <button type="button" class="hi-later" data-hi-close><Words page="welcome" field="later" /></button>
+    </div>
+  </div>
+</dialog>
+
+<style is:global>
+  /* Centred on a laptop, a sheet from the bottom on a phone. */
+  .hi-dlg { width: min(100% - 2rem, 34rem); max-height: calc(100dvh - 2rem); margin: auto; padding: 0; border: 0; border-radius: 1.75rem; background: #fff; color: var(--color-ink); overflow: hidden; box-shadow: 0 40px 80px -30px rgb(0 0 0 / 50%); }
+  .hi-dlg[open] { display: flex; flex-direction: column; animation: hi-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .hi-dlg::backdrop { background: rgb(17 17 17 / 55%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  @keyframes hi-in { from { opacity: 0; transform: translateY(16px) scale(0.97); } }
+  .hi-photo { position: relative; flex: none; aspect-ratio: 16 / 9; max-height: 15rem; background: var(--color-mist); }
+  .hi-photo img { object-position: 50% 65%; }
+  .hi-x { position: absolute; top: 0.75rem; right: 0.75rem; display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border: 0; border-radius: 9999px; background: rgb(255 255 255 / 92%); color: var(--color-ink); cursor: pointer; box-shadow: 0 1px 3px rgb(17 17 17 / 20%); }
+  .hi-x:hover { background: #fff; }
+  .hi-body { padding: 1.25rem 1.5rem 1.5rem; overflow-y: auto; }
+  .hi-eyebrow { display: inline-flex; align-items: center; border-radius: 9999px; background: var(--color-lime-50); padding: 0.3rem 0.8rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-lime-text); }
+  .hi-title { margin-top: 0.75rem; font-size: clamp(1.5rem, 1rem + 1.6vw, 1.9rem); font-weight: 800; line-height: 1.12; }
+  .hi-text { margin-top: 0.6rem; color: var(--color-body); line-height: 1.55; }
+  .hi-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1.25rem; }
+  .hi-later { margin-left: auto; min-height: 2.75rem; padding: 0 0.5rem; border: 0; background: none; color: var(--color-muted); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .hi-later:hover { color: var(--color-ink); }
+  @media (max-width: 639.98px) {
+    .hi-dlg { width: 100%; max-width: none; max-height: 92dvh; margin: auto 0 0; border-radius: 1.5rem 1.5rem 0 0; }
+    @keyframes hi-in { from { opacity: 0; transform: translateY(32px); } }
+    .hi-photo { max-height: 12.5rem; }
+    .hi-body { padding: 1.1rem 1.25rem max(env(safe-area-inset-bottom), 1.25rem); }
+    .hi-actions > .btn-lime, .hi-actions > .btn-wa { flex: 1 1 auto; }
+    .hi-later { flex: 1 1 100%; margin: 0; }
+  }
+</style>
+
+<script>
+  const dlg = document.getElementById('welcome') as HTMLDialogElement | null;
+  const KEY = 'bat-welcome-shown';
+  const DAY = 864e5;
+  const DELAY = 15_000;
+  if (dlg && typeof dlg.showModal === 'function') {
+    const force = new URLSearchParams(location.search).has('welcome');
+    let shown = 0;
+    try { shown = Number(localStorage.getItem(KEY)) || 0; } catch {}
+    let tries = 0;
+    const open = () => {
+      if (dlg.open) return;
+      // Not over another popup, the photo viewer or the phone menu: try again shortly, a few times.
+      if (document.querySelector('dialog[open], .mnav[open], .mega.is-open')) { if (tries++ < 4) setTimeout(open, 10_000); return; }
+      // A tab in the background waits until it is looked at.
+      if (document.hidden) { document.addEventListener('visibilitychange', () => { if (!document.hidden) open(); }, { once: true }); return; }
+      try { localStorage.setItem(KEY, String(Date.now())); } catch {}
+      dlg.showModal();
+    };
+    if (force) open();
+    else if (Date.now() - shown >= DAY) setTimeout(open, DELAY);
+    dlg.querySelectorAll('[data-hi-close]').forEach((b) => b.addEventListener('click', () => dlg.close()));
+    // A tap on the dimmed page closes it.
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+  }
+</script>

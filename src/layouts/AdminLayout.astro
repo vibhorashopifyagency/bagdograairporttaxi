@@ -476,7 +476,7 @@ const tabs: Item[] = [
       .a-icon-btn-wa { border: 0; background: #0f7a4e; color: #fff; }
       .a-icon-btn-wa:hover { background: #0b5f3c; }
       .a-sheet { margin: auto 0 0; width: 100%; max-width: 100%; max-height: 85vh; border: 0; border-radius: 24px 24px 0 0; padding: 0; background: #fff; color: var(--color-ink); }
-      .a-sheet::backdrop { background: rgb(17 17 17 / 55%); }
+      .a-sheet::backdrop { background: rgb(17 17 17 / 55%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
       /* Pill choices (UPI or cash, share or fixed pay). */
       .a-pill span { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1.1rem; border-radius: 999px; border: 1px solid var(--color-line); background: #fff; font-weight: 600; font-size: 0.9rem; color: var(--color-body); cursor: pointer; }
       .a-pill input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
@@ -485,7 +485,7 @@ const tabs: Item[] = [
       /* Popups: centred on a laptop, the whole screen on a phone. */
       .a-dialog { margin: auto; width: min(100% - 2rem, 640px); max-width: none; max-height: calc(100dvh - 3rem); border: 0; border-radius: 24px; padding: 0; background: #fff; color: var(--color-ink); overflow: hidden; }
       .a-dialog[open] { display: flex; flex-direction: column; }
-      .a-dialog::backdrop { background: rgb(17 17 17 / 55%); }
+      .a-dialog::backdrop { background: rgb(17 17 17 / 55%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
       .a-dialog-sm { width: min(100% - 2rem, 520px); }
       .a-dialog-xl { width: min(100% - 3rem, 1120px); height: calc(100dvh - 3rem); border-radius: 28px; }
       .a-dialog-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }

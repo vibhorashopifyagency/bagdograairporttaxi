@@ -548,6 +548,21 @@ export const WORD_PAGES = {
     },
   },
 
+  welcome: {
+    name: 'Welcome popup',
+    group: 'shared',
+    path: '/',
+    note: 'The card that pops up 15 seconds after a visitor arrives, with the happy photo. Once a day per visitor; not on the booking form or trip pages.',
+    fields: {
+      eyebrow: f('Small heading above', 'Welcome to the hills'),
+      title: f('Heading', 'Your mountain holiday starts the moment you land'),
+      text: f('Text', 'A driver with your name at the arrivals door, fixed fares from {fromFare}, {freeWait} minutes of free waiting and free cancellation up to {freeCancel} hours before pickup. Pay only {advance}% now.'),
+      bookButton: f('Book button', 'Book my taxi'),
+      whatsappButton: f('WhatsApp button', 'Ask on WhatsApp'),
+      later: f('"Not now" link', 'Maybe later'),
+    },
+  },
+
   'route-page': {
     name: 'Every taxi route page',
     group: 'templates',

@@ -54,6 +54,21 @@ export const PHOTOS = {
   'car-traveller': { file: 'Force Traveller, Leh-Manali Highway.jpg', alt: 'A Force Traveller on a mountain highway' },
 };
 
+/**
+ * key -> a free stock photograph (Pexels licence: free to use and change, no
+ * credit required, though it is credited on /photo-credits/ like the rest).
+ */
+export const STOCK = {
+  'happy-travellers': {
+    url: 'https://images.pexels.com/photos/17864689/pexels-photo-17864689.jpeg?auto=compress&cs=tinysrgb&w=2400',
+    alt: 'Two friends laughing in a hug in front of snow-capped Himalayan peaks',
+    artist: 'Rani Sahu',
+    license: 'Pexels licence',
+    licenseUrl: 'https://www.pexels.com/license/',
+    source: 'https://www.pexels.com/photo/happy-women-in-orange-t-shirts-posing-on-mountain-17864689/',
+  },
+};
+
 /** key -> the business's own photo in scripts/photos-own/ and its alt text. */
 export const OWN = {
   founder: { file: 'founder.jpeg', alt: 'Pinku Singh, founder of Jai Jawan Travels, at his desk in the Bagdogra office' },
@@ -87,13 +102,17 @@ for (const p of Object.values(meta.query.pages)) {
 }
 
 const out = {};
-const all = [...Object.entries(PHOTOS), ...Object.entries(OWN).map(([k, p]) => [k, { ...p, own: true }])];
+const all = [
+  ...Object.entries(PHOTOS),
+  ...Object.entries(STOCK).map(([k, p]) => [k, { ...p, stock: true }]),
+  ...Object.entries(OWN).map(([k, p]) => [k, { ...p, own: true }]),
+];
 for (const [key, p] of all) {
   const cached = p.own ? new URL(`../scripts/photos-own/${p.file}`, import.meta.url) : new URL(key + '.bin', CACHE);
   if (!p.own && (force || !(await exists(cached)))) {
-    const url = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p.file)}?width=2000`;
+    const url = p.stock ? p.url : `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p.file)}?width=2000`;
     const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error(`${key}: ${res.status} for ${p.file}`);
+    if (!res.ok) throw new Error(`${key}: ${res.status} for ${p.file ?? p.url}`);
     await writeFile(cached, Buffer.from(await res.arrayBuffer()));
     await new Promise((r) => setTimeout(r, 800));
   }
@@ -115,8 +134,10 @@ for (const [key, p] of all) {
   }
   const credit = p.own
     ? { artist: 'Jai Jawan Travels', license: 'Own photograph', licenseUrl: '', source: '', own: true }
-    : byFile[p.file] ?? { artist: 'Unknown', license: 'See source', licenseUrl: '', source: '' };
-  out[key] = { alt: p.alt, width, height, file: p.file, ...credit };
+    : p.stock
+      ? { artist: p.artist, license: p.license, licenseUrl: p.licenseUrl, source: p.source }
+      : byFile[p.file] ?? { artist: 'Unknown', license: 'See source', licenseUrl: '', source: '' };
+  out[key] = { alt: p.alt, width, height, ...(p.file && { file: p.file }), ...credit };
   console.log(`photos: ${key} ${width}x${height} ${credit.license} ${credit.artist}`);
 }
 await writeFile(DATA, JSON.stringify(out, null, 2) + '\n');

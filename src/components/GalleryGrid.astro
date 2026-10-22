@@ -98,7 +98,7 @@ const data = items.map((it) => ({
   .gchip.is-on { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
   .gchip.is-on span { color: var(--color-lime); }
   .glb { max-width: none; max-height: none; width: 100vw; height: 100dvh; margin: 0; padding: 0; background: transparent; border: 0; }
-  .glb::backdrop { background: rgb(17 17 17 / .94); }
+  .glb::backdrop { background: rgb(17 17 17 / .94); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   .glb[open] { display: grid; place-items: center; }
   .glb-frame { position: relative; width: min(100vw, 1500px); height: 100dvh; display: grid; grid-template-rows: 1fr; padding: 3.5rem 1rem 1rem; }
   .glb-fig { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: .9rem; min-height: 0; }

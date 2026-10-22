@@ -72,7 +72,7 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
   .pe-stage.is-phone .pe-frame { width: 400px; max-width: 100%; border-radius: 24px; box-shadow: 0 10px 40px -12px rgb(17 17 17 / 40%); }
   .pe-panel { margin: 0 0 0 auto; width: min(100%, 680px); max-width: none; height: 100dvh; max-height: none; border: 0; padding: 0; background: #fff; color: var(--color-ink); }
   .pe-panel[open] { display: flex; flex-direction: column; }
-  .pe-panel::backdrop { background: rgb(17 17 17 / 35%); }
+  .pe-panel::backdrop { background: rgb(17 17 17 / 35%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   [data-theme='dark'] .pe-stage { background: #0b0c0e; }
   [data-theme='dark'] .pe-panel { background: var(--a-surface); }
   [data-theme='dark'] .pe-size[aria-pressed='true'] { background: var(--color-lime); color: #111; }
