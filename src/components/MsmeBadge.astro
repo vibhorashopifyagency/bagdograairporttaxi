@@ -1,0 +1,40 @@
+---
+/**
+ * The Ministry of MSME (Udyam) badge: the ministry's logo beside "MSME
+ * registered" and, when the owner has added it, the Udyam number. The number
+ * comes from the dashboard's Registrations list (Business details): the entry
+ * whose name mentions MSME or Udyam. The logo is the Government of India's,
+ * from Wikimedia Commons (public domain), served as /msme-logo.svg.
+ */
+import { MSME } from '../data/site';
+interface Props {
+  /** `inline` for the footer, `card` for the About sidebar. */
+  variant?: 'inline' | 'card';
+  /** For dark backgrounds. */
+  dark?: boolean;
+  class?: string;
+}
+const { variant = 'inline', dark = false, class: cls = '' } = Astro.props;
+const number = MSME?.id?.trim();
+---
+
+{variant === 'card' ? (
+  <div class={`card flex items-center gap-4 p-4 ${cls}`}>
+    <img src="/msme-logo.svg" alt="Ministry of Micro, Small and Medium Enterprises logo" width="394" height="394" loading="lazy" decoding="async" class="h-16 w-16 shrink-0" />
+    <div class="min-w-0">
+      <strong class="block font-[family-name:var(--font-display)] text-[1.05rem] text-ink">MSME registered</strong>
+      <span class="mt-0.5 block text-sm leading-snug text-muted">Registered with the Ministry of MSME, Government of India{number ? '.' : ' (Udyam).'}</span>
+      {number && <span class="mt-1 block text-xs text-muted">Udyam No. <span class="font-semibold text-ink">{number}</span></span>}
+    </div>
+  </div>
+) : (
+  <div class={`flex items-center gap-3 ${cls}`}>
+    <span class={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${dark ? 'bg-white' : 'bg-white ring-1 ring-line'}`}>
+      <img src="/msme-logo.svg" alt="Ministry of Micro, Small and Medium Enterprises logo" width="394" height="394" loading="lazy" decoding="async" class="h-11 w-11" />
+    </span>
+    <span class="min-w-0 text-xs leading-snug">
+      <strong class={`block text-sm ${dark ? 'text-white' : 'text-ink'}`}>MSME registered</strong>
+      <span class={dark ? 'text-white/55' : 'text-muted'}>Ministry of MSME, Government of India{number && ` · Udyam No. ${number}`}</span>
+    </span>
+  </div>
+)}

@@ -7,7 +7,10 @@ import ReviewsSlider from '../components/ReviewsSlider.astro';
 import Icon from '../components/Icon.astro';
 import Photo from '../components/Photo.astro';
 import GalleryGrid from '../components/GalleryGrid.astro';
-import { BUSINESS, ORG_ID, SITE } from '../data/site';
+import MsmeBadge from '../components/MsmeBadge.astro';
+import Words from '../components/Words.astro';
+import { editAttr, wordsList, wordsText } from '../data/page-text';
+import { BUSINESS, MSME, ORG_ID, SITE } from '../data/site';
 import { GALLERY } from '../data/gallery';
 import { ROUTES } from '../data/routes';
 import { PACKAGES } from '../data/packages';
@@ -17,49 +20,48 @@ const aboutGallery = [...GALLERY.filter((g) => g.category === 'Our cars'), ...GA
 ---
 
 <BaseLayout
-  title={`About Us: Local Bagdogra Taxi and Tour Operator since ${BUSINESS.foundingYear}`}
-  description={`${SITE.name} is a local taxi and tour operator based at Bagdogra, running airport transfers and tours across Darjeeling, Sikkim and the Dooars since ${BUSINESS.foundingYear}.`}
+  title={wordsText('about', 'seoTitle')}
+  description={wordsText('about', 'seoDescription')}
   crumbs={[{ name: 'About', path: '/about/' }]}
   schema={[about]}
 >
-  <PageHero slot="hero" image="tea-worker" eyebrow={`Bagdogra · since ${BUSINESS.foundingYear}`} title="A local team at Bagdogra, not a call centre" />
+  <PageHero slot="hero" image="tea-worker" words="about" />
 
   <div class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-14">
     <div class="prose-site min-w-0">
-      <p class="answer">{SITE.name} is a unit of {BUSINESS.legalName}, a taxi and tour operator based at {BUSINESS.address.locality}, a few minutes from the airport. Since {BUSINESS.foundingYear} we have driven travellers from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling, North Sikkim and the Dooars with our own drivers and cars.</p>
-      <p>The business is run by Pinku Singh, an Army veteran, which is where the name Jai Jawan and the saluting soldier on our badge come from. Travellers who book with us talk to him or his office directly, before the trip and during it.</p>
-      <h2>What we promise every traveller</h2>
-      <ul>
-        <li>One fixed fare, shown before you pay, the same on every page of this site.</li>
-        <li>Drivers who know the hill roads, verified with police records and trained for mountain driving.</li>
-        <li>A real office you can visit, and one phone number that is answered 24 hours a day.</li>
-        <li>A written cancellation and refund policy, not "flexible" or "contact us".</li>
+      <Words page="about" field="answer" as="p" class="answer" />
+      <Words page="about" field="owner" as="p" />
+      <Words page="about" field="promisesTitle" as="h2" />
+      <ul data-edit={editAttr('about', 'promises')}>
+        {wordsList('about', 'promises').map((t) => <li set:html={t} />)}
       </ul>
 
-      <h2>Business details</h2>
+      <Words page="about" field="detailsTitle" as="h2" />
       <ul>
         <li>Name: {BUSINESS.legalName}</li>
         <li>Address: {BUSINESS.address.street}, {BUSINESS.address.locality}, {BUSINESS.address.district}, {BUSINESS.address.region} {BUSINESS.address.postalCode}</li>
         <li>Phone and WhatsApp: <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a></li>
         {BUSINESS.gstin && <li>GSTIN: {BUSINESS.gstin}</li>}
-        {BUSINESS.registrations.map((r) => <li>{r.name}{r.id && `: ${r.id}`}</li>)}
+        <li>MSME: registered with the Ministry of MSME, Government of India{MSME?.id && ` (Udyam No. ${MSME.id})`}</li>
+        {BUSINESS.registrations.filter((r) => r !== MSME).map((r) => <li>{r.name}{r.id && `: ${r.id}`}</li>)}
         <li>Hours: {BUSINESS.hours}</li>
       </ul>
     </div>
     <aside class="space-y-4 lg:sticky lg:top-24 lg:self-start">
       <dl class="card grid grid-cols-3 gap-2 p-5 text-center">
-        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{since}+</dd><dt class="text-xs text-muted">years</dt></div>
-        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{ROUTES.length}</dd><dt class="text-xs text-muted">fixed routes</dt></div>
-        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{PACKAGES.length}</dd><dt class="text-xs text-muted">packages</dt></div>
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{since}+</dd><Words page="about" field="statYears" as="dt" class="text-xs text-muted" /></div>
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{ROUTES.length}</dd><Words page="about" field="statRoutes" as="dt" class="text-xs text-muted" /></div>
+        <div><dd class="font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink">{PACKAGES.length}</dd><Words page="about" field="statPackages" as="dt" class="text-xs text-muted" /></div>
       </dl>
       <div class="card p-5">
-        <h2 class="text-lg font-bold">Talk to us</h2>
+        <Words page="about" field="talkTitle" as="h2" class="text-lg font-bold" />
         <div class="mt-4 space-y-3">
           <a class="btn-wa w-full" href={`https://wa.me/${BUSINESS.whatsapp}`} rel="noopener"><Icon name="whatsapp" /> WhatsApp</a>
           <a class="btn-ghost w-full" href={BUSINESS.phoneHref}><Icon name="phone" class="h-4 w-4 text-lime-text" /> {BUSINESS.phone}</a>
-          <a class="btn-ghost w-full" href={BUSINESS.mapsUrl} rel="noopener"><Icon name="map" class="h-4 w-4 text-lime-text" /> Find us on Google Maps</a>
+          <a class="btn-ghost w-full" href={BUSINESS.mapsUrl} rel="noopener"><Icon name="map" class="h-4 w-4 text-lime-text" /> <Words page="about" field="mapsButton" /></a>
         </div>
       </div>
+      <MsmeBadge variant="card" />
     </aside>
   </div>
   {/* TODO(pre-launch): the note below is drafted in the owner's voice from what the current site and reviews say; have Pinku Singh approve or rewrite it. */}
@@ -69,20 +71,18 @@ const aboutGallery = [...GALLERY.filter((g) => g.category === 'Our cars'), ...GA
         <div class="overflow-hidden rounded-2xl bg-mist">
           <Photo name="founder" class="aspect-[4/3] h-auto w-full object-cover" sizes="(min-width: 1024px) 46vw, 100vw" />
         </div>
-        <figcaption class="mt-3 text-sm text-muted">Pinku Singh at the {BUSINESS.legalName} office, {BUSINESS.address.street}, {BUSINESS.address.locality}.</figcaption>
+        <Words page="about" field="founderCaption" as="figcaption" class="mt-3 text-sm text-muted" />
       </figure>
       <div class="max-w-2xl">
-        <p class="eyebrow">A note from the founder</p>
-        <h2 id="founder-note" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Why I run this the way I do</h2>
-        <div class="mt-6 space-y-4 text-lg leading-relaxed text-body">
-          <p>I served in the Army before I came home to Bagdogra and started this business in {BUSINESS.foundingYear}. Two things stayed with me from those years: you keep your word, and you look after the people in your charge. That is how I wanted a taxi service to be run.</p>
-          <p>So the fare you see on this site is the fare you pay. The car arrives when we said it would. The driver knows the hill road, because he drives it every week. And if anything goes wrong on the way, you can ring me or my office directly. The number is on every page.</p>
-          <p>Most of our travellers land at Bagdogra after a long journey and want to reach Darjeeling or Gangtok without any fuss. That is what we are here for.</p>
+        <Words page="about" field="founderEyebrow" as="p" class="eyebrow" />
+        <Words page="about" field="founderTitle" as="h2" id="founder-note" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" />
+        <div class="mt-6 space-y-4 text-lg leading-relaxed text-body" data-edit={editAttr('about', 'founderNote')}>
+          {wordsList('about', 'founderNote').map((t) => <p set:html={t} />)}
         </div>
         <div class="mt-8 flex items-center gap-4 border-t border-line pt-6">
           <div>
-            <p class="font-[family-name:var(--font-display)] text-xl font-extrabold text-ink">Pinku Singh</p>
-            <p class="text-sm text-muted">Founder, {BUSINESS.legalName} · Bagdogra Airport Taxi</p>
+            <Words page="about" field="founderName" as="p" class="font-[family-name:var(--font-display)] text-xl font-extrabold text-ink" />
+            <Words page="about" field="founderRole" as="p" class="text-sm text-muted" />
           </div>
           <p class="ml-auto hidden text-sm italic text-muted sm:block">“{BUSINESS.tagline}”</p>
         </div>
@@ -91,13 +91,13 @@ const aboutGallery = [...GALLERY.filter((g) => g.category === 'Our cars'), ...GA
   </section>
   <section class="wrap mt-16" aria-labelledby="about-gallery">
     <div class="flex flex-wrap items-end justify-between gap-4">
-      <div><p class="eyebrow">Gallery</p><h2 id="about-gallery" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Our cars and the roads we drive</h2></div>
-      <a href="/gallery/" class="inline-flex items-center gap-1.5 font-semibold text-lime-text no-underline hover:text-ink">All {GALLERY.length} photos <Icon name="arrow" class="h-4 w-4" /></a>
+      <div><Words page="about" field="galleryEyebrow" as="p" class="eyebrow" /><Words page="about" field="galleryTitle" as="h2" id="about-gallery" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" /></div>
+      <a href="/gallery/" class="inline-flex items-center gap-1.5 font-semibold text-lime-text no-underline hover:text-ink"><Words page="about" field="galleryLink" /> <Icon name="arrow" class="h-4 w-4" /></a>
     </div>
     <div class="mt-8"><GalleryGrid items={aboutGallery} dense /></div>
   </section>
   <div class="wrap mt-16"><TrustStrip /></div>
-  <div class="mt-16"><ReviewsSlider heading="Reviews from our travellers" /></div>
+  <div class="mt-16"><ReviewsSlider heading="about:reviewsTitle" /></div>
   <div class="wrap">
     <BookCta image="hero" />
   </div>

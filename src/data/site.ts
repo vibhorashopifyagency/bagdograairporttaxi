@@ -116,6 +116,13 @@ export const BUSINESS_START = {
 };
 export const BUSINESS = overlayOne('business', BUSINESS_START);
 
+/**
+ * The MSME (Udyam) entry in `registrations`, if the owner has added one, so
+ * the MSME badge (MsmeBadge.astro) can show its number and the plain lists
+ * on About and in the footer can leave it out.
+ */
+export const MSME = BUSINESS.registrations.find((r) => /\b(msme|udyam)\b/i.test(r.name));
+
 /** The promises shown beside every Book button. Keep them true. */
 export const POLICY_START = {
   advancePercent: 20,
