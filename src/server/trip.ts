@@ -63,7 +63,8 @@ export type LibraryPhoto = { key: string; title: string; place: string; alt: str
 export const LIBRARY: LibraryPhoto[] = GALLERY.map((g) => ({ key: g.photo, title: g.title, place: g.place, alt: PHOTOS[g.photo]?.alt ?? g.title }));
 const LIBRARY_KEYS = new Set(LIBRARY.map((p) => p.key));
 export const isPhotoKey = (k: string) => LIBRARY_KEYS.has(k);
-export const photoAlt = (k: string) => LIBRARY.find((p) => p.key === k)?.title ?? '';
+/** Uploaded photos ('u:…', src/server/files.ts) carry no caption. */
+export const photoAlt = (k: string) => LIBRARY.find((p) => p.key === k)?.title ?? (k.startsWith('u:') ? 'A photo for your trip' : '');
 
 /** Picks a picture for a day from the places its title and text name. */
 const PLACE_PHOTOS: [RegExp, PhotoKey][] = [
@@ -209,8 +210,12 @@ export const itinerarySchema = z.object({
   showQr: z.boolean(),
 });
 
-/** Validates and tidies a draft. Returns an error for the person, or clean data. */
-export function cleanItinerary(input: unknown): { error: string } | { data: ItineraryData } {
+/**
+ * Validates and tidies a draft. Returns an error for the person, or clean
+ * data. `uploads` are the photo keys uploaded for this booking; any other
+ * key that is not in the library is dropped.
+ */
+export function cleanItinerary(input: unknown, uploads: Set<string> = new Set()): { error: string } | { data: ItineraryData } {
   const parsed = itinerarySchema.safeParse(input);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -229,10 +234,10 @@ export function cleanItinerary(input: unknown): { error: string } | { data: Itin
       ...d,
       phone,
       driverPhone,
-      days: d.days.filter((x) => x.title || x.detail || x.stay).map((x) => ({ ...x, photo: isPhotoKey(x.photo) ? x.photo : '' })),
+      days: d.days.filter((x) => x.title || x.detail || x.stay).map((x) => ({ ...x, photo: isPhotoKey(x.photo) || uploads.has(x.photo) ? x.photo : '' })),
       includes: d.includes.filter(Boolean),
       excludes: d.excludes.filter(Boolean),
-      photos: d.photos.filter((k, i, all) => isPhotoKey(k) && all.indexOf(k) === i),
+      photos: d.photos.filter((k, i, all) => (isPhotoKey(k) || uploads.has(k)) && all.indexOf(k) === i),
     },
   };
 }

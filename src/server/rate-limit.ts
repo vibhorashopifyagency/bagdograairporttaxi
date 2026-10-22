@@ -25,6 +25,10 @@ export const LIMITS = {
   adminApi: { name: 'admin-api', max: 240, windowSec: 60 },
   /** The payments CSV reads every payment, so it is the heaviest download. */
   export: { name: 'export', max: 10, windowSec: 600 },
+  /** Payment screenshots and itinerary photos, per signed-in user. Each one counts against the Blob store's monthly allowance. */
+  upload: { name: 'upload', max: 60, windowSec: 3600 },
+  /** Uploaded itinerary photos on a customer's trip page, per IP. A page shows a cover and a photo a day. */
+  tripPhoto: { name: 'trip-photo', max: 240, windowSec: 60 },
 } satisfies Record<string, Limit>;
 
 export type Verdict = { ok: true } | { ok: false; retryAfter: number };

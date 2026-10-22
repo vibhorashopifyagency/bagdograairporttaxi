@@ -12,7 +12,7 @@
  * staff record payments only when the admin has switched that on for them.
  */
 import { createHash } from 'node:crypto';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { readUpiText, type Upi, type UpiQr } from '../lib/upi';
 import { audit } from './admin';
 import { addDays, inr, isDay, todayIST, type Tone } from './dashboard';
@@ -98,6 +98,8 @@ export type PaymentForm = {
   receivedBy: string;
   upiRef: string;
   note: string;
+  /** An uploaded screenshot's id (/admin/api/upload/), attached when the payment is saved. */
+  screenshot?: string;
 };
 
 const money = (s: string) => Number(s.replace(/[^\d]/g, ''));
@@ -110,8 +112,23 @@ function checkForm(f: PaymentForm): string | null {
   if (!isDay(f.receivedOn) || f.receivedOn > addDays(today, 1) || f.receivedOn < addDays(today, -400)) return 'Check the date.';
   if (f.receivedBy.length > 80 || f.upiRef.length > 60 || f.note.length > 300) return 'One of the fields is too long.';
   if (f.upiRef && !/^[A-Za-z0-9 \-/]+$/.test(f.upiRef)) return 'The UPI reference is letters and numbers only.';
+  if (f.screenshot && !/^[0-9a-f-]{36}$/.test(f.screenshot)) return 'Choose the screenshot again.';
   return null;
 }
+
+/** A screenshot uploaded for this booking and not yet on a payment: the one Record payment just sent. */
+async function screenshotReady(bookingId: string, id: string | undefined): Promise<boolean> {
+  if (!id) return true;
+  const f = schema.files;
+  const [row] = await getDb().select({ id: f.id }).from(f).where(and(eq(f.id, id), eq(f.bookingId, bookingId), eq(f.kind, 'payment'), isNull(f.paymentId)));
+  return Boolean(row);
+}
+
+type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+const attachScreenshot = (tx: Tx, id: string | undefined, paymentId: string) =>
+  id ? tx.update(schema.files).set({ paymentId }).where(and(eq(schema.files.id, id), isNull(schema.files.paymentId))) : null;
+
+const SCREENSHOT_GONE = 'The screenshot could not be found. Choose it again, or record the payment without it.';
 
 type Ctx = { actorId: string; ipHash: string };
 type Booking = { id: string; ref: string; kind: 'taxi' | 'package'; fareTotal: number; advanceShown: number; driverId: string | null; driverName: string | null };
@@ -126,6 +143,7 @@ export async function recordPayment(b: Booking, f: PaymentForm, ctx: Ctx): Promi
   if (f.collector !== 'office' && f.collector !== 'driver') return { error: 'Say who received it: the office or the driver.' };
   const byDriver = f.collector === 'driver';
   if (byDriver && !b.driverId) return { error: 'This booking has no driver from the drivers list. Assign one first (Edit trip and driver).' };
+  if (!(await screenshotReady(b.id, f.screenshot))) return { error: SCREENSHOT_GONE };
   const amount = money(f.amount);
   const db = getDb();
   const result = await db.transaction(async (tx) => {
@@ -162,6 +180,7 @@ export async function recordPayment(b: Booking, f: PaymentForm, ctx: Ctx): Promi
       type: 'payment',
       data: { amount, method: f.method, paymentId: row!.id, ...(byDriver ? { driver: b.driverName } : {}) },
     });
+    await attachScreenshot(tx, f.screenshot, row!.id);
     return { summary: summarise(b.fareTotal, b.advanceShown, [...rows, row!], b.kind) };
   });
   if ('summary' in result) await audit({ actorId: ctx.actorId, action: 'payment_recorded', entity: 'booking', entityId: b.id, detail: { ref: b.ref, amount, method: f.method, ...(byDriver ? { driverId: b.driverId } : {}) }, ipHash: ctx.ipHash });
@@ -172,6 +191,7 @@ export async function recordPayment(b: Booking, f: PaymentForm, ctx: Ctx): Promi
 export async function recordRefund(b: Booking, f: PaymentForm, ctx: Ctx): Promise<{ error: string } | { summary: PaySummary }> {
   const bad = checkForm(f);
   if (bad) return { error: bad };
+  if (!(await screenshotReady(b.id, f.screenshot))) return { error: SCREENSHOT_GONE };
   const amount = money(f.amount);
   const result = await getDb().transaction(async (tx) => {
     await tx.select({ id: schema.bookings.id }).from(schema.bookings).where(eq(schema.bookings.id, b.id)).for('update');
@@ -193,6 +213,7 @@ export async function recordRefund(b: Booking, f: PaymentForm, ctx: Ctx): Promis
       })
       .returning();
     await tx.insert(schema.bookingEvents).values({ bookingId: b.id, actorId: ctx.actorId, type: 'refund', data: { amount, method: f.method, paymentId: row!.id } });
+    await attachScreenshot(tx, f.screenshot, row!.id);
     return { summary: summarise(b.fareTotal, b.advanceShown, [...rows, row!], b.kind) };
   });
   if ('summary' in result) await audit({ actorId: ctx.actorId, action: 'refund_recorded', entity: 'booking', entityId: b.id, detail: { ref: b.ref, amount }, ipHash: ctx.ipHash });
@@ -277,7 +298,7 @@ export async function qrImageResponse(sha: string, mime: UpiQr['mime']): Promise
 }
 
 /** Type and size from the file's own bytes, not its name. PNG and JPEG only. */
-function imageInfo(b: Uint8Array): { mime: UpiQr['mime']; w: number; h: number } | null {
+export function imageInfo(b: Uint8Array): { mime: UpiQr['mime']; w: number; h: number } | null {
   const u16 = (i: number) => (b[i]! << 8) | b[i + 1]!;
   if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
     return { mime: 'image/png', w: (u16(16) << 16) | u16(18), h: (u16(20) << 16) | u16(22) };

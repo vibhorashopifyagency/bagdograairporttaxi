@@ -1,6 +1,6 @@
 # Admin, live editing and bookings dashboard: plan and todo list
 
-Status: plan agreed and every open question settled on 21 October 2026. On 22 October 2026: bookings filters by trip and payment and a bookings CSV, search across bookings and customers, the office UPI QR code on /book/, photo empty screens, dark mode, the installable app, the nightly 24-month clean-up, customer data download and removal, failed-save alerts, backup and restore scripts, the phone check and the Help page. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, then the dashboard shell and home screen to the mock (sidebar, phone tab bar, today board at /admin/, bookings list at /admin/bookings/, new booking by hand at /admin/bookings/new/). Later the same day: a page for each booking (/admin/bookings/BAT-.../), payments by UPI QR code and cash (Phase 3b, /admin/payments/), the Send itinerary popup with the customer's private trip page (Phase 3c stage 1, /trip/...), the itineraries list and the customers pages. Not yet deployed. Going-live steps are in docs/admin-setup.md.
+Status: plan agreed and every open question settled on 21 October 2026. On 22 October 2026: live on bagdograairporttaxi.vercel.app (the domain still serves the old site), payment screenshots and itinerary photo uploads in a private Vercel Blob store, bookings filters by trip and payment and a bookings CSV, search across bookings and customers, the office UPI QR code on /book/, photo empty screens, dark mode, the installable app, the nightly 24-month clean-up, customer data download and removal, failed-save alerts, backup and restore scripts, the phone check and the Help page. Built on 21 October 2026: the design mock, Phase 0 code, Phase 1 and Phase 2, then the dashboard shell and home screen to the mock (sidebar, phone tab bar, today board at /admin/, bookings list at /admin/bookings/, new booking by hand at /admin/bookings/new/). Later the same day: a page for each booking (/admin/bookings/BAT-.../), payments by UPI QR code and cash (Phase 3b, /admin/payments/), the Send itinerary popup with the customer's private trip page (Phase 3c stage 1, /trip/...), the itineraries list and the customers pages. Going-live steps are in docs/admin-setup.md.
 
 ## Decisions taken by the owner
 
@@ -74,11 +74,11 @@ The dashboard should feel like the business: mountains, roads, a veteran-run tea
 
 ## Phase 0: foundation
 
-- [ ] Connect the GitHub repository to Vercel. Upgrade to Pro when the owner decides (see above).
-- [ ] Add Neon from the Vercel Marketplace, with separate database branches for production and preview deployments.
+- [x] Connect the GitHub repository to Vercel. Upgrade to Pro when the owner decides (see above). *(Owner, 22 Oct 2026: bagdograairporttaxi.vercel.app on Hobby, functions in Singapore.)*
+- [x] Add Neon from the Vercel Marketplace, with separate database branches for production and preview deployments. *(Connected by the owner on 22 Oct 2026; preview branches not yet confirmed.)*
 - [x] Add the Vercel adapter to Astro: public pages pre-rendered, admin and API routes server-rendered.
 - [x] Add Drizzle ORM with versioned migrations, and Zod schemas built from the existing data types.
-- [ ] Add Vercel Blob storage for uploaded images.
+- [x] Add Vercel Blob storage for uploaded images. *(Owner, 22 Oct 2026: a private store in Singapore, connected with Vercel's own short-lived tokens, no read-write token. Pictures are served only through /admin/files/ and signed /trip/photo/ addresses; src/server/files.ts. Photos for the public website (Phase 5) will need a second, public store.)*
 - [x] Store secrets as Vercel environment variables only, never in the repository.
 - [ ] Set up a staging site on a preview branch that uses its own database branch.
 
@@ -107,7 +107,7 @@ This phase can go live before content editing is built.
 - [x] Spam protection: hidden honeypot field, rate limit per phone and IP. *(Cloudflare Turnstile left out until spam actually appears.)*
 - [x] Add a consent line on the form that links to the privacy policy.
 - [x] Save a customer record keyed by mobile number, so repeat customers are recognised.
-- [x] Email each new booking to the address in business details, currently bagdograairporttaxi@gmail.com, as a backup to WhatsApp. *(Needs a Resend account and DNS records; see docs/admin-setup.md.)*
+- [x] Email each new booking to the address in business details, currently bagdograairporttaxi@gmail.com, as a backup to WhatsApp. *(Built, but switched off: the owner chose on 22 Oct 2026 to keep everything in the dashboard and not set up Resend. It starts working if RESEND_API_KEY and MAIL_FROM are ever set.)*
 
 ## Phase 3: bookings and customers dashboard
 
@@ -129,7 +129,7 @@ There is no payment gateway, so payments are recorded by hand.
 - [x] Store the office's UPI QR code image and UPI ID in business details, editable by the admin. *(Owner's decision, 21 Oct 2026: the admin uploads the QR code picture on the Payments page, and it is shown and sent exactly as uploaded. The page reads the picture in the browser (UPI and Bharat QR codes), shows which UPI ID it pays and fills that in; a QR code that is not a UPI payment code, or a UPI ID that differs from the one in the picture, is refused. The picture is kept in the database (one small file needs no file storage). It carries no amount, so customers type it; the message and trip page say how much. The earlier version, which made a QR code from the UPI ID with the amount inside, is gone. Only the admin adds, changes or removes it (owner, 21 Oct 2026), checked on the server from the database; staff see it and send it but get a refusal if they try to change it. Removing it needs a confirmation and is kept in the audit log.)*
 - [x] Show the QR code on the booking page in place of the current payment-link button, with the advance amount to pay. *(22 Oct 2026: "Pay advance by UPI" opens the office QR code with the advance, the UPI ID with a Copy button, "Pay with a UPI app" on phones, and "I have paid: send it on WhatsApp". Tour packages are priced "from", so for them the button is hidden and the advance is asked for on WhatsApp. The site's wording about cards, net banking and a payment gateway was corrected to UPI, which also changed the FAQ, the structured data and llms.txt.)*
 - [x] A "send QR code" button on each booking that opens WhatsApp to the customer with the amount and the UPI ID. *(The message also links to the trip page, which shows the office QR code and the amount to enter. "Share QR image" on a phone sends the QR code picture with the amount under it; on a laptop the same picture downloads, ready to drop into WhatsApp Web.)*
-- [ ] Record each payment on the booking: amount, method (UPI or cash), date, who received it, UPI transaction reference, optional screenshot. *(All but the screenshot, which needs photo storage (Vercel Blob). A payment larger than the balance is refused.)*
+- [x] Record each payment on the booking: amount, method (UPI or cash), date, who received it, UPI transaction reference, optional screenshot. *(A payment larger than the balance is refused. Screenshots since 22 Oct 2026: chosen in Record payment (or "Add the screenshot" afterwards), shrunk to a JPEG in the browser, kept in Blob; the 24-month clean-up and "Remove their details" delete the file too, and the nightly job deletes screenshots never attached after a day.)*
 - [x] Payment state per booking: unpaid, advance paid, fully paid, refunded. It is worked out from the recorded payments, not typed in. *(The advance is 20% of the agreed fare, so changing the fare moves it too.)*
 - [x] Admin records and edits payments directly. *(Edits are reversals, as below.)*
 - [x] Staff can record a payment only when the admin has switched on "can record payments" for them. Without it, the payment controls are hidden. *(Checked on the server on every payment, so switching it off works at once.)*
@@ -148,7 +148,7 @@ A "Send itinerary" button on every booking, and in the quick actions, opens a po
 - [x] Inclusions and exclusions, filled in from the package and editable.
 - [x] Payment summary: total, advance paid and balance due, worked out from the recorded payments, with an option to include the UPI QR code.
 - [x] A personal message, with saved templates such as "Welcome", "Day before pickup" and "Thank you for travelling with us". *("Save as template" turns the names and times back into blanks, so a saved template works for the next customer. Saved templates are shared by the team.)*
-- [ ] Images: pick from the site's photo library or upload new ones, then reorder them. *(Picking from the library works. Uploading waits for photo storage (Vercel Blob).)*
+- [ ] Images: pick from the site's photo library or upload new ones, then reorder them. *(Picking and uploading work (uploads since 22 Oct 2026, shown to the customer through signed addresses, deleted with the booking's data, or by the nightly job once no itinerary uses it). Reordering is still by taking a photo out and adding it again.)*
 - [x] A live preview of the WhatsApp message and of the itinerary page.
 
 **How it reaches the customer (stage 1, free, works from day one)**
@@ -217,7 +217,7 @@ How customers pay (owner, 21 October 2026, evening): the office takes the advanc
 - [x] Remove names and mobile numbers from bookings 24 months after the trip date, automatically every night. Trip, fare and payment totals stay for the accounts. *(src/server/retention.ts, run by the Vercel cron in vercel.json at 02:00 India time with CRON_SECRET. Also removes drop addresses, flights, notes, payment notes, itineraries, the number an itinerary went to, the values on edit entries, and access-log rows older than 24 months. Tested on 22 Oct 2026 with bookings 23, 25 and 30 months old. The Team page shows the last run.)*
 - [x] Customer data export and deletion on request, from the customer page. *(Admin only: "Download what we hold" (a plain text file to send them) and "Remove their details", which asks for a reason and a tick, and warns about trips still to come. Logged without the name.)*
 - [ ] Daily database backups, which Neon provides, plus a tested restore. *(Built: npm run db:backup and npm run db:restore, tested on 22 Oct 2026 (every table identical after the round trip); Neon's own restore is described in docs/admin-setup.md. Still to do once Neon is set up: check Neon's restore window on the chosen plan.)*
-- [x] Error alerts for failed booking saves. *(The office is emailed the booking at once when the database does not answer; a booking that arrives later through the browser's retry shows "reached us … late" on its timeline and in its email. A failed nightly clean-up is emailed too. Needs Resend.)*
+- [x] Error alerts for failed booking saves. *(The office is emailed the booking at once when the database does not answer; a booking that arrives later through the browser's retry shows "reached us … late" on its timeline and in its email. A failed nightly clean-up is emailed too. Needs Resend, which the owner chose not to use (22 Oct 2026): the WhatsApp message still arrives, the late booking still shows, and the Team page turns red when the clean-up has not run for a day and a half.)*
 - [x] Check the admin works well on a phone, since staff will use it on the road. *(Every page checked at phone width on 22 Oct 2026; the New booking form was wider than the screen and is fixed.)*
 - [x] A short guide for the admin and for staff. *(/admin/help/, in the menu for everyone: eleven everyday jobs step by step, and five more for the admin.)*
 

@@ -3,6 +3,9 @@
 //   npm run db:backup                       writes backups/backup-<date>.json.gz
 //   npm run db:backup -- --out=<file>       somewhere else
 //
+// Payment screenshots and itinerary photos stay in the Blob store: this
+// copies only the list of them (the `files` table), not the pictures.
+//
 // It holds customer names and mobile numbers, so treat the file like the
 // admin password: keep it off shared drives, and delete copies older than
 // 24 months, as the privacy policy promises. Logins in progress, rate-limit
@@ -26,6 +29,7 @@ const TABLES = [
   'bookings',
   'booking_events',
   'payments',
+  'files',
   'itineraries',
   'driver_payouts',
   'audit_log',

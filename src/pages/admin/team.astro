@@ -9,6 +9,7 @@ import PasswordField from '../../components/admin/PasswordField.astro';
 import { audit, checkNewAccount, createAccount, isAdmin } from '../../server/admin';
 import { getAuth } from '../../server/auth';
 import { getDb, schema } from '../../server/db';
+import { env } from '../../server/env';
 import { RETENTION_MONTHS, cutoffDay, lastPurge, overdueCount } from '../../server/retention';
 import { ipHash } from '../../server/security';
 import { asc, eq } from 'drizzle-orm';
@@ -99,6 +100,9 @@ const people = await db
 // The nightly clean-up of customer details (src/server/retention.ts), so the admin can see it runs.
 const [purge, overdue] = await Promise.all([lastPurge(), overdueCount()]);
 const ran = purge ? new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(purge.at)) : null;
+// No emails (owner, 22 Oct 2026), so a run that stopped happening is shown here: it is due every night.
+const stale = purge ? Date.now() - new Date(purge.at).getTime() > 36 * 3600e3 : false;
+const cronReady = Boolean(env('CRON_SECRET'));
 const cutoffLabel = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${cutoffDay()}T00:00:00Z`));
 ---
 
@@ -169,9 +173,12 @@ const cutoffLabel = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'nu
       <p class="text-sm text-body">Names and mobile numbers are removed every night once a trip is {RETENTION_MONTHS} months old, as the privacy policy promises. Today that means trips before {cutoffLabel}. Fares and payments stay for the accounts.</p>
       {ran ? (
         <p class="text-sm text-body">Last run {ran}: {purge!.bookings ? `${purge!.bookings} ${purge!.bookings === 1 ? 'booking' : 'bookings'} and ${purge!.customers} ${purge!.customers === 1 ? 'customer' : 'customers'} cleared` : 'nothing was due'}.</p>
+      ) : cronReady ? (
+        <p class="text-sm text-body">It runs each night at 2 am and has not run yet.</p>
       ) : (
-        <p class="a-msg a-msg-error text-sm">The nightly clean-up has not run yet. It needs CRON_SECRET set on Vercel (see the setup guide).</p>
+        <p class="a-msg a-msg-error text-sm">The nightly clean-up cannot run: CRON_SECRET is not set on Vercel (see the setup guide).</p>
       )}
+      {stale && <p class="a-msg a-msg-error text-sm">It has not run since then. In Vercel, open Logs and search “[alert]” to see why; it tries again each night.</p>}
       {overdue > 0 && <p class="a-msg a-msg-error text-sm">{overdue} {overdue === 1 ? 'booking is' : 'bookings are'} past the date and still waiting to be cleared.</p>}
     </section>
     </div>

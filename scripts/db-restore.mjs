@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import pg from 'pg';
 
-const TABLES = ['user', 'account', 'two_factor', 'recovery_codes', 'customers', 'drivers', 'bookings', 'booking_events', 'payments', 'itineraries', 'driver_payouts', 'audit_log', 'settings'];
+const TABLES = ['user', 'account', 'two_factor', 'recovery_codes', 'customers', 'drivers', 'bookings', 'booking_events', 'payments', 'files', 'itineraries', 'driver_payouts', 'audit_log', 'settings'];
 /** Tables whose id comes from a counter, which must carry on after the restored rows. */
 const COUNTERS = ['booking_events', 'audit_log'];
 

@@ -327,7 +327,6 @@ export const payments = pgTable(
     receivedOn: date('received_on').notNull(),
     receivedBy: text('received_by'),
     upiRef: text('upi_ref'),
-    screenshotUrl: text('screenshot_url'),
     note: text('note'),
     reversesPaymentId: uuid('reverses_payment_id'),
     /** The driver who collected it; a reversal carries the same driver, so their sum nets out. */
@@ -346,7 +345,10 @@ export const payments = pgTable(
   ],
 );
 
-/** One day of an itinerary. `photo` is a key from src/data/photos.json, or ''. */
+/**
+ * One day of an itinerary. `photo` is a key from src/data/photos.json, an
+ * uploaded photo ('u:' and its `files` id, src/server/files.ts), or ''.
+ */
 export type ItineraryDay = { title: string; detail: string; stay: string; photo: string };
 
 /** Everything the "Send itinerary" popup collects. Dates are YYYY-MM-DD. */
@@ -370,7 +372,7 @@ export type ItineraryData = {
   days: ItineraryDay[];
   includes: string[];
   excludes: string[];
-  /** Photo keys, in the order they are sent. */
+  /** Photo keys (library or uploaded, as for a day), in the order they are sent. */
   photos: string[];
   message: string;
   showQr: boolean;
@@ -397,6 +399,37 @@ export const itineraries = pgTable('itineraries', {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/**
+ * Pictures uploaded from the dashboard: payment screenshots ('payment') and
+ * itinerary photos ('itinerary'). The picture itself is in the private Blob
+ * store (src/server/files.ts); this row says which booking it belongs to, so
+ * it is deleted with the booking's other personal data, and which payment a
+ * screenshot proves. Every picture is a JPEG the browser shrank before upload.
+ */
+export const files = pgTable(
+  'files',
+  {
+    id: uuid('id').primaryKey(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => bookings.id, { onDelete: 'cascade' }),
+    kind: text('kind').$type<'payment' | 'itinerary'>().notNull(),
+    /** Set once the screenshot is attached to a payment (or refund). */
+    paymentId: uuid('payment_id').references(() => payments.id, { onDelete: 'set null' }),
+    /** Where it is in the store, for example payments/2026-10/<id>.jpg. */
+    pathname: text('pathname').notNull().unique(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    bytes: integer('bytes').notNull(),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('files_booking_idx').on(t.bookingId),
+    index('files_payment_idx').on(t.paymentId).where(sql`${t.paymentId} is not null`),
+  ],
+);
 
 /**
  * Money between the office and a driver: a 'payout' is the office paying the

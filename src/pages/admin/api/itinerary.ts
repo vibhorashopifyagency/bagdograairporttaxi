@@ -5,6 +5,7 @@ import { audit } from '../../../server/admin';
 import { getDb, schema } from '../../../server/db';
 import { ipHash } from '../../../server/security';
 import { assignDriver } from '../../../server/drivers';
+import { itineraryUploads, uploadKey } from '../../../server/files';
 import { cleanItinerary } from '../../../server/trip';
 
 export const prerender = false;
@@ -29,7 +30,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   const parsed = input.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json(400, { ok: false, error: 'Invalid request.' });
   const { id, action } = parsed.data;
-  const clean = cleanItinerary(parsed.data.data);
+  const uploads = new Set((await itineraryUploads(id)).map((f) => uploadKey(f.id)));
+  const clean = cleanItinerary(parsed.data.data, uploads);
   if ('error' in clean) return json(400, { ok: false, error: clean.error });
   const data = clean.data;
 

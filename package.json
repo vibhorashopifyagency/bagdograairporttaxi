@@ -31,6 +31,7 @@
     "@astrojs/sitemap": "^3.7.3",
     "@astrojs/vercel": "^11.0.16",
     "@tailwindcss/vite": "^4.3.3",
+    "@vercel/blob": "^2.8.1",
     "astro": "^7.2.4",
     "better-auth": "^1.7.12",
     "drizzle-orm": "^0.45.4",

@@ -27,14 +27,17 @@ interface Props {
   upiReady: boolean;
   templates: Template[];
   library: LibraryPhoto[];
+  /** Photos uploaded for this booking ('u:' keys, src/server/files.ts), and whether uploading works here. */
+  uploads: { key: string; src: string }[];
+  uploadReady: boolean;
   /** The drivers list (active drivers, and this booking's driver). */
   drivers: { id: string; name: string; phone: string; car: string; label: string }[];
   autoOpen?: boolean;
 }
-const { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, drivers, autoOpen = false } = Astro.props;
+const { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, uploads, uploadReady, drivers, autoOpen = false } = Astro.props;
 const first = firstName(draft.name) || 'the customer';
 const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
-const config = { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, drivers };
+const config = { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, uploads, uploadReady, drivers };
 const closeIcon = '<path d="M18 6 6 18M6 6l12 12"/>';
 const waIcon = '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.5 8.5 0 1 1 21 11.5z"/>';
 const photoIcon = '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>';
@@ -193,17 +196,32 @@ const field = 'a-field it-field';
   </div>
 </dialog>
 
-{/* Picking photos from the website's library */}
+{/* Picking photos: uploaded for this trip, or from the website's library */}
 <dialog id="dlg-photos" class="a-dialog" aria-labelledby="ph-h">
   <div class="a-dialog-body">
     <header class="a-dialog-head">
       <div class="flex flex-col">
         <h2 id="ph-h" class="m-0 font-display text-xl font-bold" data-picker-title>Choose photos</h2>
-        <span class="text-sm text-muted">From the website's photo library. Uploading your own comes with photo storage.</span>
+        <span class="text-sm text-muted">{uploadReady ? 'Upload your own, or pick from the website’s photos.' : 'From the website’s photo library.'}</span>
       </div>
       <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
     </header>
     <div class="a-dialog-main">
+      {uploadReady && (
+        <section class="mb-6 flex flex-col gap-2.5" aria-labelledby="ph-up-h">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 id="ph-up-h" class="m-0 text-base font-bold">Photos for this trip</h3>
+            <button type="button" class="a-chip inline-flex items-center gap-1.5" data-upload>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+              Upload photos
+            </button>
+            <input type="file" accept="image/*" multiple hidden data-upload-input />
+          </div>
+          <p class="m-0 text-sm text-muted" data-upload-status role="status">The hotel, the car, anything from your phone. Only this customer’s trip page shows them.</p>
+          <ul class="m-0 grid list-none grid-cols-2 gap-2.5 p-0 sm:grid-cols-3" data-uploads></ul>
+        </section>
+      )}
+      {uploadReady && <h3 class="m-0 mb-2.5 text-base font-bold">From the website</h3>}
       <ul class="m-0 grid list-none grid-cols-2 gap-2.5 p-0 sm:grid-cols-3" data-picker>
         {library.map((p) => (
           <li>
@@ -235,6 +253,7 @@ const field = 'a-field it-field';
     type Template,
   } from '../../lib/itinerary-text';
   import { inr } from '../../lib/admin-client';
+  import { PHOTO_MAX, uploadPicture } from '../../lib/shrink-image';
 
   type Day = { title: string; detail: string; stay: string; photo: string };
   type Data = {
@@ -255,6 +274,8 @@ const field = 'a-field it-field';
     upiReady: boolean;
     templates: Template[];
     library: { key: string; title: string; place: string; alt: string }[];
+    uploads: { key: string; src: string }[];
+    uploadReady: boolean;
     drivers: { id: string; name: string; phone: string; car: string }[];
   };
 
@@ -269,7 +290,10 @@ const field = 'a-field it-field';
     let templates = cfg.templates;
     let sentOnce = cfg.sent;
     const $ = <T extends Element = HTMLElement>(sel: string, el: ParentNode = root) => el.querySelector<T>(sel)!;
-    const titleOf = (key: string) => cfg.library.find((p) => p.key === key)?.title ?? '';
+    const titleOf = (key: string) => cfg.library.find((p) => p.key === key)?.title ?? (key.startsWith('u:') ? 'Your photo' : '');
+    /** A library photo at one of the website's widths, or an uploaded one (a single size, for signed-in staff). */
+    const srcOf = (key: string, width: 400 | 800 | 1600) =>
+      key.startsWith('u:') ? (cfg.uploads.find((u) => u.key === key)?.src ?? `/admin/files/${key.slice(2)}.jpg`) : `/img/${key}-${width}.webp`;
     const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => {
       const n = document.createElement(tag);
       if (cls) n.className = cls;
@@ -383,7 +407,7 @@ const field = 'a-field it-field';
           const row = el('div', 'flex items-start gap-3');
           const img = el('img', 'it-day-img') as HTMLImageElement;
           img.alt = titleOf(day.photo);
-          if (day.photo) img.src = `/img/${day.photo}-400.webp`;
+          if (day.photo) img.src = srcOf(day.photo, 400);
           else img.classList.add('is-empty');
           const text = el('div', 'flex min-w-0 flex-1 flex-col gap-0.5');
           text.append(
@@ -463,7 +487,7 @@ const field = 'a-field it-field';
       const tiles = d.photos.map((key, i) => {
         const tile = el('div', 'it-photo');
         const img = el('img') as HTMLImageElement;
-        img.src = `/img/${key}-400.webp`;
+        img.src = srcOf(key, 400);
         img.alt = titleOf(key);
         const rm = el('button', 'it-photo-x') as HTMLButtonElement;
         rm.type = 'button';
@@ -494,25 +518,75 @@ const field = 'a-field it-field';
       });
       picker!.showModal();
     }
-    picker.querySelectorAll<HTMLButtonElement>('[data-pick]').forEach((b) =>
-      b.addEventListener('click', () => {
-        const key = b.dataset.pick!;
-        if (pickFor.day !== undefined) {
-          d.days[pickFor.day]!.photo = key;
-          picker.close();
-          changed();
-          renderDays();
-          return;
-        }
-        const at = d.photos.indexOf(key);
-        if (at >= 0) d.photos.splice(at, 1);
-        else if (d.photos.length < 10) d.photos.push(key);
-        b.setAttribute('aria-pressed', String(at < 0));
+    function pickPhoto(b: HTMLButtonElement) {
+      const key = b.dataset.pick!;
+      if (pickFor.day !== undefined) {
+        d.days[pickFor.day]!.photo = key;
+        picker!.close();
         changed();
-        renderPhotos();
-      }),
-    );
+        renderDays();
+        return;
+      }
+      const at = d.photos.indexOf(key);
+      if (at >= 0) d.photos.splice(at, 1);
+      else if (d.photos.length < 10) d.photos.push(key);
+      b.setAttribute('aria-pressed', String(d.photos.includes(key)));
+      changed();
+      renderPhotos();
+    }
+    picker.addEventListener('click', (e) => {
+      const b = (e.target as Element).closest<HTMLButtonElement>('[data-pick]');
+      if (b) pickPhoto(b);
+    });
     $('[data-picker-done]', picker).addEventListener('click', () => picker.close());
+
+    /* ---------- Uploading photos (src/server/files.ts) ---------- */
+    const uploadsBox = picker.querySelector<HTMLUListElement>('[data-uploads]');
+    function uploadTile(u: { key: string; src: string }) {
+      const li = el('li');
+      const b = el('button', 'it-pick') as HTMLButtonElement;
+      b.type = 'button';
+      b.dataset.pick = u.key;
+      b.setAttribute('aria-pressed', String(pickFor.day !== undefined ? d.days[pickFor.day]?.photo === u.key : d.photos.includes(u.key)));
+      const img = el('img') as HTMLImageElement;
+      img.src = u.src;
+      img.alt = '';
+      img.loading = 'lazy';
+      b.append(img, el('span', 'px-2.5 py-2 text-left text-sm font-semibold', 'Your photo'));
+      li.append(b);
+      return li;
+    }
+    uploadsBox?.replaceChildren(...cfg.uploads.map(uploadTile));
+    const uploadInput = picker.querySelector<HTMLInputElement>('[data-upload-input]');
+    const uploadBtn = picker.querySelector<HTMLButtonElement>('[data-upload]');
+    const uploadStatus = picker.querySelector<HTMLElement>('[data-upload-status]');
+    uploadBtn?.addEventListener('click', () => uploadInput!.click());
+    uploadInput?.addEventListener('change', async () => {
+      const chosen = [...(uploadInput.files ?? [])].slice(0, 10);
+      uploadInput.value = '';
+      if (!chosen.length) return;
+      uploadBtn!.disabled = true;
+      let failed = '';
+      for (const [i, file] of chosen.entries()) {
+        uploadStatus!.textContent = chosen.length > 1 ? `Sending ${i + 1} of ${chosen.length}…` : 'Sending the photo…';
+        const res = await uploadPicture(file, PHOTO_MAX, { kind: 'itinerary', booking: cfg.booking.id });
+        if (!res.ok) {
+          failed = res.error;
+          continue;
+        }
+        const u = { key: res.key, src: res.src };
+        cfg.uploads.push(u);
+        const tile = uploadTile(u);
+        uploadsBox!.append(tile);
+        // A new photo is chosen straight away: for the day being edited, or added to the photos sent.
+        pickPhoto(tile.querySelector('button')!);
+        if (!picker!.open) break;
+      }
+      uploadBtn!.disabled = false;
+      uploadStatus!.textContent = failed || 'Added. Tap a photo to take it out again.';
+      uploadStatus!.classList.toggle('text-[#b42318]', Boolean(failed));
+      uploadStatus!.classList.toggle('text-muted', !failed);
+    });
 
     /* ---------- Templates ---------- */
     const chips = $('[data-templates]');
@@ -574,7 +648,7 @@ const field = 'a-field it-field';
       const cover = d.photos[0] ?? d.days.find((x) => x.photo)?.photo ?? '';
       const img = $<HTMLImageElement>('[data-card-img]');
       img.hidden = !cover;
-      if (cover) { img.src = `/img/${cover}-800.webp`; img.alt = titleOf(cover); }
+      if (cover) { img.src = srcOf(cover, 800); img.alt = titleOf(cover); }
       const range = shortRange(d.start, d.end);
       $('[data-card-title]').textContent = `${firstName(d.name) ? `${firstName(d.name)}'s ` : ''}${cfg.place} trip${range ? `, ${range}` : ''}`;
       $('[data-card-host]').textContent = new URL(cfg.tripUrl).host;
@@ -647,7 +721,7 @@ const field = 'a-field it-field';
     async function toJpeg(key: string): Promise<File | null> {
       try {
         const img = new Image();
-        img.src = `/img/${key}-1600.webp`;
+        img.src = srcOf(key, 1600);
         await img.decode();
         const c = document.createElement('canvas');
         c.width = img.naturalWidth;

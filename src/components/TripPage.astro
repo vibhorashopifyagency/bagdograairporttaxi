@@ -13,6 +13,7 @@ import { BUSINESS, SITE } from '../data/site';
 import { dateRange, dayDate, firstName, shortRange } from '../lib/itinerary-text';
 import { qrSrc, upiLink, type Upi } from '../lib/upi';
 import type { ItineraryData } from '../server/db/schema';
+import { photoSrc, uploadIdOf } from '../server/files';
 import type { PaySummary } from '../server/payments';
 
 interface Props {
@@ -52,7 +53,9 @@ const src = qr && showQr ? qrSrc(qr) : '';
 const link = showQr && upi?.id ? upiLink(upi, ask, ref) : '';
 const waUs = `https://wa.me/${BUSINESS.whatsapp}?text=${encodeURIComponent(`Namaste, this is ${d.name || 'a customer'} about my booking ${ref}. `)}`;
 const message = d.message.trim();
-const og = new URL(`/img/${cover}-16x9.webp`, SITE.url).href;
+// An uploaded photo is the office's own (src/server/files.ts): signed for the customer, the admin's copy in a preview.
+const coverUploaded = Boolean(uploadIdOf(cover));
+const og = new URL(coverUploaded ? photoSrc(cover, 1600) : `/img/${cover}-16x9.webp`, SITE.url).href;
 const ogTitle = `${first ? `${first}'s ` : ''}${place} trip${shortRange(d.start, d.end) ? `, ${shortRange(d.start, d.end)}` : ''}`;
 
 const callIcon =
@@ -71,8 +74,8 @@ const tick = '<path d="M20 6 9 17l-5-5"/>';
     <meta property="og:title" content={ogTitle} />
     <meta property="og:description" content={hasPlan ? 'Day-by-day plan, hotels, driver and payment' : 'Pickup, car, driver and payment'} />
     <meta property="og:image" content={og} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="675" />
+    {!coverUploaded && <meta property="og:image:width" content="1200" />}
+    {!coverUploaded && <meta property="og:image:height" content="675" />}
     <meta property="og:site_name" content={SITE.name} />
     <link rel="icon" href="/logo-192.png" sizes="192x192" type="image/png" />
     <link rel="preload" href="/fonts/bricolage-latin-variable.woff2" as="font" type="font/woff2" crossorigin />
@@ -95,7 +98,7 @@ const tick = '<path d="M20 6 9 17l-5-5"/>';
       </header>
 
       <section class="relative h-[300px] text-white sm:h-[340px]">
-        <img src={`/img/${cover}-1600.webp`} srcset={`/img/${cover}-800.webp 800w, /img/${cover}-1600.webp 1600w`} sizes="(min-width: 720px) 720px, 100vw" alt={photoAlt(cover)} class="absolute inset-0 h-full w-full object-cover" />
+        <img src={photoSrc(cover, 1600, preview)} srcset={coverUploaded ? undefined : `/img/${cover}-800.webp 800w, /img/${cover}-1600.webp 1600w`} sizes={coverUploaded ? undefined : '(min-width: 720px) 720px, 100vw'} alt={photoAlt(cover)} class="absolute inset-0 h-full w-full object-cover" />
         <div class="absolute inset-0 bg-[linear-gradient(180deg,rgb(17_17_17/0.05)_30%,rgb(17_17_17/0.84)_100%)]"></div>
         <div class="absolute right-5 bottom-5 left-5 flex flex-col gap-1.5 sm:right-7 sm:left-7">
           <span class:list={['self-start rounded-full px-2.5 py-0.5 text-xs font-bold text-ink', cancelled ? 'bg-[#fde8e7]' : confirmed ? 'bg-lime' : 'bg-amber']}>
@@ -156,7 +159,7 @@ const tick = '<path d="M20 6 9 17l-5-5"/>';
                   <div class="flex min-w-0 flex-1 flex-col gap-1.5 pb-6">
                     {dayDate(d.start, i) && <span class="text-xs font-bold tracking-[0.06em] text-lime-text uppercase">{dayDate(d.start, i)}</span>}
                     <span class="text-[17px] leading-snug font-bold">{day.title}</span>
-                    {day.photo && <img src={`/img/${day.photo}-800.webp`} alt={photoAlt(day.photo)} loading="lazy" width="800" height="533" class="h-[150px] w-full rounded-[14px] object-cover sm:h-[220px]" />}
+                    {day.photo && <img src={photoSrc(day.photo, 800, preview)} alt={photoAlt(day.photo)} loading="lazy" width="800" height="533" class="h-[150px] w-full rounded-[14px] object-cover sm:h-[220px]" />}
                     {day.detail && <span class="text-sm text-body">{day.detail}</span>}
                     {day.stay && <span class="text-[13px] text-muted">{day.stay}</span>}
                   </div>

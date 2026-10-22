@@ -50,6 +50,7 @@ const everyone: Topic[] = [
     steps: [
       'Open the booking and press Send itinerary. It fills in from the booking and the tour package.',
       'Check the dates, pickup, driver and car. Add or change days, photos and the message. The right side shows what the customer will see.',
+      'Photos: press Add, then Upload photos to use your own (the hotel, the car), or pick from the website’s. Only this customer’s trip page shows the ones you upload.',
       'Press Send on WhatsApp. WhatsApp opens with the message and a link to the customer’s own trip page; press Send there.',
       'On a phone, Share with photos sends the pictures too: choose the customer in WhatsApp.',
       'Changed something later? Open it again and press Send update. The same link shows the new version.',
@@ -69,6 +70,7 @@ const everyone: Topic[] = [
     title: 'Record money received',
     steps: [
       'Open the booking and press Record payment. Enter the amount, UPI or cash, and the UPI reference from the screenshot.',
+      'Choose screenshot adds the customer’s payment screenshot; it is kept with the payment. Forgot it? “Add the screenshot” under the payment on the booking.',
       'Who received it: the office, or the driver (for the balance after the trip).',
       'Staff can record payments only when the admin has switched it on for them on the Team page.',
       'A mistake cannot be deleted. Ask the admin to reverse it, then record it again correctly.',
@@ -97,7 +99,7 @@ const everyone: Topic[] = [
     id: 'privacy',
     title: 'If a customer asks what we hold, or to remove it',
     steps: [
-      `Customer names and numbers are removed by themselves ${RETENTION_MONTHS} months after the trip. Fares and payments stay for the accounts.`,
+      `Customer names and numbers are removed by themselves ${RETENTION_MONTHS} months after the trip, with their payment screenshots and uploaded trip photos. Fares and payments stay for the accounts.`,
       'If a customer asks to see their details, or to have them removed sooner, tell the admin. Only the admin can do it, from the customer’s page.',
       'Keep notes to what helps the next trip. The customer can ask to see them.',
     ],
@@ -160,7 +162,7 @@ const adminOnly: Topic[] = [
     title: 'Customer data requests',
     steps: [
       'Open the customer. “Download what we hold” gives a plain text file you can send them.',
-      '“Remove their details” takes their name, number, addresses and notes off every booking at once. It cannot be undone, and it warns you about trips still to come.',
+      '“Remove their details” takes their name, number, addresses and notes off every booking at once, and deletes their payment screenshots and uploaded trip photos. It cannot be undone, and it warns you about trips still to come.',
       `Team shows when the nightly clean-up last ran. It removes details ${RETENTION_MONTHS} months after each trip.`,
     ],
   },

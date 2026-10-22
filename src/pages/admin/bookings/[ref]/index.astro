@@ -27,6 +27,7 @@ import {
   summarise,
   type PaymentForm,
 } from '../../../../server/payments';
+import { adminFileSrc, filesReady, itineraryUploads, screenshotsFor, uploadKey } from '../../../../server/files';
 import { ipHash } from '../../../../server/security';
 import { allTemplates, deleteItinerary, itineraryFromBooking, tripPath, tripPlace, LIBRARY } from '../../../../server/trip';
 import DriverFields from '../../../../components/admin/DriverFields.astro';
@@ -51,7 +52,7 @@ const today = todayIST();
 
 let open = Astro.url.searchParams.get('do') ?? '';
 let error = '';
-const blankPayment = (): PaymentForm => ({ amount: '', method: 'upi', collector: 'office', receivedOn: today, receivedBy: user.name, upiRef: '', note: '' });
+const blankPayment = (): PaymentForm => ({ amount: '', method: 'upi', collector: 'office', receivedOn: today, receivedBy: user.name, upiRef: '', note: '', screenshot: '' });
 let payDraft = blankPayment();
 let refundDraft = blankPayment();
 /** Set when the payment form came back with an error, so its choices are kept. */
@@ -87,6 +88,7 @@ if (Astro.request.method === 'POST') {
       receivedBy: str('receivedBy'),
       upiRef: str('upiRef'),
       note: str('note'),
+      screenshot: str('screenshot'),
     };
     if (intent === 'payment') [payDraft, payPosted] = [draft, true];
     else refundDraft = draft;
@@ -190,6 +192,9 @@ const customerBookings = booking.customerId
   ? ((await db.select({ n: count() }).from(b).where(eq(b.customerId, booking.customerId)))[0]?.n ?? 0)
   : 0;
 await audit({ actorId: user.id, action: 'view_booking', entity: 'booking', entityId: booking.id, detail: { ref: booking.ref }, ipHash: ctx.ipHash });
+// Uploaded pictures (src/server/files.ts): each payment's screenshot, and the photos uploaded for the itinerary.
+const picturesReady = filesReady();
+const [shots, uploads] = await Promise.all([screenshotsFor(payments.map((p) => p.id)), booking.customerPhone ? itineraryUploads(booking.id) : []]);
 
 const pay = summarise(booking.fareTotal, advanceOf(booking.fareTotal), payments, booking.kind);
 // After the advance, the money still due is the driver's to collect after the
@@ -229,6 +234,7 @@ const doneText: Record<string, string> = {
   'paid-driver': 'Recorded as collected by the driver. It is on their account until they hand it to the office.',
   refund: 'Refund recorded.',
   reversed: 'Payment reversed. Both entries stay on the record.',
+  screenshot: 'Screenshot added to the payment.',
   edited: 'Saved.',
   'itinerary-deleted': 'Itinerary deleted. The customer’s link now shows only the booking and payment. Send itinerary starts a fresh one.',
 };
@@ -470,6 +476,22 @@ const facts: [string, string][] = [
                         {p.upiRef && ` · ref ${p.upiRef}`}
                       </span>
                       {p.note && <span class="text-[13px] text-body">{p.note}</span>}
+                      {shots.get(p.id) ? (
+                        <button type="button" class="a-shot" data-shot={adminFileSrc(shots.get(p.id)!.id)}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M12 18h.01" /></svg>
+                          See the screenshot
+                        </button>
+                      ) : (
+                        canPay && picturesReady && !removed && p.kind !== 'reversal' && !reversed && (
+                          <span class="flex flex-wrap items-center gap-x-3">
+                            <button type="button" class="a-shot" data-add-shot={p.id} data-booking={booking.id}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                              Add the screenshot
+                            </button>
+                            <span class="text-[13px] text-[#b42318]" data-shot-error hidden></span>
+                          </span>
+                        )
+                      )}
                     </div>
                     <span class:list={['font-bold whitespace-nowrap', p.amount < 0 ? 'text-[#b42318]' : 'text-ink', reversed && 'text-muted line-through']}>{p.amount < 0 ? `−${inr(-p.amount)}` : inr(p.amount)}</span>
                     {admin && p.kind !== 'reversal' && !reversed && (
@@ -605,6 +627,19 @@ const facts: [string, string][] = [
             <p class="m-0 rounded-xl bg-mist px-3.5 py-2.5 text-sm text-body" data-driver-only>It goes on {driverFirst}’s account as money they hold, until they hand it to the office (record that on <a href={`/admin/drivers/${booking.driverId}/`} target="_blank" rel="noopener">their page</a>).</p>
           )}
           <label class="a-field" data-upi-only><span>UPI reference <span class="font-normal text-muted">(the 12-digit number on the screenshot, optional)</span></span><input name="upiRef" maxlength="60" value={x.d.upiRef} inputmode="numeric" autocomplete="off" /></label>
+          {picturesReady && !removed && (
+            <div class="flex flex-col gap-1.5" data-shot-field={booking.id}>
+              <span class="text-[0.9rem] font-semibold text-body">Screenshot <span class="font-normal text-muted">(optional, the one the customer sent)</span></span>
+              <input type="hidden" name="screenshot" value={x.d.screenshot} />
+              <input type="file" accept="image/*" hidden data-shot-input />
+              <div class="flex flex-wrap items-center gap-3">
+                <img data-shot-preview hidden alt="The screenshot attached" class="h-20 w-14 rounded-lg border border-line object-cover object-top" />
+                <button type="button" class="a-chip" data-shot-choose>Choose screenshot</button>
+                <button type="button" class="a-chip" data-shot-clear hidden>Remove</button>
+              </div>
+              <span class="text-sm text-muted" data-shot-status role="status"></span>
+            </div>
+          )}
           <label class="a-field"><span>Note <span class="font-normal text-muted">(optional)</span></span><input name="note" maxlength="300" value={x.d.note} /></label>
           {x.intent === 'payment' && <p class="m-0 text-sm text-muted">Payments cannot be deleted. A mistake is reversed by the admin, and both entries stay on the record.</p>}
         </div>
@@ -709,6 +744,22 @@ const facts: [string, string][] = [
     </div>
   </dialog>
 
+  <dialog id="dlg-shot" class="a-dialog a-dialog-sm" aria-labelledby="dlg-shot-h">
+    <div class="a-dialog-body">
+      <header class="a-dialog-head">
+        <h2 id="dlg-shot-h" class="m-0 font-display text-xl font-bold">Payment screenshot</h2>
+        <button type="button" data-close class="a-icon-btn" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={closeIcon} /></button>
+      </header>
+      <div class="a-dialog-main flex justify-center">
+        <img data-shot-img alt="The payment screenshot" class="h-auto max-h-[70dvh] w-auto max-w-full rounded-xl border border-line" />
+      </div>
+      <footer class="a-dialog-foot">
+        <a data-shot-open target="_blank" rel="noopener" class="btn-ghost">Open full size</a>
+        <button type="button" data-close class="btn-book">Close</button>
+      </footer>
+    </div>
+  </dialog>
+
   {!removed && (
     <ItineraryDialog
       booking={{ id: booking.id, ref: booking.ref }}
@@ -722,6 +773,8 @@ const facts: [string, string][] = [
       upiReady={Boolean(upi?.qr)}
       templates={templates}
       library={LIBRARY}
+      uploads={uploads.map((f) => ({ key: uploadKey(f.id), src: adminFileSrc(f.id) }))}
+      uploadReady={picturesReady}
       drivers={pickable}
       autoOpen={open === 'itinerary'}
     />
@@ -730,6 +783,7 @@ const facts: [string, string][] = [
 
 <script>
   import { drawQrCard, inr, logEvent, openDialogs, wirePayFields } from '../../../../lib/admin-client';
+  import { SCREENSHOT_MAX, uploadPicture } from '../../../../lib/shrink-image';
 
   openDialogs();
   wirePayFields();
@@ -772,6 +826,85 @@ const facts: [string, string][] = [
     sync();
     form.querySelectorAll<HTMLButtonElement>('[data-fill]').forEach((b) => b.addEventListener('click', () => { amount.value = b.dataset.fill!; amount.focus(); }));
   });
+
+  // Payment screenshots (src/server/files.ts). In Record payment the picture
+  // is sent as soon as it is chosen and attached when the payment is saved;
+  // a payment already recorded gets one with "Add the screenshot".
+  document.querySelectorAll<HTMLElement>('[data-shot-field]').forEach((box) => {
+    const input = box.querySelector<HTMLInputElement>('[data-shot-input]')!;
+    const id = box.querySelector<HTMLInputElement>('input[name=screenshot]')!;
+    const preview = box.querySelector<HTMLImageElement>('[data-shot-preview]')!;
+    const choose = box.querySelector<HTMLButtonElement>('[data-shot-choose]')!;
+    const clear = box.querySelector<HTMLButtonElement>('[data-shot-clear]')!;
+    const status = box.querySelector<HTMLElement>('[data-shot-status]')!;
+    const submit = box.closest('form')!.querySelector<HTMLButtonElement>('button[type=submit]')!;
+    const say = (text: string, bad = false) => {
+      status.textContent = text;
+      status.classList.toggle('text-[#b42318]', bad);
+      status.classList.toggle('text-muted', !bad);
+    };
+    const show = (src: string) => {
+      preview.hidden = !src;
+      if (src) preview.src = src;
+      clear.hidden = !src;
+      choose.textContent = src ? 'Choose another' : 'Choose screenshot';
+    };
+    if (id.value) show(`/admin/files/${id.value}.jpg`);
+    choose.addEventListener('click', () => input.click());
+    clear.addEventListener('click', () => {
+      id.value = '';
+      show('');
+      say('');
+    });
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      input.value = '';
+      if (!file) return;
+      say('Sending the screenshot…');
+      submit.disabled = true;
+      choose.disabled = true;
+      const res = await uploadPicture(file, SCREENSHOT_MAX, { kind: 'payment', booking: box.dataset.shotField! });
+      submit.disabled = false;
+      choose.disabled = false;
+      if (!res.ok) return say(res.error, true);
+      id.value = res.id;
+      show(res.src);
+      say('Attached. It is saved with the payment.');
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-add-shot]').forEach((btn) => {
+    // Kept in the page: some phones only open the picker for an input that is.
+    const input = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', hidden: true });
+    btn.after(input);
+    const error = btn.parentElement!.querySelector<HTMLElement>('[data-shot-error]')!;
+    btn.addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      input.value = '';
+      if (!file) return;
+      const label = btn.innerHTML;
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      error.hidden = true;
+      const res = await uploadPicture(file, SCREENSHOT_MAX, { kind: 'payment', booking: btn.dataset.booking!, payment: btn.dataset.addShot! });
+      if (res.ok) return location.replace(`${location.pathname}?done=screenshot`);
+      btn.disabled = false;
+      btn.innerHTML = label;
+      error.textContent = res.error;
+      error.hidden = false;
+    });
+  });
+
+  const viewer = document.getElementById('dlg-shot') as HTMLDialogElement | null;
+  document.querySelectorAll<HTMLButtonElement>('[data-shot]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (!viewer) return;
+      viewer.querySelector<HTMLImageElement>('[data-shot-img]')!.src = b.dataset.shot!;
+      viewer.querySelector<HTMLAnchorElement>('[data-shot-open]')!.href = b.dataset.shot!;
+      viewer.showModal();
+    }),
+  );
 
   // Driver: picking one fills the car number and what the trip earns them;
   // "Add a new driver" shows the fields for one. A pay typed by hand stays.
@@ -939,6 +1072,8 @@ const facts: [string, string][] = [
   .a-pill input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
   .a-pill input:focus-visible + span { outline: 3px solid var(--color-lime); outline-offset: 2px; }
   [data-upi-only][hidden], [data-office-only][hidden], [data-driver-only][hidden] { display: none; }
+  .a-shot { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2.25rem; margin-top: 0.15rem; padding: 0; border: 0; background: none; font: inherit; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .a-shot:disabled { opacity: 0.6; cursor: default; }
   .a-celebrate { position: relative; overflow: hidden; display: flex; align-items: center; gap: 0.9rem; padding: 1rem 1.25rem; border-radius: 20px; background: var(--color-ink); }
   .a-burst { position: absolute; left: 1.6rem; top: 50%; width: 0; height: 0; }
   .a-burst i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--color-lime); opacity: 0; animation: a-pop 900ms ease-out 150ms forwards; }

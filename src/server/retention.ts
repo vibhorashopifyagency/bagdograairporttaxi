@@ -15,7 +15,9 @@
  *  - timeline entries keep what happened but lose the values (the old and new
  *    address on an edit, the number an itinerary went to);
  *  - payments keep amount, date, method, who received it and the UPI
- *    reference, and lose the free-text note and any screenshot.
+ *    reference, and lose the free-text note;
+ *  - uploaded pictures (payment screenshots, itinerary photos) are deleted
+ *    from the photo store (src/server/files.ts).
  * The customer's own row loses name, number, email and notes.
  */
 import { and, count, eq, inArray, isNull, lt, lte, notExists, sql } from 'drizzle-orm';
@@ -26,6 +28,7 @@ import { audit } from './admin';
 import { STATUS_LABEL, todayIST } from './dashboard';
 import { getDb, schema } from './db';
 import { advanceOf } from './fares';
+import { deleteBookingFiles, sweepUnusedFiles } from './files';
 import { summarise } from './payments';
 
 export const RETENTION_MONTHS = 24;
@@ -43,7 +46,11 @@ export function cutoffDay(today = todayIST()): string {
 
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
-/** Removes the personal details from these bookings, as described at the top. */
+/**
+ * Removes the personal details from these bookings, as described at the top.
+ * Their pictures must already be gone from the store (deleteBookingFiles);
+ * this deletes the rows that pointed at them.
+ */
 async function scrubBookings(tx: Tx, ids: string[], now: Date): Promise<{ itineraries: number }> {
   if (!ids.length) return { itineraries: 0 };
   const b = schema.bookings;
@@ -53,7 +60,8 @@ async function scrubBookings(tx: Tx, ids: string[], now: Date): Promise<{ itiner
     .set({ customerName: null, customerPhone: null, dropAddress: null, flight: null, notes: null, ipHash: null, personalDataRemovedAt: now })
     .where(inArray(b.id, ids));
   const gone = await tx.delete(schema.itineraries).where(inArray(schema.itineraries.bookingId, ids)).returning({ id: schema.itineraries.id });
-  await tx.update(schema.payments).set({ note: null, screenshotUrl: null }).where(inArray(schema.payments.bookingId, ids));
+  await tx.update(schema.payments).set({ note: null }).where(inArray(schema.payments.bookingId, ids));
+  await tx.delete(schema.files).where(inArray(schema.files.bookingId, ids));
   // An edit keeps which fields changed, not what they said; an itinerary keeps its count, not the number it went to.
   await tx
     .update(e)
@@ -73,7 +81,8 @@ async function scrubCustomers(tx: Tx, ids: string[], now: Date): Promise<void> {
   await tx.update(schema.customers).set({ name: null, phone: null, email: null, notes: null, personalDataRemovedAt: now }).where(inArray(schema.customers.id, ids));
 }
 
-export type PurgeResult = { at: string; cutoff: string; bookings: number; customers: number; itineraries: number; auditRows: number; sessions: number; ms: number; done: boolean };
+/** `files`: pictures deleted, with the bookings or because nothing used them. */
+export type PurgeResult = { at: string; cutoff: string; bookings: number; customers: number; itineraries: number; files: number; auditRows: number; sessions: number; ms: number; done: boolean };
 
 /** Bookings handled per transaction, so one run never holds a long lock. */
 const BATCH = 200;
@@ -90,14 +99,16 @@ export async function purgeExpired({ now = new Date(), budgetMs = 10_000 } = {})
   const db = getDb();
   const b = schema.bookings;
   const c = schema.customers;
-  const result: PurgeResult = { at: now.toISOString(), cutoff, bookings: 0, customers: 0, itineraries: 0, auditRows: 0, sessions: 0, ms: 0, done: false };
+  const result: PurgeResult = { at: now.toISOString(), cutoff, bookings: 0, customers: 0, itineraries: 0, files: 0, auditRows: 0, sessions: 0, ms: 0, done: false };
 
   // 1. Bookings whose trip was more than 24 months ago.
   for (;;) {
     if (Date.now() - started > budgetMs) break;
     const due = await db.select({ id: b.id }).from(b).where(and(lt(b.pickupDate, cutoff), isNull(b.personalDataRemovedAt))).limit(BATCH);
     if (!due.length) break;
-    const r = await db.transaction((tx) => scrubBookings(tx, due.map((x) => x.id), now));
+    const ids = due.map((x) => x.id);
+    result.files += await deleteBookingFiles(ids);
+    const r = await db.transaction((tx) => scrubBookings(tx, ids, now));
     result.bookings += due.length;
     result.itineraries += r.itineraries;
   }
@@ -121,7 +132,10 @@ export async function purgeExpired({ now = new Date(), budgetMs = 10_000 } = {})
     result.customers += due.length;
   }
 
-  // 3. The access log is kept for the same 24 months, and old logins are tidied away.
+  // 3. Pictures uploaded but never used (a cancelled Record payment, a photo taken out of an itinerary).
+  if (Date.now() - started <= budgetMs) result.files += await sweepUnusedFiles();
+
+  // 4. The access log is kept for the same 24 months, and old logins are tidied away.
   if (Date.now() - started <= budgetMs) {
     const oldLog = await db.delete(schema.auditLog).where(lt(schema.auditLog.at, new Date(`${cutoff}T00:00:00+05:30`))).returning({ id: schema.auditLog.id });
     result.auditRows = oldLog.length;
@@ -136,7 +150,7 @@ export async function purgeExpired({ now = new Date(), budgetMs = 10_000 } = {})
     .insert(schema.settings)
     .values({ key: LAST_RUN_KEY, value: result })
     .onConflictDoUpdate({ target: schema.settings.key, set: { value: result } });
-  if (result.bookings || result.customers || result.auditRows) {
+  if (result.bookings || result.customers || result.files || result.auditRows) {
     await audit({ action: 'retention_purge', entity: 'retention', detail: { ...result } });
   }
   return result;
@@ -173,6 +187,7 @@ export async function eraseCustomer(customerId: string, reason: 'asked' | 'dupli
   if (customer.removed) return { ok: false, error: 'Their details were already removed.' };
   const now = new Date();
   const ids = (await db.select({ id: schema.bookings.id }).from(schema.bookings).where(eq(schema.bookings.customerId, customerId))).map((x) => x.id);
+  await deleteBookingFiles(ids);
   await db.transaction(async (tx) => {
     for (let i = 0; i < ids.length; i += BATCH) await scrubBookings(tx, ids.slice(i, i + BATCH), now);
     await scrubCustomers(tx, [customerId], now);
@@ -191,12 +206,13 @@ export async function customerReport(customerId: string, ctx: Ctx): Promise<{ na
   if (!c || c.personalDataRemovedAt) return null;
   const bookings = await db.select().from(schema.bookings).where(eq(schema.bookings.customerId, customerId)).orderBy(schema.bookings.pickupDate);
   const ids = bookings.map((x) => x.id);
-  const [pays, its] = ids.length
+  const [pays, its, pics] = ids.length
     ? await Promise.all([
         db.select().from(schema.payments).where(inArray(schema.payments.bookingId, ids)).orderBy(schema.payments.createdAt),
         db.select().from(schema.itineraries).where(inArray(schema.itineraries.bookingId, ids)),
+        db.select({ bookingId: schema.files.bookingId, kind: schema.files.kind, paymentId: schema.files.paymentId }).from(schema.files).where(inArray(schema.files.bookingId, ids)),
       ])
-    : [[], []];
+    : [[], [], []];
   await audit({ actorId: ctx.actorId, action: 'customer_export', entity: 'customer', entityId: customerId, detail: { bookings: ids.length }, ipHash: ctx.ipHash });
 
   const ist = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' });
@@ -236,10 +252,16 @@ export async function customerReport(customerId: string, ctx: Ctx): Promise<{ na
       line('  Agreed to our privacy notice', x.consentAt ? ist.format(x.consentAt) : null),
       line('  Fare', inr(x.fareTotal)),
       line('  Paid', `${inr(sum.paid)}${sum.due > 0 ? `, ${inr(sum.due)} still due` : ''}`),
-      ...paid.map((p) => line(`  ${p.kind === 'payment' ? 'Payment' : p.kind === 'refund' ? 'Refund' : 'Correction'}`, `${inr(p.amount)} on ${day(p.receivedOn)} by ${p.method === 'cash' ? 'cash' : 'UPI'}${p.upiRef ? `, reference ${p.upiRef}` : ''}`)),
+      ...paid.map((p) =>
+        line(
+          `  ${p.kind === 'payment' ? 'Payment' : p.kind === 'refund' ? 'Refund' : 'Correction'}`,
+          `${inr(p.amount)} on ${day(p.receivedOn)} by ${p.method === 'cash' ? 'cash' : 'UPI'}${p.upiRef ? `, reference ${p.upiRef}` : ''}${pics.some((f) => f.paymentId === p.id) ? ', with the screenshot of it' : ''}`,
+        ),
+      ),
       line('  Driver', [x.driverName, x.vehicleNumber].filter(Boolean).join(', ')),
       line('  Office notes', x.notes),
       line('  Itinerary', it?.published ? `"${it.published.title}", sent ${it.sentAt ? ist.format(it.sentAt) : ''}` : null),
+      line('  Photos our office uploaded for the trip', pics.filter((f) => f.bookingId === x.id && f.kind === 'itinerary').length || null),
     );
   }
   out.push(
