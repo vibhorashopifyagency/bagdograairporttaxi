@@ -1,22 +1,21 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { POLICY, SITE } from '../data/site';
+import Words from '../components/Words.astro';
+import { wordsText } from '../data/page-text';
+// The words are "Terms of service" in the dashboard's Edit pages (src/data/page-text.ts).
+const sections = ['fares', 'booking', 'waiting', 'safety', 'cancel'];
 ---
 
-<BaseLayout title="Terms of Service" description={`Booking terms for ${SITE.name} taxi transfers and tour packages.`} crumbs={[{ name: 'Terms', path: '/terms/' }]}>
+<BaseLayout title={wordsText('terms', 'seoTitle')} description={wordsText('terms', 'seoDescription')} crumbs={[{ name: 'Terms', path: '/terms/' }]}>
   <div class="wrap mt-6">
     <div class="prose-site">
-      <h1 class="text-3xl font-extrabold sm:text-4xl">Terms of service</h1>
-      <h2>Fares</h2>
-      <p>Fares are per car, one way, and include fuel, tolls, parking, driver allowance and GST. A night charge of ₹{POLICY.nightCharge} applies to pickups between {POLICY.nightChargeFrom} and {POLICY.nightChargeTo}. Permit fees for protected areas in Sikkim are extra and charged at cost.</p>
-      <h2>Booking</h2>
-      <p>A booking is confirmed when we receive the {POLICY.advancePercent}% advance and send a written confirmation. Sending an enquiry alone does not reserve a car. The balance is paid to the driver at the end of the trip.</p>
-      <h2>Waiting and changes</h2>
-      <p>Waiting is free for {POLICY.freeWaitMinutes} minutes after the actual arrival of your flight or train. Extra stops and detours beyond the agreed route are charged at the rates given in advance.</p>
-      <h2>Luggage and safety</h2>
-      <p>Please keep to the seat and luggage limits shown for each car. Drivers may refuse to drive unsafely, including above the speed limit or in dangerous weather, and may pause a trip when a road is closed by the authorities.</p>
-      <h2>Cancellations</h2>
-      <p>See the <a href="/cancellation-refund-policy/">cancellation and refund policy</a>.</p>
+      <Words page="terms" field="title" as="h1" class="text-3xl font-extrabold sm:text-4xl" />
+      {sections.map((s) => (
+        <>
+          <Words page="terms" field={`${s}Title`} as="h2" />
+          <Words page="terms" field={`${s}Text`} as="p" />
+        </>
+      ))}
     </div>
   </div>
 </BaseLayout>

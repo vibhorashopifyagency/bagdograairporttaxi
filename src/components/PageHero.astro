@@ -4,9 +4,11 @@
  * the title stays readable, eyebrow and h1, plus a slot for chips or copy.
  */
 import Photo from './Photo.astro';
+import { editAttr, hasWords, words as wordsHtml, type WordPageKey } from '../data/page-text';
+import type { WordVars } from '../lib/rich-text';
 interface Props {
   image: string;
-  title: string;
+  title?: string;
   eyebrow?: string;
   /** Shorter banner for list pages. */
   compact?: boolean;
@@ -16,8 +18,13 @@ interface Props {
   editTitle?: string;
   /** False when the photo cannot be chosen in the dashboard (a guide's). */
   editPhoto?: boolean;
+  /** "about": the eyebrow and title come from that page's words (heroEyebrow, heroTitle), editable in the dashboard. */
+  words?: WordPageKey;
+  vars?: WordVars;
 }
-const { image, title, eyebrow, compact = false, edit, editTitle, editPhoto = true } = Astro.props;
+const { image, title = '', eyebrow, compact = false, edit, editTitle, editPhoto = true, words, vars } = Astro.props;
+const part = (field: string) => (words && hasWords(words, field) ? { html: wordsHtml(words, field, vars), edit: editAttr(words, field) } : null);
+const w = { eyebrow: part('heroEyebrow'), title: part('heroTitle') };
 ---
 
 <section class="relative isolate overflow-hidden bg-ink text-white" data-edit={edit && editPhoto ? `${edit}:photo` : undefined}>
@@ -26,8 +33,12 @@ const { image, title, eyebrow, compact = false, edit, editTitle, editPhoto = tru
   <!-- Darkens the top edge so the breadcrumb the layout overlays stays readable on a bright sky. -->
   <div class="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-ink/60 to-transparent" aria-hidden="true"></div>
   <div class:list={['wrap relative flex flex-col justify-end pt-20', compact ? 'min-h-[260px] pb-8 sm:min-h-[320px] sm:pb-10' : 'min-h-[340px] pb-9 sm:min-h-[440px] sm:pb-12']}>
-    {eyebrow && <p class="eyebrow !text-white/70">{eyebrow}</p>}
-    <h1 class="mt-2 max-w-4xl text-[2.1rem] leading-[1.08] font-extrabold text-white sm:text-5xl" data-edit={edit && editTitle ? `${edit}:${editTitle}` : undefined}>{title}</h1>
+    {w.eyebrow ? <p class="eyebrow !text-white/70" data-edit={w.eyebrow.edit} set:html={w.eyebrow.html} /> : eyebrow && <p class="eyebrow !text-white/70">{eyebrow}</p>}
+    {w.title ? (
+      <h1 class="mt-2 max-w-4xl text-[2.1rem] leading-[1.08] font-extrabold text-white sm:text-5xl" data-edit={w.title.edit} set:html={w.title.html} />
+    ) : (
+      <h1 class="mt-2 max-w-4xl text-[2.1rem] leading-[1.08] font-extrabold text-white sm:text-5xl" data-edit={edit && editTitle ? `${edit}:${editTitle}` : undefined}>{title}</h1>
+    )}
     <slot />
   </div>
 </section>

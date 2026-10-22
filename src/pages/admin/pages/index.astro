@@ -1,13 +1,16 @@
 ---
 /**
- * Edit pages: every page of the website whose words come from the
- * dashboard, each with "Edit on the page" (the page editor,
- * /admin/pages/edit/) and its form. Admin only.
+ * Edit pages: every page of the website, each with "On the page" (the page
+ * editor, /admin/pages/edit/) and its form: the words of every page, the
+ * policies, the parts shown on many pages and the page templates (page
+ * words, src/data/page-text.ts), then the destination, guide, package and
+ * route items. Admin only.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import PublishBar from '../../../components/admin/PublishBar.astro';
 import { isAdmin } from '../../../server/admin';
 import { getEntry, listEntries, type Entry } from '../../../server/content';
+import { WORD_PAGES, type WordPage } from '../../../data/page-text';
 import '../../../styles/admin-web.css';
 
 export const prerender = false;
@@ -16,7 +19,17 @@ const user = Astro.locals.user!;
 if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
 type Data = Record<string, any>;
 
-const [destinations, guides, packages, routes, faq] = await Promise.all([listEntries('destination'), listEntries('guide'), listEntries('package'), listEntries('route'), getEntry('faq', 'main')]);
+const wordPages = Object.entries(WORD_PAGES as Record<string, WordPage>);
+const [destinations, guides, packages, routes, faq, wordEntries] = await Promise.all([
+  listEntries('destination'),
+  listEntries('guide'),
+  listEntries('package'),
+  listEntries('route'),
+  getEntry('faq', 'main'),
+  Promise.all(wordPages.map(([k]) => getEntry('text', k))),
+]);
+const wordRows = (group: WordPage['group']): Row[] =>
+  wordPages.flatMap(([k, p], i) => (p.group === group ? [{ name: p.name, path: p.path, form: `/admin/pages/text/${k}/`, e: wordEntries[i], note: p.note ?? p.path }] : []));
 const chip = (e: Entry | null | undefined): [string, string] | null => {
   if (!e) return null;
   if (e.pending === 'delete') return ['Comes off when you publish', 'bg-[#fde8e7] text-[#b42318]'];
@@ -28,14 +41,18 @@ type Row = { name: string; path: string | null; form: string; e?: Entry | null; 
 const nameOf = (e: Entry, f: (d: Data) => string) => f((e.current ?? e.live) as Data);
 const groups: { title: string; text: string; rows: Row[]; add?: { href: string; label: string } }[] = [
   {
-    title: 'Home and questions',
-    text: 'The general questions show on the home page and the questions page. The home page’s search title is under Business details.',
+    title: 'Pages',
+    text: 'Every heading, paragraph, button and list on each page, and how it shows on Google. Numbers such as fares and refund days fill themselves in.',
     rows: [
-      { name: 'General questions', path: '/faq/', form: '/admin/pages/faq/main/', e: faq },
-      { name: 'Home page', path: '/', form: '/admin/business/?tab=search', note: 'Search title and description' },
-      { name: 'Gallery page', path: '/gallery/', form: '/admin/photos/?tab=gallery', note: 'Photos, titles and links' },
+      ...wordRows('pages'),
+      { name: 'General questions', path: '/faq/', form: '/admin/pages/faq/main/', e: faq, note: 'The questions on the home page and the questions page' },
+      { name: 'Gallery photos', path: '/gallery/', form: '/admin/photos/?tab=gallery', note: 'Photos, titles and links' },
+      { name: 'Home page on Google', path: '/', form: '/admin/business/?tab=search', note: 'Search title and description' },
     ],
   },
+  { title: 'Policies', text: 'The cancellation, terms and privacy pages. Hours, refund % and days are fill-ins from Business details, Policies.', rows: wordRows('policies') },
+  { title: 'On many pages', text: 'Parts that repeat across the site: change them once and every page shows it.', rows: wordRows('shared') },
+  { title: 'Page templates', text: 'The fixed headings and lines on every route, package and destination page at once. Each one’s own words are in the groups below.', rows: wordRows('templates') },
   {
     title: 'Destination guides',
     text: 'Opening answer, best time, days needed, highlights, how to reach, permits, questions and the photo.',

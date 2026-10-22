@@ -3,8 +3,9 @@
  * A list the admin can add to, take from and put in order: stops, tips,
  * questions, itinerary days. Each row has one or two boxes; the form gets
  * every row's boxes under the same names, in order. Driven by wireLists()
- * in src/lib/admin-web.ts.
+ * in src/lib/admin-web.ts. Each row is a RowListRow.
  */
+import RowListRow from './RowListRow.astro';
 interface Field {
   name: string;
   /** Read aloud for each box: "Question", "Answer". */
@@ -34,62 +35,15 @@ interface Props {
   error?: string;
 }
 const { id, fields, values, addLabel, noun, max = 0, numbered = false, movable = true, was, cards = false, error } = Astro.props;
-const icon = {
-  x: '<path d="M18 6 6 18M6 6l12 12"/>',
-  up: '<path d="m18 15-6-6-6 6"/>',
-  down: '<path d="m6 9 6 6 6-6"/>',
-};
 const rows = values.length ? values : [];
 ---
 
 {was && <span class="wf-was">Changed from what is live</span>}
 {error && <span class="wf-err">{error}</span>}
-<div data-list={id} data-max={max || undefined} class="flex flex-col gap-2">
-  {rows.map((vals) => (
-    <div data-row class:list={['web-row', cards && 'web-day']}>
-      {numbered && <span class="web-row-n" data-n aria-hidden="true"></span>}
-      <div class="flex min-w-0 flex-1 flex-col gap-2">
-        {fields.map((f, i) =>
-          f.rows ? (
-            <textarea name={f.name} rows={f.rows} aria-label={f.label} placeholder={f.placeholder} maxlength={f.maxlength} class="wf-input">{vals[i] ?? ''}</textarea>
-          ) : (
-            <input name={f.name} value={vals[i] ?? ''} aria-label={f.label} placeholder={f.placeholder} maxlength={f.maxlength} class:list={['wf-input', i === 0 && fields.length > 1 && 'font-semibold']} />
-          ),
-        )}
-      </div>
-      <div class="web-row-tools">
-        {movable && (
-          <>
-            <button type="button" data-move="up" class="a-icon-btn" aria-label={`Move this ${noun} up`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.up} /></button>
-            <button type="button" data-move="down" class="a-icon-btn" aria-label={`Move this ${noun} down`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.down} /></button>
-          </>
-        )}
-        <button type="button" data-remove-row class="a-icon-btn" aria-label={`Remove this ${noun}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
-      </div>
-    </div>
-  ))}
+<div data-list={id} data-max={max || undefined} class:list={['web-list', cards && 'is-cards']}>
+  {rows.map((vals) => <RowListRow fields={fields} values={vals} noun={noun} numbered={numbered} movable={movable} cards={cards} />)}
   <template>
-    <div data-row class:list={['web-row', cards && 'web-day']}>
-      {numbered && <span class="web-row-n" data-n aria-hidden="true"></span>}
-      <div class="flex min-w-0 flex-1 flex-col gap-2">
-        {fields.map((f, i) =>
-          f.rows ? (
-            <textarea name={f.name} rows={f.rows} aria-label={f.label} placeholder={f.placeholder} maxlength={f.maxlength} class="wf-input"></textarea>
-          ) : (
-            <input name={f.name} aria-label={f.label} placeholder={f.placeholder} maxlength={f.maxlength} class:list={['wf-input', i === 0 && fields.length > 1 && 'font-semibold']} />
-          ),
-        )}
-      </div>
-      <div class="web-row-tools">
-        {movable && (
-          <>
-            <button type="button" data-move="up" class="a-icon-btn" aria-label={`Move this ${noun} up`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.up} /></button>
-            <button type="button" data-move="down" class="a-icon-btn" aria-label={`Move this ${noun} down`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.down} /></button>
-          </>
-        )}
-        <button type="button" data-remove-row class="a-icon-btn" aria-label={`Remove this ${noun}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
-      </div>
-    </div>
+    <RowListRow fields={fields} noun={noun} numbered={numbered} movable={movable} cards={cards} />
   </template>
 </div>
 <button type="button" data-add-row={id} class="web-add">+ {addLabel}</button>

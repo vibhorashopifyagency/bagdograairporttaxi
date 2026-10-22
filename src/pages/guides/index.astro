@@ -10,45 +10,44 @@ import BookCta from '../../components/BookCta.astro';
 import { GUIDES } from '../../data/guides';
 import { GALLERY } from '../../data/gallery';
 import { BUSINESS, waLink } from '../../data/site';
+import Words from '../../components/Words.astro';
+import { wordsText } from '../../data/page-text';
 
 const [featured, ...rest] = GUIDES;
 const latest = GUIDES.map((g) => g.updatedLabel).sort().at(-1);
 
 // One-line answers to the questions the phone rings with, each pointing at the guide that explains it.
+// The words are "Travel guides (all)" in the dashboard (src/data/page-text.ts).
 const quick = [
-  { q: 'Do Indians need a permit for Gangtok?', a: 'No. Only Tsomgo, Nathula, Zuluk and North Sikkim need one, and we arrange it.', slug: 'sikkim-permit-guide' },
-  { q: 'How long is Bagdogra to Darjeeling by taxi?', a: 'About 3 hours door to door. Gangtok is about 5.', slug: 'bagdogra-airport-transport-guide' },
-  { q: 'Which month has the clearest Kanchenjunga views?', a: 'October to December, once the monsoon has washed the air.', slug: 'best-time-to-visit-darjeeling-sikkim' },
-  { q: 'Which days is Nathula Pass open?', a: 'Usually Wednesday to Sunday, for Indian citizens only.', slug: 'nathula-pass-guide' },
-  { q: 'Nearest offbeat village to the airport?', a: 'Sittong, about 3 hours away, with orange orchards in winter.', slug: 'offbeat-places-north-bengal-sikkim' },
-  { q: 'Do Uber and Ola run from Bagdogra?', a: 'Only on the plains. Hill trips need a pre-booked taxi.', slug: 'bagdogra-airport-transport-guide' },
+  { n: 'quick1', slug: 'sikkim-permit-guide' },
+  { n: 'quick2', slug: 'bagdogra-airport-transport-guide' },
+  { n: 'quick3', slug: 'best-time-to-visit-darjeeling-sikkim' },
+  { n: 'quick4', slug: 'nathula-pass-guide' },
+  { n: 'quick5', slug: 'offbeat-places-north-bengal-sikkim' },
+  { n: 'quick6', slug: 'bagdogra-airport-transport-guide' },
 ];
 
-const steps = [
-  { title: 'Read the guide', text: 'Permits, opening days, fares and seasons, written by the people who drive these roads every week.' },
-  { title: 'Send us your dates', text: 'One WhatsApp message. We reply with the current road, weather and permit position, not a script.' },
-  { title: 'We arrange the rest', text: 'Permits applied for, the right car for the road, and a driver who knows where the tea stops are.' },
-];
+const steps = ['step1', 'step2', 'step3'];
 ---
 
 <BaseLayout
-  title="Travel Guides for Bagdogra, Darjeeling and Sikkim"
-  description="Practical, up-to-date guides from a local Bagdogra taxi operator: Sikkim permits, getting from Bagdogra Airport to the hills, and more."
+  title={wordsText('guides', 'seoTitle')}
+  description={wordsText('guides', 'seoDescription')}
   crumbs={[{ name: 'Travel guides', path: '/guides/' }]}
 >
-  <PageHero slot="hero" image="teesta" eyebrow="From the drivers’ seat" title="Travel guides" compact>
-    <p class="mt-4 max-w-2xl text-lg text-white/85">Answers to the questions our drivers hear every day, kept current.</p>
+  <PageHero slot="hero" image="teesta" words="guides" compact>
+    <Words page="guides" field="heroLead" as="p" class="mt-4 max-w-2xl text-lg text-white/85" />
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {GUIDES.length} guides</span>
       <span class="chip-light"><Icon name="check" class="h-4 w-4" /> Updated {latest}</span>
-      <span class="chip-light"><Icon name="car" class="h-4 w-4" /> Written by our drivers</span>
+      <span class="chip-light"><Icon name="car" class="h-4 w-4" /> <Words page="guides" field="chipWriters" /></span>
     </div>
   </PageHero>
 
   <section class="wrap section" aria-labelledby="guides-h">
     <div class="flex flex-wrap items-end justify-between gap-4">
-      <div><p class="eyebrow">Start here</p><h2 id="guides-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">The guides</h2></div>
-      <p class="max-w-md text-body">Every guide ends with the date we last checked it against the road, the check posts and the weather.</p>
+      <div><Words page="guides" field="listEyebrow" as="p" class="eyebrow" /><Words page="guides" field="listTitle" as="h2" id="guides-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" /></div>
+      <Words page="guides" field="listNote" as="p" class="max-w-md text-body" />
     </div>
     <div class="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3" data-reveal-stagger>
       <GuideCard guide={featured} featured />
@@ -59,8 +58,8 @@ const steps = [
   <section class="bg-cream py-14 sm:py-16" aria-labelledby="quick-h">
     <div class="wrap">
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <div><p class="eyebrow">Quick answers</p><h2 id="quick-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">What the phone rings with</h2></div>
-        <a href="/faq/" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-lime-text">All questions <Icon name="arrow" class="h-4 w-4" /></a>
+        <div><Words page="guides" field="quickEyebrow" as="p" class="eyebrow" /><Words page="guides" field="quickTitle" as="h2" id="quick-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" /></div>
+        <a href="/faq/" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-lime-text"><Words page="guides" field="quickLink" /> <Icon name="arrow" class="h-4 w-4" /></a>
       </div>
       <ul class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" data-reveal-stagger>
         {quick.map((it, i) => (
@@ -68,9 +67,9 @@ const steps = [
             <a href={`/guides/${it.slug}/`} class="card lift group flex h-full gap-4 p-5 no-underline">
               <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-sm font-extrabold text-ink">{String(i + 1).padStart(2, '0')}</span>
               <span class="min-w-0">
-                <strong class="block font-[family-name:var(--font-display)] text-lg leading-snug text-ink group-hover:text-lime-text">{it.q}</strong>
-                <span class="mt-1.5 block text-sm leading-relaxed text-body">{it.a}</span>
-                <span class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-ink">Full answer <Icon name="arrow" class="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+                <Words page="guides" field={`${it.n}Q`} as="strong" class="block font-[family-name:var(--font-display)] text-lg leading-snug text-ink group-hover:text-lime-text" />
+                <Words page="guides" field={`${it.n}A`} class="mt-1.5 block text-sm leading-relaxed text-body" />
+                <span class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><Words page="guides" field="quickMore" /> <Icon name="arrow" class="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
               </span>
             </a>
           </li>
@@ -82,19 +81,19 @@ const steps = [
   <section class="wrap section" aria-labelledby="how-h">
     <div class="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
       <div>
-        <p class="eyebrow">How it works</p>
-        <h2 id="how-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Read, ask, go</h2>
-        <p class="mt-3 text-lg leading-relaxed text-body">No guide covers the day you travel. That is what the WhatsApp number is for.</p>
+        <Words page="guides" field="howEyebrow" as="p" class="eyebrow" />
+        <Words page="guides" field="howTitle" as="h2" id="how-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" />
+        <Words page="guides" field="howLead" as="p" class="mt-3 text-lg leading-relaxed text-body" />
         <ol class="mt-8 space-y-6" data-reveal-stagger>
           {steps.map((s, i) => (
             <li class="flex gap-5">
               <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink font-[family-name:var(--font-display)] text-lg font-extrabold text-lime">{i + 1}</span>
-              <span><strong class="block font-[family-name:var(--font-display)] text-xl text-ink">{s.title}</strong><span class="mt-1 block leading-relaxed text-body">{s.text}</span></span>
+              <span><Words page="guides" field={`${s}Title`} as="strong" class="block font-[family-name:var(--font-display)] text-xl text-ink" /><Words page="guides" field={`${s}Text`} class="mt-1 block leading-relaxed text-body" /></span>
             </li>
           ))}
         </ol>
         <div class="mt-8 flex flex-wrap gap-3">
-          <a class="btn-wa" href={waLink('Hi, I have a question about travelling from Bagdogra.')} rel="noopener"><Icon name="whatsapp" /> Ask on WhatsApp</a>
+          <a class="btn-wa" href={waLink('Hi, I have a question about travelling from Bagdogra.')} rel="noopener"><Icon name="whatsapp" /> <Words page="guides" field="howWhatsapp" /></a>
           <a class="btn-ghost" href={BUSINESS.phoneHref}><Icon name="phone" /> {BUSINESS.phone}</a>
         </div>
       </div>
@@ -104,7 +103,7 @@ const steps = [
         </div>
         <div class="card absolute -bottom-5 left-5 right-5 flex items-center gap-3 p-4 shadow-[var(--shadow-float)] sm:left-auto sm:right-6 sm:w-80">
           <span class="live-dot shrink-0"></span>
-          <span class="text-sm"><strong class="block text-ink">Team on duty now</strong><span class="text-muted">Replies on WhatsApp in minutes, every day of the year.</span></span>
+          <span class="text-sm"><Words page="guides" field="dutyTitle" as="strong" class="block text-ink" /><Words page="guides" field="dutyText" class="text-muted" /></span>
         </div>
       </div>
     </div>
@@ -113,8 +112,8 @@ const steps = [
   <section class="bg-cream py-14 sm:py-16" aria-labelledby="where-h">
     <div class="wrap">
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <div><p class="eyebrow">Where the guides take you</p><h2 id="where-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">See the road for yourself</h2></div>
-        <a href="/gallery/" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-lime-text">All {GALLERY.length} photos <Icon name="arrow" class="h-4 w-4" /></a>
+        <div><Words page="guides" field="whereEyebrow" as="p" class="eyebrow" /><Words page="guides" field="whereTitle" as="h2" id="where-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" /></div>
+        <a href="/gallery/" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-lime-text"><Words page="guides" field="whereLink" /> <Icon name="arrow" class="h-4 w-4" /></a>
       </div>
     </div>
     <div class="mt-8"><PhotoMarquee items={GALLERY.filter((g) => g.category !== 'Our cars')} /></div>
@@ -122,6 +121,6 @@ const steps = [
 
   <div class="wrap section">
     <TrustStrip />
-    <BookCta waText="Hi, I have a question about travelling from Bagdogra." heading="Still have a question?" image="nathula" />
+    <BookCta waText="Hi, I have a question about travelling from Bagdogra." words="guides:ctaTitle" image="nathula" />
   </div>
 </BaseLayout>

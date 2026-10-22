@@ -4,10 +4,10 @@ import PageHero from '../../components/PageHero.astro';
 import PackageCard from '../../components/PackageCard.astro';
 import BookCta from '../../components/BookCta.astro';
 import TrustStrip from '../../components/TrustStrip.astro';
+import Words from '../../components/Words.astro';
+import { wordsText } from '../../data/page-text';
 import { PACKAGES } from '../../data/packages';
-import { inr } from '../../data/routes';
 import { SITE } from '../../data/site';
-const min = Math.min(...PACKAGES.map((p) => p.fromPrice));
 const itemList = {
   '@type': 'ItemList',
   name: 'Tour packages from Bagdogra',
@@ -16,20 +16,18 @@ const itemList = {
 ---
 
 <BaseLayout
-  title={`Sikkim and North Bengal Tour Packages from ${inr(min)}`}
-  description={`${PACKAGES.length} Darjeeling, Sikkim, Silk Route, Dooars and Bhutan tour packages from Bagdogra or NJP, from ${inr(min)} per person with private car and day-wise plans.`}
+  title={wordsText('packages', 'seoTitle')}
+  description={wordsText('packages', 'seoDescription')}
   crumbs={[{ name: 'Tour packages', path: '/tour-packages/' }]}
   schema={[itemList]}
   modified={SITE.contentUpdated}
 >
-  <PageHero slot="hero" image="tsomgo" eyebrow={`${PACKAGES.length} packages · from ${inr(min)} per person`} title="Darjeeling, Sikkim, Dooars and Bhutan tour packages from Bagdogra" compact />
+  <PageHero slot="hero" image="tsomgo" words="packages" compact />
   <div class="wrap section">
-    <p class="answer max-w-3xl">
-      All {PACKAGES.length} packages start and end at Bagdogra Airport or NJP station, with one private car and driver for the whole trip, hotels with breakfast and dinner, and permits where needed. Prices start at {inr(min)} per person with two sharing. We are a local Bagdogra operator, so you deal directly with the people who run the trip.
-    </p>
+    <Words page="packages" field="answer" as="p" class="answer max-w-3xl" />
     <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>{PACKAGES.map((p) => <PackageCard pkg={p} />)}</div>
     <section class="mt-14"><TrustStrip /></section>
-    <p class="mt-8 max-w-3xl">Want a different plan? We build custom tours for any number of days, starting from Kolkata, Delhi, Mumbai, Bengaluru or anywhere you fly in from. <a href="/contact/">Tell us your dates</a>.</p>
-    <BookCta waText="Hi, I would like a quote for a tour package." heading="Get a custom tour quote" image="north-sikkim" />
+    <Words page="packages" field="customNote" as="p" class="mt-8 max-w-3xl" />
+    <BookCta waText="Hi, I would like a quote for a tour package." words="packages:ctaTitle" image="north-sikkim" />
   </div>
 </BaseLayout>

@@ -20,13 +20,42 @@ form:not([data-dirty]) [data-when-dirty], form[data-dirty] [data-when-clean] { d
 form[data-dirty] .web-save { border-color: var(--color-amber); }
 form[data-dirty] .web-save-note { color: #8a5300; font-weight: 600; }
 
-/* A row in a list (a stop, a question, an itinerary day). */
+/*
+ * A row in a list (a stop, a question, an itinerary day). A plain row keeps
+ * its buttons on the box's line, as tall as the box; a card row (.web-card)
+ * puts its number and buttons in a strip along the top.
+ */
+.web-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.web-list.is-cards { gap: 0.75rem; }
 .web-row { display: flex; align-items: flex-start; gap: 0.5rem; }
+.web-row-fields { display: flex; flex: 1 1 auto; flex-direction: column; gap: 0.5rem; min-width: 0; }
 .web-row-n { display: grid; place-items: center; flex-shrink: 0; width: 2rem; height: 2.875rem; font-family: var(--font-display); font-weight: 700; color: #5c6373; }
-.web-row-tools { display: flex; flex-direction: column; gap: 0.25rem; flex-shrink: 0; }
-.web-row-tools .a-icon-btn { width: 2.25rem; height: 2.25rem; border-radius: 0.6rem; }
-.web-row-tools .a-icon-btn:disabled { opacity: 0.35; }
-.web-day { display: flex; gap: 0.625rem; align-items: flex-start; padding: 0.75rem; border: 1px solid var(--color-line); border-radius: 16px; background: #fff; }
+.web-tools { display: flex; flex-shrink: 0; align-items: center; gap: 0.375rem; min-height: 2.875rem; }
+.web-tools.is-col { flex-direction: column; align-items: stretch; min-height: 0; }
+/* Up and down, joined into one control so the pair reads as "move". */
+.web-move { display: inline-flex; overflow: hidden; border: 1px solid var(--color-line); border-radius: 0.75rem; background: #fff; }
+.web-move button { display: grid; place-items: center; width: 2.5rem; height: 2.75rem; border: 0; background: transparent; color: var(--color-ink); cursor: pointer; }
+.web-move button + button { border-left: 1px solid var(--color-line); }
+.web-move button:hover:not(:disabled) { background: var(--color-mist); }
+.web-move button:focus-visible, .web-remove:focus-visible { outline: 3px solid var(--color-lime); outline-offset: -3px; }
+.web-move button:disabled { color: #c3c8d0; cursor: default; }
+.is-col .web-move { flex-direction: column; }
+.is-col .web-move button { width: 100%; }
+.is-col .web-move button + button { border-left: 0; border-top: 1px solid var(--color-line); }
+.web-remove { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--color-line); border-radius: 0.75rem; background: #fff; color: #5c6373; cursor: pointer; }
+.web-remove:hover { border-color: #f1b8b3; background: #fde8e7; color: #b42318; }
+.is-col .web-remove { width: 100%; }
+.web-remove.is-sm { width: 2.5rem; height: 2.5rem; }
+.web-card { flex-direction: column; align-items: stretch; gap: 0.625rem; padding: 0.625rem 0.75rem 0.875rem; border: 1px solid var(--color-line); border-radius: 16px; background: #fff; }
+.web-card-head { display: flex; align-items: center; gap: 0.75rem; }
+.web-card-title { display: flex; flex: 1 1 auto; align-items: center; gap: 0.5rem; min-width: 0; font-size: 0.875rem; font-weight: 700; color: var(--color-body); }
+.web-card-n { display: grid; place-items: center; min-width: 1.75rem; height: 1.75rem; padding: 0 0.4rem; border-radius: 999px; background: var(--color-lime); font-family: var(--font-display); font-size: 0.8125rem; font-weight: 800; color: var(--color-ink); }
+.web-card .web-tools { min-height: 0; }
+.web-card .web-move button { width: 2.25rem; height: 2.25rem; }
+.web-card .web-remove { width: 2.25rem; height: 2.25rem; }
+@media (pointer: coarse) {
+  .web-card .web-move button, .web-card .web-remove { width: 2.75rem; height: 2.75rem; }
+}
 
 /* Chips (places, "best for" tags): a box that grows with its words. */
 .web-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
@@ -43,5 +72,13 @@ form[data-dirty] .web-save-note { color: #8a5300; font-weight: 600; }
 [data-theme='dark'] .web-save { background: rgb(23 26 31 / 92%); border-color: var(--a-edge); }
 [data-theme='dark'] .web-save-note { color: var(--color-muted); }
 [data-theme='dark'] form[data-dirty] .web-save-note { color: #ffcb57; }
-[data-theme='dark'] .web-day { background: var(--a-surface); border-color: var(--a-edge); }
+[data-theme='dark'] .web-card { background: var(--a-surface); border-color: var(--a-edge); }
+[data-theme='dark'] .web-move, [data-theme='dark'] .web-remove { background: var(--a-surface); border-color: var(--a-edge); color: var(--color-white, #fff); }
+[data-theme='dark'] .web-move button { color: inherit; }
+[data-theme='dark'] .web-move button + button { border-color: var(--a-edge); }
+[data-theme='dark'] .web-move button:hover:not(:disabled) { background: var(--a-raised); }
+[data-theme='dark'] .web-move button:disabled { color: #4a505b; }
+[data-theme='dark'] .web-remove:hover { border-color: #6b2620; background: #2a1514; color: #ff8f86; }
+[data-theme='dark'] .web-card-title { color: var(--color-muted); }
+[data-theme='dark'] .web-row-n { color: var(--color-muted); }
 [data-theme='dark'] .web-chip { background: var(--a-raised); border-color: var(--a-edge); }

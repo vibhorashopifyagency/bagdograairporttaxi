@@ -4,12 +4,14 @@ import PageHero from '../../components/PageHero.astro';
 import BookCta from '../../components/BookCta.astro';
 import TrustStrip from '../../components/TrustStrip.astro';
 import Photo from '../../components/Photo.astro';
+import Words from '../../components/Words.astro';
+import { words, wordsText } from '../../data/page-text';
 import { ROUTES, ROUTE_GROUPS, inr } from '../../data/routes';
 import { VEHICLES } from '../../data/vehicles';
-import { POLICY, SITE } from '../../data/site';
+import { SITE } from '../../data/site';
 
-const title = `Bagdogra Taxi Fare Chart ${SITE.faresUpdatedLabel}: All Routes`;
-const description = `Fixed taxi fares from Bagdogra Airport, NJP and Siliguri to ${ROUTES.length} destinations by car type. All inclusive of tolls, parking and GST. Updated ${SITE.faresUpdatedLabel}.`;
+const title = wordsText('taxi', 'seoTitle');
+const description = wordsText('taxi', 'seoDescription');
 const itemList = {
   '@type': 'ItemList',
   name: 'Taxi routes from Bagdogra, NJP and Siliguri',
@@ -19,11 +21,9 @@ const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', i
 ---
 
 <BaseLayout title={title} description={description} crumbs={[{ name: 'Taxi fares', path: '/taxi/' }]} schema={[itemList]} modified={SITE.contentUpdated}>
-  <PageHero slot="hero" image="airport" eyebrow={`${ROUTES.length} routes · updated ${SITE.faresUpdatedLabel}`} title="Taxi fares from Bagdogra Airport, NJP and Siliguri" compact />
+  <PageHero slot="hero" image="airport" words="taxi" compact />
   <div class="wrap section">
-    <p class="answer max-w-3xl">
-      Every fare below is a fixed, one-way price per car, including fuel, tolls, parking, driver allowance and GST. The only extra is {inr(POLICY.nightCharge)} for pickups between {POLICY.nightChargeFrom} and {POLICY.nightChargeTo}. Fares were last updated in <time datetime={SITE.faresUpdated}>{SITE.faresUpdatedLabel}</time>.
-    </p>
+    <Words page="taxi" field="answer" as="p" class="answer max-w-3xl" />
 
     <div class="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
       {VEHICLES.map((v) => (
@@ -42,7 +42,7 @@ const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', i
           <div class="table-scroll">
             <table>
               <thead>
-                <tr><th scope="col">Route</th><th scope="col">Distance</th>{VEHICLES.map((v) => <th scope="col">{v.name}</th>)}</tr>
+                <tr><th scope="col" set:html={words('taxi', 'tableRoute')} /><th scope="col" set:html={words('taxi', 'tableDistance')} />{VEHICLES.map((v) => <th scope="col">{v.name}</th>)}</tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
@@ -60,7 +60,7 @@ const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', i
     })}
 
     <section class="mt-14"><TrustStrip /></section>
-    <p class="mt-8 max-w-3xl">Need a route that isn’t listed, a round trip or a car for several days? <a href="/contact/">Ask us for a quote</a>. We reply within 15 minutes, day or night.</p>
+    <Words page="taxi" field="quoteNote" as="p" class="mt-8 max-w-3xl" />
     <BookCta image="teesta" />
   </div>
 </BaseLayout>

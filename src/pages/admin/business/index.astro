@@ -207,6 +207,7 @@ const profileName = (url: string) => {
 };
 const waShown = /^91\d{10}$/.test(String(b.whatsapp)) ? spaced(String(b.whatsapp).slice(2)) : String(b.whatsapp);
 const icon = {
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
   warn: '<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
   tick: '<path d="M20 6 9 17l-5-5"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
@@ -277,17 +278,17 @@ const icon = {
               {bWas.registrations && <span class="wf-was">Changed from what is live</span>}
               <div data-list="reg" class="flex flex-col gap-2" data-max="10">
                 {(b.registrations ?? []).map((r: Data) => (
-                  <div data-row class="flex items-start gap-2">
+                  <div data-row class="flex items-center gap-2">
                     <input name="regName" value={r.name} aria-label="Registration" placeholder="West Bengal Tourism registered tour operator" class="wf-input flex-[2_1_0]" />
                     <input name="regId" value={r.id ?? ''} aria-label="Its number" placeholder="Number" class="wf-input flex-[1_1_0]" />
-                    <button type="button" data-remove-row class="a-icon-btn" aria-label="Remove this registration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+                    <button type="button" data-remove-row class="web-remove" aria-label="Remove this registration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.remove} /></button>
                   </div>
                 ))}
                 <template>
-                  <div data-row class="flex items-start gap-2">
+                  <div data-row class="flex items-center gap-2">
                     <input name="regName" aria-label="Registration" placeholder="West Bengal Tourism registered tour operator" class="wf-input flex-[2_1_0]" />
                     <input name="regId" aria-label="Its number" placeholder="Number" class="wf-input flex-[1_1_0]" />
-                    <button type="button" data-remove-row class="a-icon-btn" aria-label="Remove this registration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+                    <button type="button" data-remove-row class="web-remove" aria-label="Remove this registration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.remove} /></button>
                   </div>
                 </template>
               </div>
@@ -300,17 +301,21 @@ const icon = {
               {bWas.sameAs && <span class="wf-was">Changed from what is live</span>}
               <div data-list="same" class="flex flex-col gap-2" data-max="10">
                 {(b.sameAs ?? []).map((u: string) => (
-                  <div data-row class="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1.5 rounded-xl bg-mist p-2 pl-3">
+                  <div data-row class="flex flex-col gap-1.5 rounded-xl bg-mist p-2 pl-3">
                     <span class="truncate text-sm font-semibold">{profileName(u)}</span>
-                    <button type="button" data-remove-row class="a-icon-btn row-span-2 h-10 w-10" aria-label={`Remove ${profileName(u)}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
-                    <input name="sameAs" type="url" value={u} aria-label={`${profileName(u)} link`} class="wf-input min-h-10 text-sm" />
+                    <span class="flex items-center gap-2">
+                      <input name="sameAs" type="url" value={u} aria-label={`${profileName(u)} link`} class="wf-input min-h-10 flex-1 text-sm" />
+                      <button type="button" data-remove-row class="web-remove is-sm" aria-label={`Remove ${profileName(u)}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.remove} /></button>
+                    </span>
                   </div>
                 ))}
                 <template>
-                  <div data-row class="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1.5 rounded-xl bg-mist p-2 pl-3">
+                  <div data-row class="flex flex-col gap-1.5 rounded-xl bg-mist p-2 pl-3">
                     <span class="truncate text-sm font-semibold">New link</span>
-                    <button type="button" data-remove-row class="a-icon-btn row-span-2 h-10 w-10" aria-label="Remove this link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
-                    <input name="sameAs" type="url" placeholder="https://www.facebook.com/..." aria-label="Profile link" class="wf-input min-h-10 text-sm" />
+                    <span class="flex items-center gap-2">
+                      <input name="sameAs" type="url" placeholder="https://www.facebook.com/..." aria-label="Profile link" class="wf-input min-h-10 flex-1 text-sm" />
+                      <button type="button" data-remove-row class="web-remove is-sm" aria-label="Remove this link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.remove} /></button>
+                    </span>
                   </div>
                 </template>
               </div>

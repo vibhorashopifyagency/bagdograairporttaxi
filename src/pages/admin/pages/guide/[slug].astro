@@ -111,7 +111,8 @@ const done = Astro.url.searchParams.get('done');
 </AdminLayout>
 
 <script>
-  import { wireCounters, wireDirty } from '../../../../lib/admin-web';
+  import { wireAutosize, wireCounters, wireDirty } from '../../../../lib/admin-web';
   wireCounters();
   wireDirty();
+  wireAutosize();
 </script>

@@ -3,10 +3,13 @@
  * The page editor (Phase 6, "Edit pages"): a public page shown as it is, with
  * every spot the dashboard can change outlined. The page templates mark
  * those spots with data-edit="type:key:field" (a destination's summary, a
- * route's stops, a guide's title, the photo at the top). Clicking one:
+ * route's stops, a guide's title, the photo at the top, and the page words
+ * of src/data/page-text.ts: "text:home:heroTitle"). Clicking one:
  *   - plain words: edited right there, Enter saves a draft of that field;
- *   - lists (questions, highlights, days, fares, stops, tips) and photos:
- *     the item's form opens in a side panel at that section.
+ *     page words show their fill-ins ({freeCancel}) and marks while edited;
+ *   - lists (questions, highlights, days, fares, stops, tips, bullet points),
+ *     photos and Google listings: the item's form opens in a side panel at
+ *     that box.
  * The page is the published one; drafts of plain words are laid over it
  * here so the admin sees them, and lists say "shows after you publish".
  * Layout, colours and section order cannot be changed. Admin only.
@@ -43,7 +46,7 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
       <a href={path} target="_blank" rel="noopener" class="btn-ghost min-h-10 px-3.5 py-1 text-sm" data-pe-live>Live page</a>
     </div>
     <p class="a-msg m-0 bg-mist text-body" data-pe-help>
-      Click an outlined spot. Words change right on the page: press Enter to save, Esc to stop. Lists and photos open their form beside the page.
+      Click any outlined words. They change right on the page: press Enter to save, Esc to stop. Lists and photos open their form beside the page.
     </p>
     <div class="pe-stage" data-pe-stage>
       <iframe src={path} title="The page being edited" class="pe-frame" data-pe-frame data-path={path}></iframe>
@@ -52,7 +55,7 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
 
   <dialog class="pe-panel" data-pe-panel aria-labelledby="pe-panel-h">
     <div class="flex items-center gap-3 border-b border-line px-4 py-3">
-      <h2 id="pe-panel-h" class="m-0 flex-1 truncate font-display text-lg font-bold" data-pe-panel-title>Edit</h2>
+      <h2 id="pe-panel-h" class="m-0 flex-1 truncate font-display text-lg font-bold outline-none" tabindex="-1" autofocus data-pe-panel-title>Edit</h2>
       <a href="#" class="text-sm font-semibold" data-pe-panel-full target="_top">Open in full</a>
       <button type="button" class="a-icon-btn" data-pe-panel-close aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
     </div>
@@ -77,6 +80,8 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
 </style>
 
 <script>
+  import { wordsToHtml, type WordVars } from '../../../lib/rich-text';
+
   /** Fields edited in a form beside the page rather than on it. */
   const PANEL_FIELDS = new Set(['faqs', 'highlights', 'itinerary', 'includes', 'excludes', 'stops', 'tips', 'fares', 'fromPrice', 'list', 'photo']);
   const FORM: Record<string, (key: string) => string> = {
@@ -85,6 +90,7 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
     destination: (k) => `/admin/pages/destination/${k}/`,
     guide: (k) => `/admin/pages/guide/${k}/`,
     faq: () => '/admin/pages/faq/main/',
+    text: (k) => `/admin/pages/text/${k}/`,
   };
   const NAMES: Record<string, string> = {
     faqs: 'Questions', highlights: 'Top things to see', itinerary: 'Day by day', includes: 'Included', excludes: 'Not included',
@@ -92,7 +98,8 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
     summary: 'Opening answer', bestTime: 'Best time to visit', daysNeeded: 'Days needed', howToReach: 'How to reach', permit: 'Permits', title: 'Title',
   };
 
-  type Item = { current: Record<string, unknown> | unknown[] | null; live: Record<string, unknown> | unknown[] | null; pending: string | null; state: string };
+  type Words = { name: string; group: string; labels: Record<string, string> };
+  type Item = { current: Record<string, unknown> | unknown[] | null; live: Record<string, unknown> | unknown[] | null; pending: string | null; state: string; words?: Words };
   const frame = document.querySelector<HTMLIFrameElement>('[data-pe-frame]')!;
   const stage = document.querySelector<HTMLElement>('[data-pe-stage]')!;
   const panel = document.querySelector<HTMLDialogElement>('[data-pe-panel]')!;
@@ -129,10 +136,40 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
 
   let editing: { el: HTMLElement; before: string; bar: HTMLElement } | null = null;
   let items: Record<string, Item> = {};
+  let vars: WordVars = {};
 
   const parts = (el: Element) => {
     const [type, key, f] = (el.getAttribute('data-edit') ?? '').split(':');
     return { type, key, f, id: `${type}:${key}` };
+  };
+  /** Page words that are a list, or a Google listing, open their form; other page words are edited on the page. */
+  const inPanel = (el: Element) => {
+    const { type, f, id } = parts(el);
+    if (type !== 'text') return PANEL_FIELDS.has(f);
+    return f.startsWith('seo') || Array.isArray(field(items[id]?.current, f));
+  };
+  /** What a spot is, in the admin's words: "Main heading (Top)", "Opening answer". */
+  const nameOf = (el: Element) => {
+    const { f, id } = parts(el);
+    const label = items[id]?.words?.labels[f];
+    if (!label) return NAMES[f] ?? 'Text';
+    const [section, box] = label.includes(' · ') ? label.split(' · ') : ['', label];
+    return section ? `${box} (${section})` : box;
+  };
+  /** The design's classes on bold words, links and accent words, read once from the published markup so previews match. */
+  const optsOf = (el: HTMLElement) => {
+    if (!el.dataset.peOpts) {
+      const cls = (sel: string) => el.querySelector<HTMLElement>(sel)?.getAttribute('class') ?? undefined;
+      el.dataset.peOpts = JSON.stringify({ accent: cls(':scope > span[class]'), strong: cls('strong[class]'), link: cls('a[class]') });
+    }
+    return JSON.parse(el.dataset.peOpts) as { accent?: string; strong?: string; link?: string };
+  };
+  const preview = (el: HTMLElement, src: string) => {
+    const o = optsOf(el);
+    let html = wordsToHtml(src, vars, { accent: o.accent });
+    if (o.strong) html = html.replace(/<strong>/g, `<strong class="${o.strong}">`);
+    if (o.link) html = html.replace(/<a href="([^"]*)">/g, `<a href="$1" class="${o.link}">`);
+    return html;
   };
 
   function paintSpots(doc: Document) {
@@ -141,21 +178,28 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
       const it = items[id];
       el.classList.remove('pe-draft');
       el.querySelector(':scope > .pe-tag')?.remove();
+      // The published markup, kept so page words can go back to it when a draft is saved back to what is live or thrown away.
+      if (el.dataset.peLive === undefined) el.dataset.peLive = el.innerHTML;
       if (!it) return;
       const name = f === 'list' ? null : f;
       const now = name ? field(it.current, name) : it.current;
       const was = name ? field(it.live, name) : it.live;
       const changed = it.pending && JSON.stringify(now ?? null) !== JSON.stringify(was ?? null);
-      // Plain words: show the draft right on the page (inside the one paragraph a spot may wrap).
-      if (changed && name && !PANEL_FIELDS.has(name) && typeof now === 'string') {
-        const only = el.children.length === 1 && !el.firstElementChild!.children.length ? (el.firstElementChild as HTMLElement) : el;
-        only.textContent = now;
+      const words = parts(el).type === 'text';
+      // Plain words: show the draft right on the page (inside the one paragraph a spot may wrap); page words with their fill-ins and marks.
+      if (words && !inPanel(el) && !changed) el.innerHTML = el.dataset.peLive ?? el.innerHTML;
+      if (changed && name && !inPanel(el) && typeof now === 'string') {
+        if (words) el.innerHTML = preview(el, now);
+        else {
+          const only = el.children.length === 1 && !el.firstElementChild!.children.length ? (el.firstElementChild as HTMLElement) : el;
+          only.textContent = now;
+        }
       }
       if (it.pending === 'delete' || changed) {
         el.classList.add('pe-draft');
         const tag = doc.createElement('span');
         tag.className = 'pe-tag is-draft';
-        tag.textContent = it.pending === 'delete' ? 'Comes off when you publish' : name && !PANEL_FIELDS.has(name) ? 'Draft' : 'Changed: shows after you publish';
+        tag.textContent = it.pending === 'delete' ? 'Comes off when you publish' : name && !inPanel(el) ? 'Draft' : 'Changed: shows after you publish';
         if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
         el.append(tag);
       }
@@ -168,16 +212,17 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
       items = {};
       return;
     }
-    const res = await fetch(`/admin/api/content/?items=${encodeURIComponent(ids.join(','))}`).catch(() => null);
+    const res = await fetch(`/admin/api/content/?items=${encodeURIComponent(ids.join(','))}&path=${encodeURIComponent(frame.contentWindow!.location.pathname)}`).catch(() => null);
     const data = res?.ok ? await res.json() : { items: {} };
     items = data.items ?? {};
+    vars = data.vars ?? {};
     paintSpots(doc);
   }
 
   function stopEditing(save: boolean) {
     if (!editing) return;
     const { el, before, bar } = editing;
-    if (!save) el.textContent = before;
+    if (!save) el.innerHTML = before;
     el.removeAttribute('contenteditable');
     el.classList.remove('pe-editing');
     bar.remove();
@@ -216,16 +261,30 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
     if (editing?.el === el) return;
     stopEditing(false);
     el.querySelector(':scope > .pe-tag')?.remove();
-    const before = el.textContent ?? '';
+    const before = el.innerHTML;
+    const { type, id, f } = parts(el);
+    // Page words are edited as written, so a fill-in stays a fill-in: "Free cancellation up to {freeCancel} h".
+    const src = type === 'text' ? field(items[id]?.current, f) : undefined;
+    if (typeof src === 'string') {
+      optsOf(el);
+      el.textContent = src;
+    }
     el.setAttribute('contenteditable', 'plaintext-only');
     el.classList.add('pe-editing');
     el.focus();
     const bar = doc.createElement('div');
     bar.className = 'pe-bar';
     bar.setAttribute('contenteditable', 'false');
-    const { f } = parts(el);
-    bar.innerHTML = `<button type="button" class="pe-save">Save</button><button type="button" class="pe-cancel">Cancel</button><span class="pe-msg"></span>`;
-    bar.querySelector('.pe-msg')!.textContent = `${NAMES[f] ?? 'Text'}: Enter saves a draft, Esc cancels.`;
+    const w = items[id]?.words;
+    bar.innerHTML = `<button type="button" class="pe-save">Save</button><button type="button" class="pe-cancel">Cancel</button>${w ? '<button type="button" class="pe-cancel pe-form">Form</button>' : ''}<span class="pe-msg"></span>`;
+    const where = w && w.group === 'templates' ? ` This changes ${w.name.replace(/^Every /, 'every ')}.` : w && w.group === 'shared' ? ` This is the ${w.name.toLowerCase()}, on many pages.` : '';
+    const fills = typeof src === 'string' && /\{[a-zA-Z0-9]+\}/.test(src) ? ' Words in {brackets} fill themselves in.' : '';
+    bar.querySelector('.pe-msg')!.textContent = `${nameOf(el)}: Enter saves a draft, Esc cancels.${where}${fills}`;
+    bar.querySelector('.pe-form')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      stopEditing(false);
+      openPanel(el);
+    });
     doc.body.append(bar);
     const r = el.getBoundingClientRect();
     const win = doc.defaultView!;
@@ -246,8 +305,8 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
     const { type, key, f } = parts(el);
     const href = FORM[type]?.(key);
     if (!href) return;
-    const url = `${href}#${f === 'list' ? 'faqs' : f}`;
-    panel.querySelector('[data-pe-panel-title]')!.textContent = NAMES[f] ?? 'Edit';
+    const url = `${href}#${type === 'text' ? `f-${f}` : f === 'list' ? 'faqs' : f}`;
+    panel.querySelector('[data-pe-panel-title]')!.textContent = type === 'text' ? nameOf(el) : (NAMES[f] ?? 'Edit');
     panel.querySelector<HTMLAnchorElement>('[data-pe-panel-full]')!.href = href;
     panelFrame.src = url;
     panel.showModal();
@@ -270,8 +329,8 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
     doc.documentElement.classList.toggle('pe-outlines', outline.checked);
     const count = doc.querySelectorAll('[data-edit]').length;
     document.querySelector('[data-pe-help]')!.textContent = count
-      ? 'Click an outlined spot. Words change right on the page: press Enter to save, Esc to stop. Lists and photos open their form beside the page.'
-      : 'Nothing on this page is edited here: its words are part of the design. Open a destination, travel guide, tour package, taxi route or the questions page.';
+      ? 'Click any outlined words. They change right on the page: press Enter to save, Esc to stop. Lists, photos and Google listings open their form beside the page.'
+      : 'Nothing on this page can be changed here yet. Go back to Edit pages and open another page.';
     editing = null;
     await loadItems(doc);
 
@@ -288,7 +347,7 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
         }
         e.preventDefault();
         e.stopPropagation();
-        if (PANEL_FIELDS.has(parts(el).f)) openPanel(el);
+        if (inPanel(el)) openPanel(el);
         else startEditing(el);
       },
       true,

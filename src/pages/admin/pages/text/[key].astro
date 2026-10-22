@@ -1,0 +1,205 @@
+---
+/**
+ * One page's words (src/data/page-text.ts): every heading, paragraph,
+ * button label and list the design has a place for, grouped by section,
+ * with the page's fill-ins listed beside the form. The page editor opens
+ * this form in its side panel at one box (#f-heroTitle). Admin only; saves are
+ * drafts until Publish, and only the boxes that differ from the starting
+ * copy are kept, so the rest keep following the code.
+ */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import PublishBar from '../../../../components/admin/PublishBar.astro';
+import WebField from '../../../../components/admin/WebField.astro';
+import RowList from '../../../../components/admin/RowList.astro';
+import VersionHistory from '../../../../components/admin/VersionHistory.astro';
+import { isAdmin } from '../../../../server/admin';
+import { discardDraft, getEntry, markForReset, saveDraft } from '../../../../server/content';
+import { wasNotes } from '../../../../server/content-diff';
+import { ipHash } from '../../../../server/security';
+import { GLOBAL_VARS, WORD_PAGES, varsForPath, type WordField, type WordPage } from '../../../../data/page-text';
+import '../../../../styles/admin-web.css';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!isAdmin(user)) return Astro.redirect('/admin/', 303);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+type Data = Record<string, any>;
+
+const key = Astro.params.key!;
+const page = (WORD_PAGES as Record<string, WordPage>)[key];
+if (!page) return Astro.redirect('/admin/pages/', 303);
+const fields = Object.entries(page.fields) as [string, WordField][];
+
+let error = '';
+let errorField = '';
+let posted: Data | null = null;
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? 'save');
+  const here = (done: string) => Astro.redirect(`/admin/pages/text/${key}/?done=${done}`, 303);
+  if (intent === 'discard') {
+    await discardDraft(ctx, 'text', key);
+    return here('discarded');
+  }
+  if (intent === 'reset') {
+    const r = await markForReset(ctx, 'text', key);
+    if (r.ok) return here('reset');
+    error = r.error;
+  }
+  if (intent === 'save') {
+    posted = Object.fromEntries(
+      fields.map(([name, d]) => [name, Array.isArray(d.text) ? f.getAll(name).map((x) => String(x).trim()).filter(Boolean) : String(f.get(name) ?? '').trim()]),
+    );
+    const r = await saveDraft(ctx, 'text', key, posted);
+    if (r.ok) return here(r.message ? 'same' : 'saved');
+    error = r.error;
+    errorField = (r.field ?? '').split('.')[0];
+  }
+}
+const entry = (await getEntry('text', key))!;
+const w: Data = posted ?? (entry.current as Data);
+const was = wasNotes('text', entry.live, entry.current);
+const done = Astro.url.searchParams.get('done');
+
+// Sections in the order the page shows them: the part of each label before " · ".
+const sections: { name: string; fields: [string, WordField][] }[] = [];
+for (const [name, d] of fields) {
+  const [section, label] = d.label.includes(' · ') ? d.label.split(' · ') : ['', d.label];
+  const last = sections.at(-1);
+  const item: [string, WordField] = [name, { ...d, label }];
+  if (last && last.name === section) last.fields.push(item);
+  else sections.push({ name: section, fields: [item] });
+}
+// The Google listing goes last: the words on the page come first.
+sections.sort((a, b) => Number(a.name === 'Google listing') - Number(b.name === 'Google listing'));
+const short = (t: string) => t.length <= 60 && !t.includes('\n');
+const rows = (t: string) => Math.min(8, Math.max(2, Math.ceil(t.length / 75)));
+const groupName = { pages: 'Pages', policies: 'Policies', shared: 'On many pages', templates: 'Page templates' }[page.group];
+const vars = varsForPath(page.path);
+const own = Object.keys(page.vars ?? {});
+const fillIns = [...own, ...Object.keys(GLOBAL_VARS)].filter((n) => vars[n]);
+const usedHere = new Set(fields.flatMap(([, d]) => (Array.isArray(d.text) ? d.text : [d.text]).join(' ').match(/\{([a-zA-Z0-9]+)\}/g) ?? []).map((t) => t.slice(1, -1)));
+---
+
+<AdminLayout title={page.name}>
+  <div class="flex flex-col gap-5">
+    <PublishBar />
+    <div class="flex flex-col gap-2">
+      <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 text-sm text-muted" data-chrome>
+        <a href="/admin/pages/" class="font-semibold text-body">Edit pages</a><span aria-hidden="true">›</span><span>{groupName}</span>
+      </nav>
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-[34px]">{page.name}</h1>
+        <span class:list={['web-state', entry.pending ? 'bg-[#fff4d6] text-[#8a5300]' : 'bg-lime-50 text-[#3f6200]']}>{entry.pending ? 'Draft, not live yet' : 'Live'}</span>
+        <span class="flex-1"></span>
+        <span class="flex gap-2" data-chrome>
+          <a href={`/admin/pages/edit/?path=${encodeURIComponent(page.path)}`} class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Edit on the page</a>
+          <a href={page.path} target="_blank" rel="noopener" class="btn-ghost min-h-10 px-4 py-1.5 text-sm">Live page</a>
+        </span>
+      </div>
+      {page.note && <p class="m-0 max-w-3xl text-body">{page.note}</p>}
+    </div>
+
+    {done === 'saved' && <p class="a-msg a-msg-ok m-0" role="status">Saved as a draft. It goes on the website when you publish.</p>}
+    {done === 'same' && <p class="a-msg a-msg-ok m-0" role="status">That is what the website already shows, so there was nothing to save.</p>}
+    {done === 'discarded' && <p class="a-msg a-msg-ok m-0" role="status">Draft thrown away. This is what the website shows.</p>}
+    {done === 'reset' && <p class="a-msg a-msg-ok m-0" role="status">These words go back to the starting copy when you publish.</p>}
+    {done === 'restored' && <p class="a-msg a-msg-ok m-0" role="status">The earlier version is back as a draft. Publish to put it live.</p>}
+    {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+    {page.group === 'templates' && <p class="a-msg m-0 bg-mist text-body">These words show on <strong>{page.name.replace(/^Every /, 'every ')}</strong>. The fill-ins in {'{curly brackets}'} become each page's own name and numbers.</p>}
+
+    <div class="flex flex-wrap items-start gap-5">
+      <form method="post" data-web-form class="flex min-w-0 flex-[1_1_620px] flex-col gap-5">
+        <input type="hidden" name="intent" value="save" />
+        {sections.map((s) => (
+          <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+            {s.name && <h2 class="m-0 font-display text-xl font-bold">{s.name}</h2>}
+            {s.fields.map(([name, d]) => {
+              const value = w[name];
+              const start = Array.isArray(d.text) ? d.text.join(' ') : d.text;
+              return (
+                <div id={`f-${name}`} class="tw-field">
+                  {Array.isArray(d.text) ? (
+                    <div class="flex flex-col gap-2">
+                      <span class="wf-label">{d.label}</span>
+                      <RowList id={name} noun="line" addLabel="Add a line" max={Math.min(40, Math.max(6, d.text.length * 2))} was={was[name]} error={errorField === name ? error : undefined} fields={[{ name, label: d.label, rows: d.text.some((x) => x.length > 70) ? 2 : undefined }]} values={(Array.isArray(value) ? value : []).map((x: string) => [x])} />
+                      {d.help && <span class="wf-help">{d.help}</span>}
+                    </div>
+                  ) : (
+                    <WebField
+                      label={d.label}
+                      name={name}
+                      value={value}
+                      rows={short(start) || name === 'seoTitle' ? undefined : rows(start)}
+                      was={was[name] && (short(start) ? was[name] : 'Changed from what is live')}
+                      error={errorField === name ? error : undefined}
+                      help={d.help}
+                      count={name === 'seoTitle' ? [30, 65] : name === 'seoDescription' ? [70, 160] : undefined}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </section>
+        ))}
+        <div class="web-save">
+          <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
+          <button type="submit" class="btn-book min-h-12">Save as draft</button>
+        </div>
+      </form>
+      <aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-4 xl:sticky xl:top-4 xl:max-w-[400px]" data-chrome>
+        {(entry.pending || entry.state === 'edited') && (
+          <section class="a-card flex flex-col gap-2.5 p-5">
+            {entry.pending === 'save' && <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Discard my changes</button></form>}
+            {entry.state === 'edited' && <form method="post"><input type="hidden" name="intent" value="reset" /><button class="btn-ghost min-h-11 w-full">Back to the starting copy</button></form>}
+          </section>
+        )}
+        <section class="a-card flex flex-col gap-3 p-5" aria-labelledby="tw-marks">
+          <h2 id="tw-marks" class="m-0 font-display text-lg font-bold">Links, bold and fill-ins</h2>
+          <ul class="m-0 flex list-none flex-col gap-2 p-0 text-sm text-body">
+            <li><code class="tw-code">[our fares](/taxi/)</code> a link</li>
+            <li><code class="tw-code">**Landing soon?**</code> bold</li>
+            <li><code class="tw-code">{'{freeCancel}'}</code> a fill-in: the live number, so it changes by itself when Policies, fares or Business details change</li>
+          </ul>
+        </section>
+        <section class="a-card flex flex-col gap-2 p-5" aria-labelledby="tw-vars">
+          <h2 id="tw-vars" class="m-0 font-display text-lg font-bold">Fill-ins on this page</h2>
+          <p class="m-0 text-sm text-muted">Type one in {'{curly brackets}'} anywhere on this form. {own.length > 0 && 'The first ones change from page to page.'}</p>
+          <details class="tw-vars" open={own.length > 0 || undefined}>
+            <summary class="text-sm font-semibold">Show all {fillIns.length}</summary>
+            <dl class="m-0 mt-2 flex flex-col">
+              {fillIns.map((n) => (
+                <div class:list={['tw-var', usedHere.has(n) && 'is-used']}>
+                  <dt><code class="tw-code">{`{${n}}`}</code></dt>
+                  <dd class="m-0 min-w-0"><span class="block truncate font-semibold text-ink">{vars[n]!.text || '(empty here)'}</span><span class="block text-xs text-muted">{vars[n]!.label}</span></dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        </section>
+        <VersionHistory type="text" itemKey={key} />
+      </aside>
+    </div>
+  </div>
+</AdminLayout>
+
+<style is:global>
+  .tw-field { scroll-margin-top: 1rem; border-radius: 14px; }
+  .tw-field:target { outline: 3px solid var(--color-lime); outline-offset: 6px; }
+  .tw-code { padding: 0.05rem 0.35rem; border-radius: 6px; background: var(--color-mist); font-size: 0.8125rem; color: var(--color-ink); white-space: nowrap; }
+  .tw-vars summary { cursor: pointer; }
+  .tw-var { display: grid; grid-template-columns: minmax(0, 10.5rem) minmax(0, 1fr); gap: 0.75rem; align-items: center; padding: 0.45rem 0; border-top: 1px solid #f0f1f3; font-size: 0.875rem; }
+  .tw-var dt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .tw-var.is-used dt .tw-code { background: var(--color-lime-50); }
+  [data-theme='dark'] .tw-code { background: var(--a-raised); color: var(--color-white, #fff); }
+  [data-theme='dark'] .tw-var { border-color: var(--a-edge); }
+  [data-theme='dark'] .tw-var.is-used dt .tw-code { background: #1f2a0b; }
+</style>
+
+<script>
+  import { wireCounters, wireDirty, wireLists } from '../../../../lib/admin-web';
+  wireLists();
+  wireCounters();
+  wireDirty();
+</script>

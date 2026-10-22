@@ -5,6 +5,7 @@
  * use it. Pure functions, no database.
  */
 import type { ContentType } from '../data/published';
+import { WORD_PAGES, type WordField } from '../data/page-text';
 
 export interface DiffLine {
   /** The field, in plain words: "Sedan", "Opening answer", "Day 4". */
@@ -202,8 +203,7 @@ function diffList(type: ContentType, path: string, label: string, a: unknown[], 
   }
 }
 
-function walk(type: ContentType, prefix: string, a: unknown, b: unknown, out: DiffLine[]) {
-  const labels = LABELS[type] ?? {};
+function walk(type: ContentType, prefix: string, a: unknown, b: unknown, out: DiffLine[], labels: Record<string, string> = LABELS[type] ?? {}) {
   if ((isRecord(a) || isRecord(b)) && prefix !== 'focus') {
     const ra = isRecord(a) ? a : {};
     const rb = isRecord(b) ? b : {};
@@ -212,7 +212,7 @@ function walk(type: ContentType, prefix: string, a: unknown, b: unknown, out: Di
       // Worked out from other fields, never shown.
       if (['phoneHref', 'durationIso', 'slug', 'key', 'published', 'updated', 'updatedLabel', 'country'].includes(path)) continue;
       if (JSON.stringify(ra[k]) === JSON.stringify(rb[k])) continue;
-      walk(type, path, ra[k], rb[k], out);
+      walk(type, path, ra[k], rb[k], out, labels);
     }
     return;
   }
@@ -226,9 +226,14 @@ function walk(type: ContentType, prefix: string, a: unknown, b: unknown, out: Di
   out.push({ what: label, from: x, to: y });
 }
 
-/** Every difference between what is live and the draft, in the form's order. */
-export function diffLines(type: ContentType, live: unknown, draft: unknown): DiffLine[] {
+/** Every difference between what is live and the draft, in the form's order. `key` names the page for page words. */
+export function diffLines(type: ContentType, live: unknown, draft: unknown, key = ''): DiffLine[] {
   const out: DiffLine[] = [];
+  if (type === 'text') {
+    const fields = (WORD_PAGES as Record<string, { fields: Record<string, WordField> }>)[key]?.fields ?? {};
+    walk(type, '', live, draft, out, Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.label])));
+    return out;
+  }
   if (type === 'order') {
     const a = Array.isArray(live) ? live.map(String) : [];
     const b = Array.isArray(draft) ? draft.map(String) : [];

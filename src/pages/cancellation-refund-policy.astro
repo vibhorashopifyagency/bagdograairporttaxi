@@ -1,41 +1,40 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { BUSINESS, POLICY, SITE } from '../data/site';
+import Words from '../components/Words.astro';
+import { editAttr, wordsList, wordsText } from '../data/page-text';
+// The words are "Cancellation and refund policy" in the dashboard's Edit pages (src/data/page-text.ts); the numbers are fill-ins from the policies.
+const rows = ['row1', 'row2', 'row3'];
 ---
 
 <BaseLayout
-  title="Cancellation and Refund Policy"
-  description={`Free cancellation up to ${POLICY.freeCancelHours} hours before pickup with a full refund in ${POLICY.refundDays} working days. Clear terms for taxis and tour packages.`}
+  title={wordsText('cancellation', 'seoTitle')}
+  description={wordsText('cancellation', 'seoDescription')}
   crumbs={[{ name: 'Cancellation and refund policy', path: '/cancellation-refund-policy/' }]}
 >
   <div class="wrap mt-6">
     <div class="prose-site">
-      <h1 class="text-3xl font-extrabold sm:text-4xl">Cancellation and refund policy</h1>
-      <p class="answer mt-5">Cancel a taxi up to {POLICY.freeCancelHours} hours before pickup and we refund your full advance. Inside {POLICY.freeCancelHours} hours we refund {POLICY.lateCancelRefundPercent}%. Every refund goes back to the account you paid from within {POLICY.refundDays} working days.</p>
-      <h2>Taxi transfers</h2>
+      <Words page="cancellation" field="title" as="h1" class="text-3xl font-extrabold sm:text-4xl" />
+      <Words page="cancellation" field="answer" as="p" class="answer mt-5" />
+      <Words page="cancellation" field="taxiTitle" as="h2" />
       <div class="table-scroll">
         <table>
-          <thead><tr><th>When you cancel</th><th>Refund of advance</th></tr></thead>
+          <thead><tr><Words page="cancellation" field="tableWhen" as="th" /><Words page="cancellation" field="tableRefund" as="th" /></tr></thead>
           <tbody>
-            <tr><td>More than {POLICY.freeCancelHours} hours before pickup</td><td>100%</td></tr>
-            <tr><td>Within {POLICY.freeCancelHours} hours of pickup</td><td>{POLICY.lateCancelRefundPercent}%</td></tr>
-            <tr><td>No-show (no contact within 2 hours of the pickup time)</td><td>None</td></tr>
+            {rows.map((r) => <tr><Words page="cancellation" field={`${r}When`} as="td" /><Words page="cancellation" field={`${r}Refund`} as="td" /></tr>)}
           </tbody>
         </table>
       </div>
-      <h2>Flight and train delays</h2>
-      <p>A delay is never a cancellation. We track your flight or train, and waiting is free for {POLICY.freeWaitMinutes} minutes after the actual arrival time. If your flight is cancelled by the airline, we refund 100% of your advance or move the booking to your new date for free.</p>
-      <h2>If we cancel</h2>
-      <p>If we cannot provide the car, or a road closure makes the trip impossible, you get a 100% refund or a free change of date. Landslide reroutes are driven at no extra charge.</p>
-      <h2>Tour packages</h2>
-      <ul>
-        <li>More than 15 days before the start: full refund minus any non-refundable hotel deposits, which we show in your quote.</li>
-        <li>7 to 15 days before: 50% refund of the amount paid.</li>
-        <li>Less than 7 days before: refund of the unused car portion only.</li>
+      <Words page="cancellation" field="delayTitle" as="h2" />
+      <Words page="cancellation" field="delayText" as="p" />
+      <Words page="cancellation" field="weCancelTitle" as="h2" />
+      <Words page="cancellation" field="weCancelText" as="p" />
+      <Words page="cancellation" field="toursTitle" as="h2" />
+      <ul data-edit={editAttr('cancellation', 'tours')}>
+        {wordsList('cancellation', 'tours').map((t) => <li set:html={t} />)}
       </ul>
-      <h2>How to cancel</h2>
-      <p>Send a WhatsApp message to {BUSINESS.phone} or email {BUSINESS.email} with your name and trip date. The time we receive your message is the cancellation time. You get a written confirmation and the refund amount.</p>
-      <p class="text-sm text-muted">{SITE.name}. Policy effective {SITE.faresUpdatedLabel}.</p>
+      <Words page="cancellation" field="howTitle" as="h2" />
+      <Words page="cancellation" field="howText" as="p" />
+      <Words page="cancellation" field="effective" as="p" class="text-sm text-muted" />
     </div>
   </div>
 </BaseLayout>

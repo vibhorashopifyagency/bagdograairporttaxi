@@ -37,6 +37,7 @@ import FareBoard from '../components/FareBoard.astro';
 import PhotoMarquee from '../components/PhotoMarquee.astro';
 import GuideCard from '../components/GuideCard.astro';
 import JourneyStory from '../components/JourneyStory.astro';
+import Words from '../components/Words.astro';
 import { ROUTES, inr, lowestFare } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 import { DESTINATIONS } from '../data/destinations';
@@ -44,37 +45,26 @@ import { GENERAL_FAQS } from '../data/faqs';
 import { GALLERY } from '../data/gallery';
 import { GUIDES } from '../data/guides';
 import { GOOGLE } from '../data/reviews';
-import { BUSINESS, POLICY, SITE, waLink } from '../data/site';
+import { BUSINESS, SITE, waLink } from '../data/site';
 import { VEHICLES } from '../data/vehicles';
 import { faqPage } from '../lib/schema';
+import { editAttr, words, wordsList, wordsText } from '../data/page-text';
 
 const featured = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport').slice(0, 8);
-const darj = ROUTES[0];
-const gtk = ROUTES[1];
+const darj = ROUTES.find((r) => r.fromShort === 'Bagdogra Airport' && r.toShort === 'Darjeeling') ?? ROUTES[0];
 const anchors = featured.slice(0, 3);
-const fromFare = inr(Math.min(...ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport').map(lowestFare)));
 // A short, real five-star review for the hero; none while the cards are samples.
 const heroReview = GOOGLE.isSample ? undefined : (GOOGLE.reviews.find((r) => r.rating === 5 && r.text.length < 200) ?? GOOGLE.reviews[0]);
-const steps = [
-  { title: 'Pick your route and car', text: 'See the full fare before you pay anything.' },
-  { title: `Pay ${POLICY.advancePercent}% advance by UPI`, text: 'Scan our QR code with any UPI app. Instant WhatsApp confirmation.' },
-  { title: 'Get your driver’s details', text: 'Name, photo and car number the evening before.' },
-  { title: 'Meet at arrivals', text: 'Your driver waits with a name board, even if the flight is late.' },
-];
-const compare = [
-  ['Fare', 'Fixed and shown before you fly, tolls and GST included', 'Fixed, but you only learn it at the counter'],
-  ['Waiting', 'Driver at arrivals with your name board, flight tracked', 'Queue at the counter after every landing'],
-  ['Car and driver', 'You choose the car; driver’s name and number sent the evening before', 'Whatever is next in line'],
-  ['Payment', `${POLICY.advancePercent}% now by UPI or card, the rest after the trip`, 'Full fare up front, usually cash'],
-  ['If plans change', `Free cancellation up to ${POLICY.freeCancelHours} hours before, refund in ${POLICY.refundDays} working days`, 'No booking to cancel, no car held for you'],
-];
+// The words of every section are the "Home page" in the dashboard's Edit pages (src/data/page-text.ts).
+const steps = ['step1', 'step2', 'step3', 'step4'];
+const compare = ['row1', 'row2', 'row3', 'row4', 'row5'];
 const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', innova: 'car-innova', traveller: 'car-traveller' };
 const since = new Date().getFullYear() - Number(BUSINESS.foundingYear);
 const stats = [
-  { label: 'Years on the road', value: since, suffix: '+' },
-  { label: 'Fixed routes', value: ROUTES.length, suffix: '' },
-  { label: 'Tour packages', value: PACKAGES.length, suffix: '' },
-  ...(GOOGLE.count > 0 ? [{ label: 'Google reviews', value: GOOGLE.count, suffix: '' }] : []),
+  { label: 'statYears', value: since, suffix: '+' },
+  { label: 'statRoutes', value: ROUTES.length, suffix: '' },
+  { label: 'statPackages', value: PACKAGES.length, suffix: '' },
+  ...(GOOGLE.count > 0 ? [{ label: 'statReviews', value: GOOGLE.count, suffix: '' }] : []),
 ];
 const [leadGuide, ...moreGuides] = GUIDES;
 ---
@@ -94,31 +84,23 @@ const [leadGuide, ...moreGuides] = GUIDES;
     <div class="wrap relative grid min-w-0 grid-cols-1 gap-8 pt-6 pb-24 sm:pt-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-center lg:gap-10 lg:pt-8 lg:pb-24 xl:grid-cols-[minmax(0,1fr)_500px] xl:gap-12">
       <div class="min-w-0">
         <p class="inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur">
-          <span class="inline-flex items-center gap-2"><span class="live-dot" aria-hidden="true"></span>Drivers at Bagdogra Airport 24 hours a day</span>
+          <span class="inline-flex items-center gap-2"><span class="live-dot" aria-hidden="true"></span><Words page="home" field="heroBadge" /></span>
         </p>
         <!-- The h1 carries the search phrase; the romance moves to the line below it. -->
-        <h1 class="display-xl mt-4 max-w-[14ch] font-extrabold tracking-tight text-white">
-          Bagdogra Airport taxi to the{' '}
-          <span class="text-lime">Himalayas</span>,{' '}
-          at a fixed fare.
-        </h1>
-        <p class="mt-4 max-w-xl text-lg leading-relaxed text-white/85">
-          Your ride into the hills starts at arrivals. Fixed-fare taxis from Bagdogra Airport (IXB) and NJP to Darjeeling, Gangtok, Pelling and the Dooars from {fromFare}, with a verified local driver waiting for you with a name board.
-        </p>
-        <ul class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm font-medium text-white/90" aria-label="What is included">
-          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Tolls, parking and GST included</li>
-          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> {POLICY.freeWaitMinutes} min free waiting</li>
-          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> Free cancellation up to {POLICY.freeCancelHours} h</li>
+        <Words page="home" field="heroTitle" as="h1" accent="text-lime" class="display-xl mt-4 max-w-[14ch] font-extrabold tracking-tight text-white" />
+        <Words page="home" field="heroLead" as="p" class="mt-4 max-w-xl text-lg leading-relaxed text-white/85" />
+        <ul class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm font-medium text-white/90" aria-label="What is included" data-edit={editAttr('home', 'heroIncluded')}>
+          {wordsList('home', 'heroIncluded').map((t) => <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4 text-lime" /> <Fragment set:html={t} /></li>)}
         </ul>
         <div class="mt-5 flex flex-wrap items-center gap-3">
-          <a href="/book/" class="btn-lime lg:hidden">Book a taxi <Icon name="arrow" /></a>
-          <a href={waLink('Hi, I would like to book a taxi from Bagdogra Airport.')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> WhatsApp us</a>
+          <a href="/book/" class="btn-lime lg:hidden"><Words page="home" field="heroBook" /> <Icon name="arrow" /></a>
+          <a href={waLink('Hi, I would like to book a taxi from Bagdogra Airport.')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> <Words page="home" field="heroWhatsapp" /></a>
           <GoogleRatingBadge variant="chip" dark />
         </div>
         <ul class="mt-4 flex flex-wrap items-center gap-2" aria-label="Popular fares">
-          <li class="mr-1 text-sm font-medium text-white/70">Popular fares</li>
+          <Words page="home" field="heroPopular" as="li" class="mr-1 text-sm font-medium text-white/70" />
           {anchors.map((r) => <li><a href={`/taxi/${r.slug}/`} class="chip-light no-underline hover:bg-white/25">{r.toShort} <strong class="text-lime">{inr(lowestFare(r))}</strong></a></li>)}
-          <li><a href="/taxi/" class="chip-light no-underline hover:bg-white/25">All {ROUTES.length} fares →</a></li>
+          <li><a href="/taxi/" class="chip-light no-underline hover:bg-white/25"><Words page="home" field="heroAllFares" /></a></li>
         </ul>
         {heroReview && (
           <a href={heroReview.url || GOOGLE.url} target="_blank" rel="nofollow noopener" class="mt-4 hidden max-w-xl items-center gap-3 rounded-xl bg-white/10 p-2.5 pr-4 no-underline ring-1 ring-white/15 backdrop-blur transition-colors hover:bg-white/15 sm:flex">
@@ -145,22 +127,20 @@ const [leadGuide, ...moreGuides] = GUIDES;
   <!-- Fares at a glance: the question most visitors arrive with, answered in the first screen after the hero. -->
   <section class="wrap section" aria-labelledby="quick-answer">
     <div data-reveal>
-      <SectionHead eyebrow="Fares at a glance" id="quick-answer" title="How much is a taxi from Bagdogra Airport?" linkHref="/taxi/" linkLabel={`All ${ROUTES.length} fares`} />
-      <p class="answer mt-6 max-w-3xl" id="quick-answer-text">
-        A private taxi from Bagdogra Airport costs {inr(darj.fares.sedan)} to Darjeeling ({darj.km} km, {darj.duration}) and {inr(gtk.fares.sedan)} to Gangtok ({gtk.km} km, {gtk.duration}) in a sedan, one way. An Innova Crysta costs {inr(darj.fares.innova)} and {inr(gtk.fares.innova)}. Every fare includes tolls, parking, driver allowance and GST, and was last updated in <time datetime={SITE.faresUpdated}>{SITE.faresUpdatedLabel}</time>.
-      </p>
+      <SectionHead words="home:fares" id="quick-answer" linkHref="/taxi/" />
+      <Words page="home" field="faresAnswer" as="p" class="answer mt-6 max-w-3xl" id="quick-answer-text" />
     </div>
     <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
       {featured.map((r) => <RouteCard route={r} />)}
     </div>
-    <p class="mt-5 text-sm text-muted">Night pickups ({POLICY.nightChargeFrom} to {POLICY.nightChargeTo}) add {inr(POLICY.nightCharge)}. That is the only extra, ever. Fares to NJP, Siliguri and the Dooars are on the <a href="/taxi/">full fare chart</a>.</p>
+    <Words page="home" field="faresNote" as="p" class="mt-5 text-sm text-muted" />
   </section>
 
   <FareBoard />
 
   <!-- Cars: the fare depends on the car, so the cars come straight after the fares. -->
   <section class="wrap section" aria-labelledby="fleet">
-    <div data-reveal><SectionHead eyebrow="Our cars" id="fleet" title="Which car is right for the hill roads?" lead="Every car is commercially registered, insured and cleaned before each pickup. Child seats on request." /></div>
+    <div data-reveal><SectionHead words="home:fleet" id="fleet" /></div>
     <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
       {VEHICLES.map((v) => (
         <a href={`/book/?vehicle=${v.key}`} class="card lift group overflow-hidden no-underline">
@@ -170,7 +150,7 @@ const [leadGuide, ...moreGuides] = GUIDES;
             <p class="text-sm text-muted">{v.models}</p>
             <p class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm"><strong class="text-ink">{v.seats} seats</strong><span class="text-muted">{v.bags}</span></p>
             <p class="mt-2 text-sm leading-snug text-body">{v.bestFor}</p>
-            <p class="mt-3 text-sm text-body">Darjeeling from <strong class="text-ink">{inr(darj.fares[v.key])}</strong></p>
+            <p class="mt-3 text-sm text-body"><Words page="home" field="fleetFare" /> <strong class="text-ink">{inr(darj.fares[v.key])}</strong></p>
           </div>
         </a>
       ))}
@@ -186,19 +166,19 @@ const [leadGuide, ...moreGuides] = GUIDES;
     <Photo name="pelling" class="absolute inset-0 h-full w-full object-cover opacity-35" sizes="(min-width: 1536px) 1500px, 100vw" alt="" />
     <div class="absolute inset-0 bg-gradient-to-b from-ink via-ink/70 to-ink" aria-hidden="true"></div>
     <div class="relative">
-      <div data-reveal><SectionHead eyebrow="Secure booking in four steps" id="how" title="How do I book a taxi from Bagdogra Airport?" lead="Booked in a minute, confirmed on WhatsApp, driver details the evening before." light /></div>
+      <div data-reveal><SectionHead words="home:how" id="how" light /></div>
       <ol class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
         {steps.map((s, i) => (
           <li class="relative rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm transition-colors hover:border-lime/50 hover:bg-white/10">
             <span class="flex h-11 w-11 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-lg font-extrabold text-ink">{i + 1}</span>
-            <h3 class="mt-5 text-lg font-semibold text-white">{s.title}</h3>
-            <p class="mt-1.5 text-sm leading-relaxed text-white/70">{s.text}</p>
+            <Words page="home" field={`${s}Title`} as="h3" class="mt-5 text-lg font-semibold text-white" />
+            <Words page="home" field={`${s}Text`} as="p" class="mt-1.5 text-sm leading-relaxed text-white/70" />
           </li>
         ))}
       </ol>
       <div class="mt-10 flex flex-wrap items-center gap-4">
-        <a href="/book/" class="btn-lime">Start booking <Icon name="arrow" /></a>
-        <span class="text-sm text-white/70">Only {POLICY.advancePercent}% now. Free cancellation up to {POLICY.freeCancelHours} hours before.</span>
+        <a href="/book/" class="btn-lime"><Words page="home" field="howButton" /> <Icon name="arrow" /></a>
+        <Words page="home" field="howNote" class="text-sm text-white/70" />
       </div>
     </div>
     </div>
@@ -208,49 +188,49 @@ const [leadGuide, ...moreGuides] = GUIDES;
   <section class="bg-sand section" aria-labelledby="cmp">
     <div class="wrap">
       <div data-reveal>
-        <SectionHead eyebrow="Why book before you land" id="cmp" title="Booking ahead versus the airport prepaid counter" lead="The counter is fine if you are flexible. If you want a known fare, a named driver and no queue after a long flight, book ahead." />
+        <SectionHead words="home:cmp" id="cmp" />
       </div>
       <div class="mt-8 overflow-hidden rounded-2xl border border-line bg-white" data-reveal>
         <div class="grid grid-cols-2 bg-ink text-white sm:grid-cols-[1fr_1.6fr_1.2fr]">
           <div class="hidden p-4 sm:block"><span class="sr-only">What</span></div>
-          <div class="p-3 text-sm font-bold sm:p-4 sm:text-base"><span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-lime"></span>Booked with us</span></div>
-          <div class="p-3 text-sm font-bold text-white/70 sm:p-4 sm:text-base">Prepaid counter</div>
+          <div class="p-3 text-sm font-bold sm:p-4 sm:text-base"><span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-lime"></span><Words page="home" field="cmpUs" /></span></div>
+          <Words page="home" field="cmpThem" as="div" class="p-3 text-sm font-bold text-white/70 sm:p-4 sm:text-base" />
         </div>
-        {compare.map(([k, us, them]) => (
+        {compare.map((row) => (
           <div class="grid grid-cols-2 border-t border-line text-sm sm:grid-cols-[1fr_1.6fr_1.2fr]">
-            <div class="col-span-2 px-3 pt-3 text-[0.7rem] font-bold tracking-[0.12em] text-muted uppercase sm:col-span-1 sm:p-4 sm:text-sm sm:font-semibold sm:tracking-normal sm:normal-case sm:text-ink">{k}</div>
-            <div class="flex gap-2 bg-lime-50/60 p-3 text-ink sm:p-4"><Icon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-lime-text" />{us}</div>
-            <div class="p-3 text-muted sm:p-4">{them}</div>
+            <Words page="home" field={`${row}Label`} as="div" class="col-span-2 px-3 pt-3 text-[0.7rem] font-bold tracking-[0.12em] text-muted uppercase sm:col-span-1 sm:p-4 sm:text-sm sm:font-semibold sm:tracking-normal sm:normal-case sm:text-ink" />
+            <div class="flex gap-2 bg-lime-50/60 p-3 text-ink sm:p-4"><Icon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-lime-text" /><Words page="home" field={`${row}Us`} /></div>
+            <Words page="home" field={`${row}Them`} as="div" class="p-3 text-muted sm:p-4" />
           </div>
         ))}
       </div>
       <div class="mt-8 flex flex-wrap gap-3">
-        <a href="/book/" class="btn-book">Lock in my fare <Icon name="arrow" /></a>
-        <a href="/guides/bagdogra-airport-transport-guide/" class="btn-ghost">Compare every way to travel</a>
+        <a href="/book/" class="btn-book"><Words page="home" field="cmpButton" /> <Icon name="arrow" /></a>
+        <a href="/guides/bagdogra-airport-transport-guide/" class="btn-ghost"><Words page="home" field="cmpGuide" /></a>
       </div>
     </div>
   </section>
 
   <!-- Packages -->
   <section class="wrap section" aria-labelledby="pk">
-    <div data-reveal><SectionHead eyebrow="Tour packages from Bagdogra" id="pk" title="Darjeeling, Sikkim and Dooars tour packages" lead="One private car and driver for the whole trip, hotels with breakfast and dinner, permits arranged. Day-wise plans you can read before you pay." linkHref="/tour-packages/" linkLabel={`All ${PACKAGES.length} packages`} /></div>
+    <div data-reveal><SectionHead words="home:pk" id="pk" linkHref="/tour-packages/" /></div>
     <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>
-      {PACKAGES.slice(0, 8).map((p, i) => <PackageCard pkg={p} badge={i === 0 ? 'Our pick for a first visit' : undefined} />)}
+      {PACKAGES.slice(0, 8).map((p, i) => <PackageCard pkg={p} badge={i === 0 ? wordsText('home', 'pkBadge') : undefined} />)}
     </div>
   </section>
 
   <!-- Destinations -->
   <section class="bg-sand section" aria-labelledby="dest">
     <div class="wrap-wide">
-      <div data-reveal><SectionHead eyebrow="Where we drive" id="dest" title="Destinations across North Bengal, Sikkim and Bhutan" linkHref="/destinations/" linkLabel="All destination guides" /></div>
+      <div data-reveal><SectionHead words="home:dest" id="dest" linkHref="/destinations/" /></div>
       <div class="mt-10 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4 3xl:grid-cols-6" data-reveal-stagger>
         {DESTINATIONS.map((d) => <DestinationTile d={d} />)}
         <a href="/book/" class="lift group relative flex aspect-[4/5] flex-col justify-end overflow-hidden rounded-[var(--radius-card)] bg-ink p-4 text-white no-underline sm:p-6">
           <span class="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-lime/20 blur-2xl transition-transform duration-500 group-hover:scale-125" aria-hidden="true"></span>
-          <span class="relative block text-[0.7rem] font-bold tracking-[0.12em] text-lime uppercase">Somewhere else?</span>
-          <span class="relative mt-1 block font-[family-name:var(--font-display)] text-xl leading-tight font-bold sm:text-2xl lg:text-[1.75rem]">Name your place</span>
-          <span class="relative mt-1.5 block text-sm leading-snug text-white/80 sm:text-[0.95rem]">We quote any route across the hills.</span>
-          <span class="relative mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-lime sm:mt-4">Get a quote <span aria-hidden="true" class="transition-transform group-hover:translate-x-1">&rarr;</span></span>
+          <Words page="home" field="elseEyebrow" class="relative block text-[0.7rem] font-bold tracking-[0.12em] text-lime uppercase" />
+          <Words page="home" field="elseTitle" class="relative mt-1 block font-[family-name:var(--font-display)] text-xl leading-tight font-bold sm:text-2xl lg:text-[1.75rem]" />
+          <Words page="home" field="elseText" class="relative mt-1.5 block text-sm leading-snug text-white/80 sm:text-[0.95rem]" />
+          <span class="relative mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-lime sm:mt-4"><Words page="home" field="elseButton" /> <span aria-hidden="true" class="transition-transform group-hover:translate-x-1">&rarr;</span></span>
         </a>
       </div>
     </div>
@@ -258,7 +238,7 @@ const [leadGuide, ...moreGuides] = GUIDES;
 
   <!-- Travel guides: the pages that answer the questions travellers (and the assistants they ask) bring to us. -->
   <section class="wrap section" aria-labelledby="guides">
-    <div data-reveal><SectionHead eyebrow="Travel guides from the driver’s seat" id="guides" title="Plan the trip: permits, timings and the best months" lead="Written by the team that drives these roads every day and dated so you know they are current. Permits, Nathula opening days, how to get from the airport to the hills, and when to go." linkHref="/guides/" linkLabel={`All ${GUIDES.length} guides`} /></div>
+    <div data-reveal><SectionHead words="home:guides" id="guides" linkHref="/guides/" /></div>
     <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr]" data-reveal-stagger>
       <GuideCard guide={leadGuide} featured />
       {moreGuides.map((g) => <GuideCard guide={g} />)}
@@ -276,15 +256,13 @@ const [leadGuide, ...moreGuides] = GUIDES;
           <Photo name="car-innova" class="aspect-[4/3] w-full object-cover" sizes="256px" />
         </div>
         <div class="absolute -top-4 -left-3 hidden items-center gap-2 rounded-full bg-white px-3.5 py-2 text-sm font-semibold text-ink shadow-[var(--shadow-float)] sm:-left-5 sm:flex">
-          <span class="live-dot" aria-hidden="true"></span> Office at {BUSINESS.address.locality}, open now
+          <span class="live-dot" aria-hidden="true"></span> <Words page="home" field="whyBadge" />
         </div>
       </div>
       <div data-reveal style="--d: 120ms">
-        <p class="eyebrow">A local office, not a call centre</p>
-        <h2 id="why" class="display-lg mt-2 font-extrabold">Drivers who know every bend between the airport and the hills</h2>
-        <p class="mt-4 text-lg leading-relaxed">
-          {SITE.name} is a unit of {BUSINESS.legalName}, based at {BUSINESS.address.locality}, minutes from the terminal, and has been driving travellers up to Darjeeling, Gangtok and beyond since {BUSINESS.foundingYear}. One phone number, answered around the clock, and a fare that is the same on every page of this site.
-        </p>
+        <Words page="home" field="whyEyebrow" as="p" class="eyebrow" />
+        <Words page="home" field="whyTitle" as="h2" id="why" class="display-lg mt-2 font-extrabold" />
+        <Words page="home" field="whyText" as="p" class="mt-4 text-lg leading-relaxed" />
         <blockquote class="mt-6 border-l-4 border-lime pl-5">
           <p class="font-[family-name:var(--font-display)] text-xl font-semibold text-ink">“{BUSINESS.tagline}.”</p>
           <footer class="mt-1.5 text-sm text-muted"><cite class="not-italic">{BUSINESS.legalName}, on its <a href={GOOGLE.url} target="_blank" rel="noopener">Google Business Profile</a></cite></footer>
@@ -292,21 +270,16 @@ const [leadGuide, ...moreGuides] = GUIDES;
         <dl class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
           {stats.map((s) => (
             <div class="card p-4">
-              <dt class="text-xs font-semibold tracking-wide text-muted uppercase">{s.label}</dt>
+              <Words page="home" field={s.label} as="dt" class="text-xs font-semibold tracking-wide text-muted uppercase" />
               <dd class="mt-1 font-[family-name:var(--font-display)] text-3xl font-extrabold text-ink tabular-nums" data-count={s.value} data-suffix={s.suffix}>{s.value}{s.suffix}</dd>
             </div>
           ))}
         </dl>
-        <ul class="mt-8 space-y-3">
-          {[
-            'Police-verified drivers trained for mountain roads',
-            'Flight tracking: your driver adjusts to delays without being asked',
-            'Written cancellation and refund policy, no small print',
-            'Permits for Tsomgo, Nathula and North Sikkim arranged for you',
-          ].map((t) => <li class="flex gap-3"><span class="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-lime text-ink"><Icon name="check" class="h-3 w-3" /></span><span>{t}</span></li>)}
+        <ul class="mt-8 space-y-3" data-edit={editAttr('home', 'whyList')}>
+          {wordsList('home', 'whyList').map((t) => <li class="flex gap-3"><span class="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-lime text-ink"><Icon name="check" class="h-3 w-3" /></span><span set:html={t} /></li>)}
         </ul>
         <div class="mt-8 flex flex-wrap gap-3">
-          <a href="/about/" class="btn-ghost">About us</a>
+          <a href="/about/" class="btn-ghost"><Words page="home" field="whyAbout" /></a>
           <a href={BUSINESS.phoneHref} class="btn-ghost"><Icon name="phone" class="h-4 w-4 text-lime-text" /> {BUSINESS.phone}</a>
         </div>
       </div>
@@ -319,7 +292,7 @@ const [leadGuide, ...moreGuides] = GUIDES;
   <!-- Gallery -->
   <section class="section overflow-hidden" aria-labelledby="gal">
     <div class="wrap" data-reveal>
-      <SectionHead eyebrow="Gallery" id="gal" title="The roads we drive, in pictures" lead="Tsomgo Lake, the toy train, Nathula, the Dooars: what a taxi from Bagdogra can take you to." linkHref="/gallery/" linkLabel={`All ${GALLERY.length} photos`} />
+      <SectionHead words="home:gal" id="gal" linkHref="/gallery/" />
     </div>
     <div class="mt-10" data-reveal style="--d: 100ms">
       <PhotoMarquee items={GALLERY} />
@@ -327,7 +300,7 @@ const [leadGuide, ...moreGuides] = GUIDES;
   </section>
 
   <section class="wrap">
-    <FaqList faqs={GENERAL_FAQS} heading="Bagdogra Airport taxi: questions travellers ask" edit="faq:main:list" />
+    <FaqList faqs={GENERAL_FAQS} heading={words('home', 'faqTitle')} headingEdit={editAttr('home', 'faqTitle')} edit="faq:main:list" />
     <BookCta />
   </section>
 </BaseLayout>

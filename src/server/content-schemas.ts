@@ -8,7 +8,9 @@
  */
 import { z } from 'zod';
 import { GALLERY_CATEGORIES } from '../data/gallery';
+import { WORD_PAGES, allowedVars, type WordField } from '../data/page-text';
 import { ROUTE_GROUPS } from '../data/routes';
+import { SAFE_HREF, linksIn, tokensIn } from '../lib/rich-text';
 
 const text = (label: string, min: number, max: number) =>
   z
@@ -216,3 +218,31 @@ export const photoSchema = z.object({
 });
 
 export const orderSchema = list('items', slug, 500);
+
+/**
+ * One page's words (src/data/page-text.ts). Every field may be left out,
+ * since the dashboard stores only the fields the admin changed. A field
+ * cannot be emptied (the design has a place for it), fill-ins must be ones
+ * the page knows, links must be safe, and page titles and search
+ * descriptions stay plain text.
+ */
+export function wordsSchema(page: string) {
+  const def = (WORD_PAGES as Record<string, { fields: Record<string, WordField> }>)[page];
+  const allowed = new Set(allowedVars(page));
+  const shape: Record<string, z.ZodType> = {};
+  for (const [key, f] of Object.entries(def?.fields ?? {})) {
+    const name = f.label.split(' · ').pop() ?? f.label;
+    const longest = Math.max(...(Array.isArray(f.text) ? f.text : [f.text]).map((x) => x.length));
+    const max = key === 'seoTitle' ? 100 : key === 'seoDescription' ? 250 : Math.min(3000, Math.max(60, Math.ceil(longest * 3)));
+    const one = z
+      .string()
+      .trim()
+      .min(1, `${name} is empty. Write something, or put the old words back.`)
+      .max(max, `${name} is too long (at most ${max} characters).`)
+      .refine((v) => tokensIn(v).every((t) => allowed.has(t)), { message: `${name} has a fill-in in {curly brackets} this page does not know. Use one from the list on this form, or take the brackets away.` })
+      .refine((v) => linksIn(v).every((l) => SAFE_HREF.test(l.href)), { message: `A link in ${name} must go to a page on this site (starting with /), or start with https://, mailto: or tel:.` })
+      .refine((v) => !f.plain || (!linksIn(v).length && !/\*/.test(v)), { message: `${name} is plain text: no links, bold or stars.` });
+    shape[key] = Array.isArray(f.text) ? list(name.toLowerCase(), one, Math.min(40, Math.max(6, f.text.length * 2)), 1) : one;
+  }
+  return z.object(shape).partial();
+}

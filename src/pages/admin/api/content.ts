@@ -15,6 +15,7 @@ import {
   startDeploy,
 } from '../../../server/content';
 import { fareTextNote, fixLabel, type Fares } from '../../../server/content-forms';
+import { WORD_PAGES, varsForPath, type WordField } from '../../../data/page-text';
 import { ipHash } from '../../../server/security';
 
 export const prerender = false;
@@ -22,7 +23,7 @@ export const prerender = false;
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-const TYPES = ['site', 'business', 'policy', 'vehicle', 'route', 'package', 'destination', 'faq', 'gallery', 'guide', 'order'] as const;
+const TYPES = ['site', 'business', 'policy', 'vehicle', 'route', 'package', 'destination', 'faq', 'gallery', 'guide', 'text', 'order'] as const;
 const item = { type: z.enum(TYPES), key: z.string().min(1).max(120) };
 const input = z.discriminatedUnion('action', [
   z.object({ action: z.literal('save'), ...item, data: z.unknown() }),
@@ -47,7 +48,7 @@ const input = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('order'), type: z.enum(['route', 'package', 'destination']), keys: z.array(z.string().min(1).max(120)).max(500) }),
   // The page editor: one field of one item, typed on the page itself.
-  z.object({ action: z.literal('field'), ...item, path: z.string().regex(/^[a-zA-Z]{1,40}$/), value: z.union([z.string().max(5000), z.null()]) }),
+  z.object({ action: z.literal('field'), ...item, path: z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/), value: z.union([z.string().max(5000), z.null()]) }),
 ]);
 
 /**
@@ -58,16 +59,21 @@ const input = z.discriminatedUnion('action', [
  */
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!isAdmin(locals.user)) return json(403, { ok: false, error: 'Only the admin can change the website.' });
-  // ?items=destination:darjeeling,faq:main: what the page editor shows over the published page.
-  const wanted = (url.searchParams.get('items') ?? '').split(',').filter((x) => /^[a-z]+:[a-z0-9-]{1,120}$/.test(x)).slice(0, 20);
+  // ?items=destination:darjeeling,faq:main&path=/destinations/darjeeling/: what the page editor shows over the published page,
+  // with each page-words item's name and box labels, and the fill-ins' values for that page.
+  const wanted = (url.searchParams.get('items') ?? '').split(',').filter((x) => /^[a-z]+:[a-z0-9-]{1,120}$/.test(x)).slice(0, 40);
   if (wanted.length) {
     const items: Record<string, unknown> = {};
+    const pages = WORD_PAGES as Record<string, { name: string; group: string; fields: Record<string, WordField> }>;
     for (const w of wanted) {
       const [type, key] = w.split(':') as [ContentType, string];
       const e = (TYPES as readonly string[]).includes(type) ? await getEntry(type, key) : null;
-      if (e) items[w] = { current: e.current, live: e.live, pending: e.pending, state: e.state };
+      if (!e) continue;
+      const words = type === 'text' && pages[key] ? { name: pages[key].name, group: pages[key].group, labels: Object.fromEntries(Object.entries(pages[key].fields).map(([k, f]) => [k, f.label])) } : undefined;
+      items[w] = { current: e.current, live: e.live, pending: e.pending, state: e.state, words };
     }
-    return json(200, { ok: true, items });
+    const path = url.searchParams.get('path') ?? '/';
+    return json(200, { ok: true, items, vars: varsForPath(/^\/[a-z0-9\-/]*$/.test(path) ? path : '/') });
   }
   return json(200, { ok: true, ...(await publishStatus()) });
 };

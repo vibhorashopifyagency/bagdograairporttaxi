@@ -13,10 +13,12 @@ import { ROUTES, inr, lowestFare, routeBySlug, type Route } from '../../data/rou
 import { destinationBySlug } from '../../data/destinations';
 import { PACKAGES } from '../../data/packages';
 import { VEHICLES } from '../../data/vehicles';
-import { BUSINESS, POLICY, SITE, waLink } from '../../data/site';
+import { BUSINESS, SITE, waLink } from '../../data/site';
 import { routePhoto } from '../../lib/photos';
 import { faqPage, routeService } from '../../lib/schema';
 import { photoFile } from '../../data/photo-library';
+import Words from '../../components/Words.astro';
+import { routeVars, wordsText } from '../../data/page-text';
 
 export function getStaticPaths() {
   return ROUTES.map((route) => ({ params: { slug: route.slug }, props: { route } }));
@@ -30,26 +32,20 @@ const returnRoute = route.returnSlug ? routeBySlug(route.returnSlug) : undefined
 const related = ROUTES.filter((r) => r.slug !== route.slug && r.group === route.group).slice(0, 4);
 const packages = route.destination ? PACKAGES.filter((p) => p.destinations.includes(route.destination!)).slice(0, 3) : [];
 const waText = `Hi, I would like to book a taxi from ${route.from} to ${route.to}.`;
+// The fixed words are "Every taxi route page" in the dashboard (src/data/page-text.ts), with this route's numbers as fill-ins.
+const vars = routeVars(route);
+const w = (field: string) => wordsText('route-page', field, vars);
 
 // Every route page answers the same core questions in its own numbers, plus
 // the route-specific ones from the data file.
 const faqs = [
-  {
-    q: `What is the taxi fare from ${route.fromShort} to ${route.toShort}?`,
-    a: `${inr(route.fares.sedan)} in a sedan, ${inr(route.fares.suv)} in an SUV, ${inr(route.fares.innova)} in an Innova Crysta and ${inr(route.fares.traveller)} in a 12-seat Tempo Traveller, one way, including tolls, parking, driver allowance and GST.`,
-  },
-  {
-    q: `How long does ${route.fromShort} to ${route.toShort} take by car?`,
-    a: `The ${route.km} km drive takes ${route.duration} via ${route.via}.`,
-  },
+  { q: w('fareQ'), a: w('fareA') },
+  { q: w('timeQ'), a: w('timeA') },
   ...route.faqs,
-  {
-    q: 'What happens if I cancel?',
-    a: `Cancel up to ${POLICY.freeCancelHours} hours before pickup for a full refund of your advance, or get ${POLICY.lateCancelRefundPercent}% back inside ${POLICY.freeCancelHours} hours. Refunds take up to ${POLICY.refundDays} working days.`,
-  },
+  { q: w('cancelQ'), a: w('cancelA') },
 ];
-const title = `${route.fromShort} to ${route.toShort} Taxi Fare ${inr(from)} (${route.km} km)`;
-const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(route.fares.sedan)}, Innova ${inr(route.fares.innova)}, ${route.km} km, ${route.duration}. Fixed all-inclusive fare, free cancellation.`;
+const title = w('seoTitle');
+const description = w('seoDescription');
 ---
 
 <BaseLayout
@@ -60,7 +56,7 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
   ogImage={photoFile(routePhoto(route), 1600)}
   modified={SITE.contentUpdated}
 >
-  <PageHero slot="hero" image={routePhoto(route)} edit={`route:${route.slug}`} eyebrow="Fixed fare · one way · all inclusive" title={`${route.from} to ${route.to} taxi`}>
+  <PageHero slot="hero" image={routePhoto(route)} edit={`route:${route.slug}`} words="route-page" vars={vars}>
     <div class="mt-5 flex flex-wrap gap-2">
       <span class="chip-light"><Icon name="map" class="h-4 w-4" /> {route.km} km</span>
       <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> {route.duration}</span>
@@ -73,26 +69,26 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
       <p class="answer" data-edit={`route:${route.slug}:summary`}>{route.summary}</p>
 
       <section id="fares" class="mt-12" aria-labelledby="fares-h" data-edit={`route:${route.slug}:fares`}>
-        <h2 id="fares-h" class="mb-4 text-2xl font-extrabold sm:text-3xl">{route.fromShort} to {route.toShort} fare by car</h2>
+        <Words page="route-page" field="faresTitle" vars={vars} as="h2" id="fares-h" class="mb-4 text-2xl font-extrabold sm:text-3xl" />
         <FareTable route={route} />
       </section>
 
       <div class="prose-site mt-6">
-        <h2>Route and stops</h2>
-        <p>Your driver takes {route.via}. Short stops are included for tea, photos and rest.</p>
+        <Words page="route-page" field="stopsTitle" vars={vars} as="h2" />
+        <Words page="route-page" field="stopsText" vars={vars} as="p" />
         <ul data-edit={`route:${route.slug}:stops`}>{route.stops.map((s) => <li>{s}</li>)}</ul>
 
-        <h2>Local tips for this trip</h2>
+        <Words page="route-page" field="tipsTitle" vars={vars} as="h2" />
         <ul data-edit={`route:${route.slug}:tips`}>{route.tips.map((t) => <li>{t}</li>)}</ul>
 
         {dest && (
           <>
-            <h2>About {dest.name}</h2>
-            <p>{dest.summary} <a href={`/destinations/${dest.slug}/`}>Read our {dest.name} travel guide</a>.</p>
+            <Words page="route-page" field="aboutTitle" vars={vars} as="h2" />
+            <p>{dest.summary} <Words page="route-page" field="guideLink" vars={vars} as="a" href={`/destinations/${dest.slug}/`} />.</p>
           </>
         )}
         {returnRoute && (
-          <p>Going back? See the <a href={`/taxi/${returnRoute.slug}/`}>{returnRoute.fromShort} to {returnRoute.toShort} taxi fare</a>.</p>
+          <Words page="route-page" field="returnText" vars={vars} as="p" />
         )}
       </div>
 
@@ -103,8 +99,8 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
       <div class="card overflow-hidden">
         <div class="bg-ink p-6 text-white">
           <p class="text-sm text-white/70">{route.fromShort} → {route.toShort}</p>
-          <p class="mt-1 flex items-baseline gap-2"><span class="text-sm text-white/70">from</span><strong class="font-[family-name:var(--font-display)] text-4xl font-extrabold">{inr(from)}</strong></p>
-          <p class="mt-1 text-sm text-white/70">one way · tolls, parking and GST included</p>
+          <p class="mt-1 flex items-baseline gap-2"><Words page="route-page" field="sideFrom" vars={vars} class="text-sm text-white/70" /><strong class="font-[family-name:var(--font-display)] text-4xl font-extrabold">{inr(from)}</strong></p>
+          <Words page="route-page" field="sideNote" vars={vars} as="p" class="mt-1 text-sm text-white/70" />
           <GoogleRatingBadge variant="chip" dark class="mt-4" />
         </div>
         <ul class="divide-y divide-line px-5">
@@ -116,14 +112,14 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
           ))}
         </ul>
         <div class="space-y-3 p-5">
-          <a class="btn-book w-full" href={`/book/?route=${route.slug}`}>Book this taxi <Icon name="arrow" /></a>
-          <a class="btn-wa w-full" href={waLink(waText)} rel="noopener"><Icon name="whatsapp" /> WhatsApp</a>
+          <a class="btn-book w-full" href={`/book/?route=${route.slug}`}><Words page="route-page" field="bookButton" vars={vars} /> <Icon name="arrow" /></a>
+          <a class="btn-wa w-full" href={waLink(waText)} rel="noopener"><Icon name="whatsapp" /> <Words page="route-page" field="whatsappButton" vars={vars} /></a>
           <a class="btn-ghost w-full" href={BUSINESS.phoneHref}><Icon name="phone" class="h-4 w-4 text-lime-text" /> {BUSINESS.phone}</a>
         </div>
         <ul class="space-y-2.5 border-t border-line bg-cream p-5 text-sm">
-          <li class="flex gap-2.5"><Icon name="clock" class="h-5 w-5 shrink-0 text-lime-text" />{POLICY.freeWaitMinutes} minutes free waiting after landing</li>
-          <li class="flex gap-2.5"><Icon name="refund" class="h-5 w-5 shrink-0 text-lime-text" />Free cancellation up to {POLICY.freeCancelHours} hours before</li>
-          <li class="flex gap-2.5"><Icon name="shield" class="h-5 w-5 shrink-0 text-lime-text" />Pay {POLICY.advancePercent}% now, the rest after the trip</li>
+          <li class="flex gap-2.5"><Icon name="clock" class="h-5 w-5 shrink-0 text-lime-text" /><Words page="route-page" field="side1" vars={vars} /></li>
+          <li class="flex gap-2.5"><Icon name="refund" class="h-5 w-5 shrink-0 text-lime-text" /><Words page="route-page" field="side2" vars={vars} /></li>
+          <li class="flex gap-2.5"><Icon name="shield" class="h-5 w-5 shrink-0 text-lime-text" /><Words page="route-page" field="side3" vars={vars} /></li>
         </ul>
       </div>
     </aside>
@@ -134,18 +130,18 @@ const description = `${route.fromShort} to ${route.toShort} taxi: sedan ${inr(ro
 
     {packages.length > 0 && (
       <section class="mt-16" aria-labelledby="pk-h">
-        <h2 id="pk-h" class="mb-6 text-2xl font-extrabold sm:text-3xl">Tour packages that include {dest?.short ?? dest?.name}</h2>
+        <Words page="route-page" field="packagesTitle" vars={vars} as="h2" id="pk-h" class="mb-6 text-2xl font-extrabold sm:text-3xl" />
         <div class="grid gap-5 md:grid-cols-3">{packages.map((p) => <PackageCard pkg={p} />)}</div>
       </section>
     )}
 
     {related.length > 0 && (
       <section class="mt-16" aria-labelledby="rel-h">
-        <h2 id="rel-h" class="mb-6 text-2xl font-extrabold sm:text-3xl">Other {route.group} taxi routes</h2>
+        <Words page="route-page" field="relatedTitle" vars={vars} as="h2" id="rel-h" class="mb-6 text-2xl font-extrabold sm:text-3xl" />
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{related.map((r) => <RouteCard route={r} />)}</div>
       </section>
     )}
 
-    <BookCta bookHref={`/book/?route=${route.slug}`} waText={waText} heading={`Book your ${route.fromShort} to ${route.toShort} taxi`} image={routePhoto(route)} />
+    <BookCta bookHref={`/book/?route=${route.slug}`} waText={waText} words="route-page:ctaTitle" vars={vars} image={routePhoto(route)} />
   </div>
 </BaseLayout>

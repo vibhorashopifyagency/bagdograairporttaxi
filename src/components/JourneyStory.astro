@@ -10,10 +10,8 @@
 import SectionHead from './SectionHead.astro';
 import Photo from './Photo.astro';
 import Icon from './Icon.astro';
-import { BUSINESS, POLICY, waLink } from '../data/site';
-import { ROUTES } from '../data/routes';
-
-const darj = ROUTES.find((r) => r.fromShort === 'Bagdogra Airport' && r.toShort === 'Darjeeling')!;
+import Words from './Words.astro';
+import { BUSINESS, waLink } from '../data/site';
 
 /*
  * "Memorable", typed out one language at a time in the heading. English first
@@ -31,44 +29,14 @@ const memorable = [
   { lang: 'fr', word: 'mémorable' },
 ];
 
-interface Chapter { moment: string; title: string; text: string; photo: string; href: string; cta: string }
-const chapters: Chapter[] = [
-  {
-    moment: 'Touchdown',
-    title: 'You step out of arrivals, and your name is already on a board',
-    text: `We track your flight, so your driver is at the door when you walk out, not stuck in a queue. Waiting is free for ${POLICY.freeWaitMinutes} minutes after you land, and a delay never cancels the booking. Bags in, seat belts on, the mountains are three hours away.`,
-    photo: 'airport', href: '/guides/bagdogra-airport-transport-guide/', cta: 'What happens at the airport',
-  },
-  {
-    moment: 'The first hour',
-    title: 'The plains fall away and the tea gardens begin',
-    text: 'Past Siliguri the road starts to climb. Rohini Road winds through tea bushes that run to the horizon, and your driver pulls over at Kurseong for a cup of Darjeeling tea and a plate of momos, at the stall with the best view, because he stops there every week.',
-    photo: 'kurseong', href: '/destinations/kurseong/', cta: 'Kurseong on the way up',
-  },
-  {
-    moment: 'The bend after Ghum',
-    title: 'Kanchenjunga fills the windscreen',
-    text: `Somewhere above Ghum the clouds part and the whole range is there, white and enormous. The toy train whistles past at Batasia Loop. Your driver knows exactly which bend it happens on, after ${darj.km} km of road he has driven a thousand times.`,
-    photo: 'hero', href: '/destinations/darjeeling/', cta: 'Darjeeling guide',
-  },
-  {
-    moment: 'Evening',
-    title: 'Dropped at your hotel door, with the evening still yours',
-    text: 'Chowrasta in Darjeeling or MG Marg in Gangtok: a slow walk, hot thukpa, a sky full of stars. Your driver’s number is saved in your phone, and ours is answered 24 hours a day in case plans change. Nothing to sort out, nothing to pay until the trip is done.',
-    photo: 'gangtok', href: '/destinations/gangtok/', cta: 'Gangtok guide',
-  },
-  {
-    moment: 'The high road',
-    title: 'Yaks on the shore of a frozen lake, 3,753 m up',
-    text: 'The permits for Tsomgo Lake, Nathula and North Sikkim are already stamped; we arranged them while you were packing. A Sikkim-registered car takes you up through pine and rhododendron to prayer flags snapping in the wind. Bring a jacket. You will want the photo.',
-    photo: 'tsomgo', href: '/guides/sikkim-permit-guide/', cta: 'How the permits work',
-  },
-  {
-    moment: 'The way home',
-    title: 'Back down to Bagdogra with a phone full of mountains',
-    text: `The same driver, the same car, timed to your flight, and the stories you will still be telling next winter. ${BUSINESS.tagline}: that is the whole promise, and the reason travellers come back to us for their next trip up the hill.`,
-    photo: 'north-sikkim', href: '/tour-packages/', cta: 'Plan the whole trip',
-  },
+// The words of each moment are "The journey story" in the dashboard (src/data/page-text.ts); photos and links stay here.
+const chapters = [
+  { n: 'm1', photo: 'airport', href: '/guides/bagdogra-airport-transport-guide/' },
+  { n: 'm2', photo: 'kurseong', href: '/destinations/kurseong/' },
+  { n: 'm3', photo: 'hero', href: '/destinations/darjeeling/' },
+  { n: 'm4', photo: 'gangtok', href: '/destinations/gangtok/' },
+  { n: 'm5', photo: 'tsomgo', href: '/guides/sikkim-permit-guide/' },
+  { n: 'm6', photo: 'north-sikkim', href: '/tour-packages/' },
 ];
 ---
 
@@ -78,7 +46,7 @@ const chapters: Chapter[] = [
   <div class="absolute -top-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-lime/15 blur-3xl" aria-hidden="true"></div>
   <div class="wrap relative">
     <div data-reveal>
-      <SectionHead light eyebrow={`${BUSINESS.tagline}`} id="journey" title="A memorable journey to the hills, from the moment you land" lead="Here is how a trip with us goes: six moments between the arrivals door at Bagdogra and the drive back down, told the way our travellers tell it when they get home.">
+      <SectionHead light eyebrow={`${BUSINESS.tagline}`} words="journey:" id="journey" title="A memorable journey to the hills, from the moment you land">
         <Fragment slot="title">
           A <span class="word-cycle" data-word-cycle data-words={JSON.stringify(memorable)}><span class="sr-only">memorable</span><span class="word-cycle-text" aria-hidden="true" lang="en">memorable</span><span class="word-cycle-caret" aria-hidden="true"></span></span> journey to the hills, from the moment you land
         </Fragment>
@@ -93,14 +61,14 @@ const chapters: Chapter[] = [
             <span class="photo-fade absolute inset-x-0 bottom-0 h-2/3" aria-hidden="true"></span>
             <span class="absolute top-3 left-3 flex items-center gap-2">
               <span class="flex h-8 w-8 items-center justify-center rounded-full bg-lime font-[family-name:var(--font-display)] text-sm font-extrabold text-ink">{i + 1}</span>
-              <span class="rounded-full bg-ink/70 px-3 py-1 text-[0.7rem] font-bold tracking-[0.14em] text-lime uppercase backdrop-blur">{c.moment}</span>
+              <Words page="journey" field={`${c.n}Moment`} class="rounded-full bg-ink/70 px-3 py-1 text-[0.7rem] font-bold tracking-[0.14em] text-lime uppercase backdrop-blur" />
             </span>
           </div>
           <div class="flex flex-1 flex-col p-5 sm:p-6">
-            <h3 class="font-[family-name:var(--font-display)] text-xl leading-tight font-bold text-white sm:text-[1.35rem]">{c.title}</h3>
-            <p class="mt-3 text-[0.95rem] leading-relaxed text-white/75">{c.text}</p>
+            <Words page="journey" field={`${c.n}Title`} as="h3" class="font-[family-name:var(--font-display)] text-xl leading-tight font-bold text-white sm:text-[1.35rem]" />
+            <Words page="journey" field={`${c.n}Text`} as="p" class="mt-3 text-[0.95rem] leading-relaxed text-white/75" />
             <a href={c.href} class="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-semibold text-white no-underline hover:text-lime">
-              {c.cta} <Icon name="arrow" class="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              <Words page="journey" field={`${c.n}Link`} /> <Icon name="arrow" class="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </a>
           </div>
         </li>
@@ -108,9 +76,9 @@ const chapters: Chapter[] = [
     </ol>
 
     <div class="mt-10 flex flex-wrap items-center gap-4" data-reveal>
-      <a href="/book/" class="btn-lime">Start your journey <Icon name="arrow" /></a>
-      <a href={waLink('Hi, I am planning a trip to the hills from Bagdogra Airport. Can you help?')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> Plan it on WhatsApp</a>
-      <span class="text-sm text-white/70">Only {POLICY.advancePercent}% now. Free cancellation up to {POLICY.freeCancelHours} hours before.</span>
+      <a href="/book/" class="btn-lime"><Words page="journey" field="bookButton" /> <Icon name="arrow" /></a>
+      <a href={waLink('Hi, I am planning a trip to the hills from Bagdogra Airport. Can you help?')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> <Words page="journey" field="whatsappButton" /></a>
+      <Words page="journey" field="note" class="text-sm text-white/70" />
     </div>
   </div>
 </section>

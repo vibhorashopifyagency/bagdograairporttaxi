@@ -24,7 +24,8 @@ import { GALLERY_START } from '../data/gallery';
 import { GENERAL_FAQS_START } from '../data/faqs';
 import { GUIDES_START } from '../data/guides';
 import { PACKAGES_START } from '../data/packages';
-import { CONTENT_VERSION, fingerprint, type ContentType } from '../data/published';
+import { CONTENT_VERSION, fingerprint, pickFields, type ContentType } from '../data/published';
+import { WORD_PAGES, WORDS_START } from '../data/page-text';
 import { GOOGLE } from '../data/reviews';
 import { PHOTOS_START, photoTitle } from '../data/photo-library';
 import { ROUTES_START } from '../data/routes';
@@ -82,6 +83,8 @@ const ONES: OneDef[] = [
   { kind: 'one', type: 'site', key: 'launch', noun: 'pre-launch switch', start: LAUNCH_START, schema: S.launchSchema, dates: [] },
   { kind: 'whole', type: 'faq', key: 'main', noun: 'general questions', start: GENERAL_FAQS_START, schema: S.faqListSchema, dates: ['content'] },
   { kind: 'whole', type: 'gallery', key: 'main', noun: 'gallery', start: GALLERY_START, schema: S.gallerySchema, dates: [] },
+  // Page words: one item per page, shared part or page template, stored field by field (see saveDraft).
+  ...Object.entries(WORD_PAGES).map(([key, p]): OneDef => ({ kind: 'one', type: 'text', key, noun: p.name, start: WORDS_START[key], schema: S.wordsSchema(key), dates: ['content'] })),
   ...(['route', 'package', 'destination'] as const).map(
     (t): OneDef => ({ kind: 'whole', type: 'order', key: t, noun: `order of the ${t}s`, start: LISTS[t].start.map((d) => String(d[LISTS[t].keyField])), schema: S.orderSchema, dates: [] }),
   ),
@@ -129,8 +132,16 @@ export interface Entry {
   updatedAt: Date | null;
 }
 
+/** Page words as the site shows them: the starting copy with the fields the admin changed laid over it (fields since dropped from the code are left out). */
+function mergeWords(start: Data, changed: Data): Data {
+  const out: Data = { ...start };
+  for (const [k, v] of Object.entries(changed)) if (k in start && v !== null && v !== undefined) out[k] = v;
+  return out;
+}
+
 function liveOf(def: Def, key: string, row: Row | undefined): Value | null {
   const start = startItem(def, key);
+  if (def.type === 'text' && isRecord(start)) return isRecord(row?.published) ? mergeWords(start, row.published) : start;
   if (row?.deleted) return def.kind === 'list' && def.fixed ? (start ?? null) : null;
   const pub = row?.published;
   if (pub === undefined || pub === null) return start ?? null;
@@ -143,7 +154,7 @@ function entryOf(def: Def, key: string, row: Row | undefined): Entry {
   const start = startItem(def, key);
   const live = liveOf(def, key, row);
   let current = live;
-  if (row?.draftAction === 'save') current = row.draft ?? live;
+  if (row?.draftAction === 'save') current = def.type === 'text' && isRecord(start) && isRecord(row.draft) ? mergeWords(start, row.draft) : (row.draft ?? live);
   else if (row?.draftAction === 'delete') current = null;
   else if (row?.draftAction === 'reset') current = start ?? null;
   const state: ItemState = live === null ? 'removed' : start === undefined ? 'added' : row?.published != null ? 'edited' : 'code';
@@ -226,6 +237,18 @@ export async function saveDraft(ctx: Ctx, type: ContentType, key: string, input:
   if (!parsed.success) return { ok: false, ...firstIssue(parsed.error) };
   const data = parsed.data as Value;
   const existing = await getEntry(type, key);
+
+  // Page words keep only the fields that differ from the starting copy, so every other field keeps following the code.
+  if (def.type === 'text' && isRecord(data)) {
+    const start = startItem(def, key) as Data;
+    const full = mergeWords(start, data);
+    if (existing && same(full, existing.live)) {
+      await discardDraft(ctx, type, key);
+      return { ok: true, message: 'No changes from what is live.' };
+    }
+    await putDraft(ctx, type, key, 'save', Object.fromEntries(Object.entries(full).filter(([k, v]) => !same(v, start[k]))));
+    return { ok: true };
+  }
 
   if (def.kind === 'list') {
     if (isRecord(data) && String(data[def.keyField]) !== key) {
@@ -334,7 +357,7 @@ export async function pendingChanges(): Promise<Pending[]> {
 export function kindLabel(type: ContentType, key: string): string {
   if (type === 'site') return 'Search and launch';
   if (type === 'order') return `Order of the ${key}s`;
-  return { business: 'Business details', policy: 'Policies', route: 'Taxi route', package: 'Tour package', destination: 'Destination', vehicle: 'Car', faq: 'General questions', gallery: 'Gallery page', guide: 'Travel guide', photo: 'Photo' }[type] ?? type;
+  return { business: 'Business details', policy: 'Policies', route: 'Taxi route', package: 'Tour package', destination: 'Destination', vehicle: 'Car', faq: 'General questions', gallery: 'Gallery page', guide: 'Travel guide', photo: 'Photo', text: 'Page words' }[type] ?? type;
 }
 
 /** Where the admin edits an item. */
@@ -381,7 +404,7 @@ export async function reviewChanges(): Promise<ReviewItem[]> {
     const base = { type, key: r.key, action: r.draftAction, noun: def.noun, title: titleOf(def, r.key, r.draft ?? r.published), updatedAt: r.updatedAt, kind: kindLabel(type, r.key), href: editorHref(type, r.key) };
     if (r.draftAction === 'delete') return [{ ...base, lines: [{ what: 'Removed from the website', from: '', to: '' }] }];
     if (e.live === null) return [{ ...base, lines: [{ what: `New ${def.noun}`, from: '', to: 'added to the website' }] }];
-    const lines = diffLines(type, e.live, e.current);
+    const lines = diffLines(type, e.live, e.current, r.key);
     if (r.draftAction === 'reset') lines.unshift({ what: 'Back to the starting copy', from: '', to: '' });
     return [{ ...base, lines }];
   });
@@ -434,6 +457,10 @@ export async function findText(phrases: string[]): Promise<TextHit[]> {
   }
   const faq = await getEntry('faq', 'main');
   if (faq?.current && (faq.state !== 'code' || faq.pending)) look('faq', 'main', 'General questions', faq.current);
+  for (const key of Object.keys(WORD_PAGES)) {
+    const e = await getEntry('text', key);
+    if (e?.current && (e.state !== 'code' || e.pending)) look('text', key, WORD_PAGES[key as keyof typeof WORD_PAGES].name, e.current);
+  }
   return hits;
 }
 
@@ -481,7 +508,7 @@ async function siteAfterPublish() {
     const def = defFor(type, key)!;
     return entryOf(def, key, all.find((r) => r.type === type && r.key === key)).current;
   };
-  return { lists, business: one('business', 'main') as Data, launch: one('site', 'launch') as Data, gallery: (one('gallery', 'main') ?? []) as Data[], photoRows: byType('photo') };
+  return { lists, business: one('business', 'main') as Data, policy: one('policy', 'main') as Data, launch: one('site', 'launch') as Data, gallery: (one('gallery', 'main') ?? []) as Data[], photoRows: byType('photo'), textRows: byType('text') };
 }
 
 /** The photos the site started with. Page templates name some of them directly, so they can be replaced but never deleted. */
@@ -518,6 +545,19 @@ export async function checkBeforePublish(): Promise<string[]> {
   for (const p of site.lists.package) {
     for (const a of rupeesIn(String(p.summary ?? ''))) {
       if (a !== p.fromPrice) problems.push(`The summary of ${p.name} says ₹${a.toLocaleString('en-IN')}, but its price is ₹${Number(p.fromPrice).toLocaleString('en-IN')}. Change the text to match.`);
+    }
+  }
+  // A rupee amount typed into page words goes stale when fares change, so it must at least be a fare or price the site shows; a fill-in such as {fromFare} follows the fares by itself.
+  const amounts = new Set<number>([Number(site.policy?.nightCharge), ...site.lists.package.map((p) => Number(p.fromPrice)), ...site.lists.route.flatMap((r) => Object.values((r.fares as Record<string, number>) ?? {}))]);
+  for (const r of site.textRows) {
+    const page = WORD_PAGES[r.key as keyof typeof WORD_PAGES];
+    const changed = r.draftAction === 'save' ? r.draft : r.draftAction ? null : r.published;
+    if (!page || !isRecord(changed)) continue;
+    for (const [field, v] of Object.entries(changed)) {
+      for (const a of strings(v).flatMap(rupeesIn)) {
+        const label = (page.fields as Record<string, { label: string }>)[field]?.label ?? field;
+        if (!amounts.has(a)) problems.push(`${page.name}, ${label}, says ₹${a.toLocaleString('en-IN')}, which is not a fare or price on the site. Use a fill-in such as {fromFare} or {nightCharge}, which follows the fares, or change the amount.`);
+      }
     }
   }
   // Every photo a page names must be in the library, and described.
@@ -601,9 +641,11 @@ export async function publishAll(ctx: Ctx): Promise<PublishResult> {
         data = r.draft;
         if (def.type === 'guide' && isRecord(data)) data = { ...data, updated: today, updatedLabel: dayLabel(today) };
         const start = startItem(def, r.key);
+        // Page words are fingerprinted over just the fields the admin changed, as the build does (src/data/published.ts).
+        const base = def.type === 'text' && isRecord(start) && isRecord(data) ? pickFields(start, Object.keys(data)) : start;
         await tx
           .update(schema.contentItems)
-          .set({ published: data, deleted: false, baseHash: start === undefined ? null : fingerprint(start), publishedAt: new Date(), publishedBy: ctx.actorId, draft: null, draftAction: null })
+          .set({ published: data, deleted: false, baseHash: base === undefined ? null : fingerprint(base), publishedAt: new Date(), publishedBy: ctx.actorId, draft: null, draftAction: null })
           .where(where);
       } else if (r.draftAction === 'delete') {
         await tx.update(schema.contentItems).set({ published: null, deleted: true, baseHash: null, publishedAt: new Date(), publishedBy: ctx.actorId, draft: null, draftAction: null }).where(where);

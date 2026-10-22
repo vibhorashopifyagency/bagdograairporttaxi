@@ -20,12 +20,14 @@ import Icon from './Icon.astro';
 import Stars from './Stars.astro';
 import SectionHead from './SectionHead.astro';
 import { GOOGLE } from '../data/reviews';
+import type { WordPageKey } from '../data/page-text';
 interface Props {
-  heading?: string;
+  /** The page's own heading from its page words ("about:reviewsTitle"); the band's own otherwise (src/data/page-text.ts, "Google reviews band"). */
+  heading?: `${WordPageKey}:${string}`;
   /** Background tone: cream band (default) or plain white, for use straight under the hero. */
   tone?: 'cream' | 'white';
 }
-const { heading = 'What travellers say about us', tone = 'cream' } = Astro.props;
+const { heading, tone = 'cream' } = Astro.props;
 const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 const tints = ['#111111', '#5a8fb0', '#4f7a00', '#7a4fa3', '#c2410c', '#2f6f61'];
 const count = GOOGLE.count > 0 ? GOOGLE.count.toLocaleString('en-IN') : '';
@@ -41,7 +43,7 @@ const rows = base.map(fill);
   <section class:list={['overflow-hidden', tone === 'cream' ? 'section bg-cream' : 'pt-14 pb-2 sm:pt-20']} aria-labelledby="reviews-h" data-reviews data-sample-reviews={GOOGLE.isSample ? 'true' : undefined}>
     <div class="wrap" data-reveal>
       <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-end">
-        <SectionHead eyebrow="Google reviews" id="reviews-h" title={heading} lead="Real travellers, real trips from Bagdogra Airport. Every card links to the review on Google." />
+        <SectionHead words="reviews:" titleWords={heading} id="reviews-h" />
         {GOOGLE.hasRating && (
           <a href={GOOGLE.url} target="_blank" rel="noopener" class="card group flex items-center gap-4 p-4 no-underline hover:border-ink lg:justify-self-end">
             <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-line"><GoogleLogo class="h-8 w-8" /></span>

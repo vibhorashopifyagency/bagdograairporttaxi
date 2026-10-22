@@ -132,6 +132,7 @@ const icon = {
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   mvUp: '<path d="m18 15-6-6-6 6"/>',
   mvDown: '<path d="m6 9 6 6 6-6"/>',
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
 };
 const canUpload = filesReady();
 ---
@@ -328,10 +329,12 @@ const canUpload = filesReady();
                 <label class="a-field">Link to a page<input name="gHref" value={g.href ?? ''} placeholder="/destinations/darjeeling/" /></label>
                 <label class="a-field">Button text<input name="gCta" value={g.cta ?? ''} placeholder="Darjeeling guide and taxi fare" /></label>
               </div>
-              <div class="web-row-tools">
-                <button type="button" data-move="up" class="a-icon-btn" aria-label="Move this photo up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvUp} /></button>
-                <button type="button" data-move="down" class="a-icon-btn" aria-label="Move this photo down"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvDown} /></button>
-                <button type="button" data-remove-row class="a-icon-btn" aria-label="Take this photo off the gallery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+              <div class="web-tools is-col">
+                <span class="web-move" role="group" aria-label="Move this photo">
+                  <button type="button" data-move="up" aria-label="Move this photo up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvUp} /></button>
+                  <button type="button" data-move="down" aria-label="Move this photo down"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvDown} /></button>
+                </span>
+                <button type="button" data-remove-row class="web-remove" aria-label="Take this photo off the gallery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.remove} /></button>
               </div>
             </div>
           ))}
@@ -346,10 +349,12 @@ const canUpload = filesReady();
                 <label class="a-field">Link to a page<input name="gHref" placeholder="/destinations/darjeeling/" /></label>
                 <label class="a-field">Button text<input name="gCta" placeholder="Darjeeling guide and taxi fare" /></label>
               </div>
-              <div class="web-row-tools">
-                <button type="button" data-move="up" class="a-icon-btn" aria-label="Move this photo up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvUp} /></button>
-                <button type="button" data-move="down" class="a-icon-btn" aria-label="Move this photo down"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvDown} /></button>
-                <button type="button" data-remove-row class="a-icon-btn" aria-label="Take this photo off the gallery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" set:html={icon.x} /></button>
+              <div class="web-tools is-col">
+                <span class="web-move" role="group" aria-label="Move this photo">
+                  <button type="button" data-move="up" aria-label="Move this photo up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvUp} /></button>
+                  <button type="button" data-move="down" aria-label="Move this photo down"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.mvDown} /></button>
+                </span>
+                <button type="button" data-remove-row class="web-remove" aria-label="Take this photo off the gallery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.remove} /></button>
               </div>
             </div>
           </template>

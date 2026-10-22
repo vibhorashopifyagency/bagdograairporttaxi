@@ -4,15 +4,15 @@
  * fare, drifting across an ink band. Pure CSS marquee, paused on hover, a
  * plain scrollable row under reduced motion. Links go to the route pages.
  */
+import Words from './Words.astro';
 import { ROUTES, inr, lowestFare } from '../data/routes';
-import { SITE } from '../data/site';
 const rows = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport');
 ---
 
 <div class="border-y border-white/10 bg-ink text-white" aria-label="Fare board">
   <div class="flex items-stretch">
     <p class="hidden shrink-0 items-center gap-2 border-r border-white/10 bg-ink-soft px-5 text-[0.68rem] font-bold tracking-[0.14em] text-lime uppercase md:flex">
-      <span class="live-dot" aria-hidden="true"></span> Fixed fares · {SITE.faresUpdatedLabel}
+      <span class="live-dot" aria-hidden="true"></span> <Words page="fare-checker" field="boardLabel" />
     </p>
     <div class="marquee min-w-0 flex-1" style={`--speed: ${rows.length * 9}s`}>
       <div class="marquee-track">

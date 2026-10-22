@@ -219,6 +219,17 @@ Built on 22 October 2026 as "Edit pages" (/admin/pages/), tested with real click
 - [x] Repeated items such as fares, itinerary days and FAQs open the Phase 5 form in a side panel instead. *(The dashboard's own forms, shown without the menus when inside the panel; admin pages now send X-Frame-Options SAMEORIGIN instead of DENY for this, and public pages send SAMEORIGIN too, so no other site can frame them.)*
 - [x] Layout, colours and section order stay locked, so the design cannot be broken.
 
+### Page words (22 October 2026)
+
+The owner asked why only some parts of the pages could be edited: the first version only reached words that already lived in src/data (destinations, routes, packages, guides' title and answer, the general questions). Every other heading and paragraph was written into the page templates. Built the same day, not yet committed:
+
+- [x] Every heading, paragraph, button label and list on the home, about, contact, questions, fare chart, packages, destinations, gallery, guides, 404 and photo-credits pages, the three policy pages, the shared parts (booking box, promises strip, journey story, reviews band, fare checker and fare board, footer) and the fixed lines of every route, package and destination page, plus each page's Google title and description. *(src/data/page-text.ts, content type `text`, 23 items (one per page, shared part or template), 407 boxes. Templates read them with `<Words page field />`, `words()`, `wordsText()`, `wordsList()`; SectionHead, PageHero, BookCta, ReviewsSlider and FaqList take a `words` prop.)*
+- [x] Fill-ins keep numbers live: `{fromFare}`, `{freeCancel}`, `{nightCharge}`, `{faresUpdatedDate}` and so on, plus each template's own (`{from}`, `{to}`, `{name}`...). Small marks for `[links](/taxi/)`, `**bold**` and `*accent*` (src/lib/rich-text.ts). Saving refuses unknown fill-ins, unsafe links and empty boxes; Publish refuses a typed ₹ amount that is not a fare or price on the site.
+- [x] Stored field by field: only boxes that differ from the starting copy are kept, so code changes to every other box still show; the build warns only when a changed box's code copy moved (src/data/published.ts `overlayFields`).
+- [x] Edit pages lists them as Pages, Policies, On many pages and Page templates; each has a form (/admin/pages/text/<page>/) with the page's fill-ins and their values, and the page editor edits them in place, showing the fill-ins while editing and previewing drafts with the real values.
+- [x] Proof of no change: a before/after build of all 80 pages matched in text, titles, descriptions, structured data and every tag and class.
+- [ ] Not yet editable: the body of each travel guide (its sections and tables stay in src/pages/guides/), the booking page's form, the menu and footer link lists, the journey heading with the changing word, and WhatsApp's pre-filled messages.
+
 ## Phase 7: privacy, safety and handover
 
 - [x] Update the privacy policy: what is stored, why, for how long and who can see it.

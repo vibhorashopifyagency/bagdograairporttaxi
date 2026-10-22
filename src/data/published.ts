@@ -30,6 +30,7 @@ export type ContentType =
   | 'gallery'
   | 'guide'
   | 'photo'
+  | 'text'
   | 'order';
 
 /** One published item: its data, or a deletion. `on` is the day (India) it went live. */
@@ -153,4 +154,23 @@ export function overlayWhole<T>(type: ContentType, seed: T[], key = 'main'): T[]
   if (!entry) return seed;
   warnIfCodeMoved(type, key, entry, seed);
   return Array.isArray(entry.data) ? (likeSeed(entry.data, seed) as T[]) : seed;
+}
+
+/** The starting copy's values for just these fields, which is what the dashboard fingerprints for page words. */
+export const pickFields = (seed: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter((k) => k in seed).map((k) => [k, seed[k]]));
+
+/**
+ * Page words (src/data/page-text.ts): the dashboard stores only the fields
+ * the admin changed, so each one replaces the code's and every other field
+ * keeps following the code. The warning names only a changed field whose
+ * code copy moved underneath it.
+ */
+export function overlayFields<T extends Record<string, unknown>>(type: ContentType, seed: T, key: string): T {
+  const entry = PUBLISHED.items[type]?.[key];
+  if (!entry || !isRecord(entry.data)) return seed;
+  const data = entry.data;
+  warnIfCodeMoved(type, key, entry, pickFields(seed, Object.keys(data)));
+  const out: Record<string, unknown> = { ...seed };
+  for (const [k, v] of Object.entries(data)) if (k in seed && v !== null && v !== undefined) out[k] = v;
+  return out as T;
 }

@@ -8,6 +8,7 @@
  *     [data-add-row="x"], [data-remove-row], [data-move="up"|"down"].
  *     [data-n] inside a row shows its number.
  *   - Character counters for boxes with data-count="min,max".
+ *   - Text boxes that grow to fit their words (wireAutosize, also run by wireLists).
  *   - A form [data-web-form] is marked data-dirty once it changes (its save
  *     bar says so), with a warning before leaving with unsaved changes.
  */
@@ -27,6 +28,7 @@ const changed = (el: Element) => el.closest('form')?.dispatchEvent(new Event('in
 
 export function wireLists(): void {
   document.querySelectorAll('[data-list]').forEach(renumber);
+  wireAutosize();
   document.addEventListener('click', (e) => {
     const t = e.target as Element;
     const add = t.closest<HTMLButtonElement>('[data-add-row]');
@@ -65,6 +67,22 @@ export function wireLists(): void {
       changed(list);
     }
   });
+}
+
+/** Text boxes in website forms grow to fit their words, so nothing is hidden behind a scroll bar. */
+export function wireAutosize(): void {
+  const fit = (t: HTMLTextAreaElement) => {
+    t.style.height = 'auto';
+    t.style.height = `${t.scrollHeight + 2}px`;
+  };
+  const all = () => document.querySelectorAll<HTMLTextAreaElement>('form[data-web-form] textarea.wf-input').forEach(fit);
+  all();
+  document.addEventListener('input', (e) => {
+    if (e.target instanceof HTMLTextAreaElement && e.target.matches('textarea.wf-input')) fit(e.target);
+  });
+  // A row added from a list's template, and boxes that were hidden when the page loaded.
+  new MutationObserver(all).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('resize', all);
 }
 
 /** Character counters: "52 characters, aim for 30 to 60". */

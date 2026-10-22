@@ -1,30 +1,30 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { BUSINESS, SITE } from '../data/site';
+import Words from '../components/Words.astro';
+import { editAttr, wordsList, wordsText } from '../data/page-text';
+// The words are "Privacy policy" in the dashboard's Edit pages (src/data/page-text.ts).
+const list = (field: string) => wordsList('privacy', field);
 ---
 
-<BaseLayout title="Privacy Policy" description={`How ${SITE.name} handles the details you share when you book a taxi or tour.`} crumbs={[{ name: 'Privacy', path: '/privacy/' }]}>
+<BaseLayout title={wordsText('privacy', 'seoTitle')} description={wordsText('privacy', 'seoDescription')} crumbs={[{ name: 'Privacy', path: '/privacy/' }]}>
   <div class="wrap mt-6">
     <div class="prose-site">
-      <h1 class="text-3xl font-extrabold sm:text-4xl">Privacy policy</h1>
-      <p>We collect only what we need to run your trip: your name, mobile number, pickup and drop details, flight or train number and, for Sikkim permits, copies of photo ID.</p>
-      <h2>How we use it</h2>
-      <ul>
-        <li>To confirm your booking and send driver details on WhatsApp or SMS.</li>
-        <li>To apply for Sikkim protected-area permits on your behalf.</li>
-        <li>To ask for a review after your trip, once.</li>
+      <Words page="privacy" field="title" as="h1" class="text-3xl font-extrabold sm:text-4xl" />
+      <Words page="privacy" field="intro" as="p" />
+      <Words page="privacy" field="useTitle" as="h2" />
+      <ul data-edit={editAttr('privacy', 'use')}>
+        {list('use').map((t) => <li set:html={t} />)}
       </ul>
-      <p>We do not sell or share your details with anyone except the driver, the hotels in your package and permit authorities.</p>
-      <h2>Payments</h2>
-      <p>You pay by UPI or in cash. We keep a record of the amount, the date and the UPI transaction reference so your booking shows as paid. We never see your UPI PIN or card details.</p>
-      <h2>This website and our booking system</h2>
-      <p>This site sets no advertising cookies. The booking form runs in your browser and sends nothing to us until you press Confirm on WhatsApp or the payment button. At that moment your trip details, name and mobile number are saved in our booking system and a copy is emailed to our office, so we can arrange the trip even if the WhatsApp message does not arrive. If your connection drops, your browser keeps the request for up to 7 days and sends it the next time you open this site.</p>
-      <p>The booking system is hosted by Vercel and its database by Neon. Only our office team can sign in to it, and every time someone opens customer details it is logged.</p>
-      <h2>How long we keep it</h2>
-      <p>We keep your name and mobile number for 24 months after your trip, then remove them automatically. We keep the trip, fare and payment totals without your name, for our accounts.</p>
-      <h2>Your rights</h2>
-      <p>Under the Digital Personal Data Protection Act, 2023, you can ask us to show, correct or delete your data. Email {BUSINESS.email}. ID copies for permits are deleted within 30 days of your trip.</p>
-      <p class="text-sm text-muted">Effective {SITE.faresUpdatedLabel}.</p>
+      <Words page="privacy" field="share" as="p" />
+      <Words page="privacy" field="paymentsTitle" as="h2" />
+      <Words page="privacy" field="paymentsText" as="p" />
+      <Words page="privacy" field="siteTitle" as="h2" />
+      {list('siteText').map((t) => <p data-edit={editAttr('privacy', 'siteText')} set:html={t} />)}
+      <Words page="privacy" field="keepTitle" as="h2" />
+      <Words page="privacy" field="keepText" as="p" />
+      <Words page="privacy" field="rightsTitle" as="h2" />
+      <Words page="privacy" field="rightsText" as="p" />
+      <Words page="privacy" field="effective" as="p" class="text-sm text-muted" />
     </div>
   </div>
 </BaseLayout>

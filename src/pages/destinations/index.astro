@@ -6,15 +6,17 @@ import BookCta from '../../components/BookCta.astro';
 import PhotoMarquee from '../../components/PhotoMarquee.astro';
 import { DESTINATIONS } from '../../data/destinations';
 import { GALLERY } from '../../data/gallery';
+import Words from '../../components/Words.astro';
+import { wordsText } from '../../data/page-text';
 ---
 
 <BaseLayout
-  title="North Bengal and Sikkim Destinations: Travel Guides from Bagdogra"
-  description="Local guides to Darjeeling, Gangtok, Kalimpong, Mirik, Kurseong, Pelling, North Sikkim and the Dooars: best time, days needed and how to reach."
+  title={wordsText('destinations', 'seoTitle')}
+  description={wordsText('destinations', 'seoDescription')}
   crumbs={[{ name: 'Destinations', path: '/destinations/' }]}
 >
-  <PageHero slot="hero" image="hero" eyebrow="Where we drive" title="Destinations we drive to" compact>
-    <p class="mt-4 max-w-2xl text-lg text-white/85">Short, practical guides written by the people who drive these roads every day: best time, days needed, permits and how to reach from Bagdogra.</p>
+  <PageHero slot="hero" image="hero" words="destinations" compact>
+    <Words page="destinations" field="heroLead" as="p" class="mt-4 max-w-2xl text-lg text-white/85" />
   </PageHero>
   <div class="wrap section">
     <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>
@@ -22,11 +24,11 @@ import { GALLERY } from '../../data/gallery';
     </div>
     <section class="mt-16" aria-labelledby="dest-gallery">
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <div><p class="eyebrow">Gallery</p><h2 id="dest-gallery" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">See where the road goes</h2></div>
-        <a href="/gallery/" class="font-semibold text-lime-text no-underline hover:text-ink">All {GALLERY.length} photos →</a>
+        <div><Words page="destinations" field="galleryEyebrow" as="p" class="eyebrow" /><Words page="destinations" field="galleryTitle" as="h2" id="dest-gallery" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" /></div>
+        <Words page="destinations" field="galleryLink" as="a" href="/gallery/" class="font-semibold text-lime-text no-underline hover:text-ink" />
       </div>
       <div class="mt-8"><PhotoMarquee items={GALLERY.filter((g) => g.category !== 'Our cars')} /></div>
     </section>
-    <BookCta waText="Hi, I am planning a trip and would like some advice." heading="Not sure where to go first?" image="tsomgo" />
+    <BookCta waText="Hi, I am planning a trip and would like some advice." words="destinations:ctaTitle" image="tsomgo" />
   </div>
 </BaseLayout>

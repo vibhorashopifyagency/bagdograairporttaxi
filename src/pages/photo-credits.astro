@@ -6,19 +6,21 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Photo from '../components/Photo.astro';
 import { PHOTOS } from '../lib/photos';
+import Words from '../components/Words.astro';
+import { wordsText } from '../data/page-text';
 // The business's own photographs (own: true) need no attribution and are left out.
 const entries = Object.entries(PHOTOS).filter(([, p]) => !p.own).sort(([a], [b]) => a.localeCompare(b));
 ---
 
 <BaseLayout
-  title="Photo Credits: Photographers and Licences for Images on This Site"
-  description="The photographers and Creative Commons licences for every photograph used on bagdograairporttaxi.com, with links to the originals on Wikimedia Commons."
+  title={wordsText('photo-credits', 'seoTitle')}
+  description={wordsText('photo-credits', 'seoDescription')}
   crumbs={[{ name: 'Photo credits', path: '/photo-credits/' }]}
   noindex
 >
   <div class="wrap section">
-    <h1 class="text-3xl font-extrabold sm:text-4xl">Photo credits</h1>
-    <p class="mt-4 max-w-3xl text-lg">The landscape and car photographs on this site are by the photographers below, used under the licence shown. Each links to the original on Wikimedia Commons. Photos marked CC BY-SA may be reused under the same licence; please credit the photographer, not us.</p>
+    <Words page="photo-credits" field="title" as="h1" class="text-3xl font-extrabold sm:text-4xl" />
+    <Words page="photo-credits" field="intro" as="p" class="mt-4 max-w-3xl text-lg" />
     <ul class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {entries.map(([key, p]) => (
         <li class="card flex gap-4 p-3">

@@ -1,0 +1,71 @@
+---
+/**
+ * One row of a RowList: its boxes, and the buttons that move it up or down
+ * and remove it. A card row (questions, itinerary days) puts its number and
+ * the buttons in a strip along the top, so the boxes get the full width; a
+ * plain row (a stop, a tip) puts the buttons on the box's own line, the
+ * same height as the box.
+ */
+interface Field {
+  name: string;
+  label: string;
+  rows?: number;
+  placeholder?: string;
+  maxlength?: number;
+}
+interface Props {
+  fields: Field[];
+  /** One value per field; empty for the template row. */
+  values?: string[];
+  noun: string;
+  numbered?: boolean;
+  movable?: boolean;
+  cards?: boolean;
+}
+const { fields, values = [], noun, numbered = false, movable = true, cards = false } = Astro.props;
+const icon = {
+  up: '<path d="m18 15-6-6-6 6"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+};
+const Noun = noun[0].toUpperCase() + noun.slice(1);
+---
+
+<div data-row class:list={['web-row', cards && 'web-card']}>
+  {cards ? (
+    <div class="web-card-head">
+      <span class="web-card-title"><span class="web-card-n" data-n aria-hidden="true"></span>{Noun}</span>
+      <div class="web-tools">
+        {movable && (
+          <span class="web-move" role="group" aria-label={`Move this ${noun}`}>
+            <button type="button" data-move="up" aria-label={`Move this ${noun} up`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.up} /></button>
+            <button type="button" data-move="down" aria-label={`Move this ${noun} down`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.down} /></button>
+          </span>
+        )}
+        <button type="button" data-remove-row class="web-remove" aria-label={`Remove this ${noun}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.remove} /></button>
+      </div>
+    </div>
+  ) : (
+    numbered && <span class="web-row-n" data-n aria-hidden="true"></span>
+  )}
+  <div class="web-row-fields">
+    {fields.map((f, i) =>
+      f.rows ? (
+        <textarea name={f.name} rows={f.rows} aria-label={f.label} placeholder={f.placeholder} maxlength={f.maxlength} class="wf-input">{values[i] ?? ''}</textarea>
+      ) : (
+        <input name={f.name} value={values[i] ?? ''} aria-label={f.label} placeholder={f.placeholder} maxlength={f.maxlength} class:list={['wf-input', i === 0 && fields.length > 1 && 'font-semibold']} />
+      ),
+    )}
+  </div>
+  {!cards && (
+    <div class="web-tools">
+      {movable && (
+        <span class="web-move" role="group" aria-label={`Move this ${noun}`}>
+          <button type="button" data-move="up" aria-label={`Move this ${noun} up`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.up} /></button>
+          <button type="button" data-move="down" aria-label={`Move this ${noun} down`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.down} /></button>
+        </span>
+      )}
+      <button type="button" data-remove-row class="web-remove" aria-label={`Remove this ${noun}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={icon.remove} /></button>
+    </div>
+  )}
+</div>

@@ -1,29 +1,47 @@
 ---
 /** Eyebrow, heading and optional lead or link, so every section opens the same way. */
+import { editAttr, hasWords, words as wordsHtml, type WordPageKey } from '../data/page-text';
+import type { WordVars } from '../lib/rich-text';
+
 interface Props {
   eyebrow?: string;
-  title: string;
+  title?: string;
   id: string;
   lead?: string;
   linkHref?: string;
   linkLabel?: string;
   light?: boolean;
   center?: boolean;
+  /** "home:fares": the section's page words (fares + Eyebrow, Title, Lead, Link in src/data/page-text.ts), editable in the dashboard. */
+  words?: `${WordPageKey}:${string}`;
+  /** A heading from another page's words ("about:reviewsTitle"), in place of the section's own. */
+  titleWords?: `${WordPageKey}:${string}`;
+  vars?: WordVars;
 }
-const { eyebrow, title, id, lead, linkHref, linkLabel, light = false, center = false } = Astro.props;
+const { eyebrow, title = '', id, lead, linkHref, linkLabel, light = false, center = false, words, titleWords, vars } = Astro.props;
 // A `title` slot lets a section put markup inside the heading (an animated word, say) while `title` stays the plain-text fallback.
 const richTitle = Astro.slots.has('title');
+const [wp, wf] = (words?.split(':') ?? []) as [WordPageKey, string];
+/** A part of the section from page words, or null when the page has none for it. With no prefix ("reviews:") the fields are plain eyebrow, title, lead, link. */
+const named = (page: WordPageKey, field: string) => (hasWords(page, field) ? { html: wordsHtml(page, field, vars), edit: editAttr(page, field) } : null);
+const part = (name: 'Eyebrow' | 'Title' | 'Lead' | 'Link') => (words ? named(wp, wf ? wf + name : name.toLowerCase()) : null);
+const [tp, tf] = (titleWords?.split(':') ?? []) as [WordPageKey, string];
+const w = { eyebrow: part('Eyebrow'), title: richTitle ? null : titleWords ? named(tp, tf) : part('Title'), lead: part('Lead'), link: part('Link') };
 ---
 
 <div class:list={['flex flex-wrap items-end justify-between gap-x-8 gap-y-4', center && 'justify-center text-center']}>
   <div class:list={['max-w-2xl', center && 'mx-auto']}>
-    {eyebrow && <p class:list={['eyebrow', light && '!text-white/60']}>{eyebrow}</p>}
-    <h2 id={id} class:list={['mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]', light && 'text-white']}>{richTitle ? <slot name="title" /> : title}</h2>
-    {lead && <p class:list={['mt-3 text-lg leading-relaxed', light ? 'text-white/70' : 'text-body']}>{lead}</p>}
+    {w.eyebrow ? <p class:list={['eyebrow', light && '!text-white/60']} data-edit={w.eyebrow.edit} set:html={w.eyebrow.html} /> : eyebrow && <p class:list={['eyebrow', light && '!text-white/60']}>{eyebrow}</p>}
+    {w.title ? (
+      <h2 id={id} class:list={['mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]', light && 'text-white']} data-edit={w.title.edit} set:html={w.title.html} />
+    ) : (
+      <h2 id={id} class:list={['mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]', light && 'text-white']}>{richTitle ? <slot name="title" /> : title}</h2>
+    )}
+    {w.lead ? <p class:list={['mt-3 text-lg leading-relaxed', light ? 'text-white/70' : 'text-body']} data-edit={w.lead.edit} set:html={w.lead.html} /> : lead && <p class:list={['mt-3 text-lg leading-relaxed', light ? 'text-white/70' : 'text-body']}>{lead}</p>}
   </div>
   {linkHref && (
     <a href={linkHref} class:list={['inline-flex items-center gap-1.5 font-semibold no-underline', light ? 'text-white hover:text-lime' : 'text-ink hover:text-lime-text']}>
-      {linkLabel ?? 'See all'}
+      {w.link ? <span data-edit={w.link.edit} set:html={w.link.html} /> : (linkLabel ?? 'See all')}
       <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
     </a>
   )}

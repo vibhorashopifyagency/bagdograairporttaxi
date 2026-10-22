@@ -4,17 +4,19 @@ import FaqList from '../components/FaqList.astro';
 import BookCta from '../components/BookCta.astro';
 import { GENERAL_FAQS } from '../data/faqs';
 import { faqPage } from '../lib/schema';
+import Words from '../components/Words.astro';
+import { editAttr, words, wordsText } from '../data/page-text';
 ---
 
 <BaseLayout
-  title="Bagdogra Taxi FAQ: Fares, Delays, Cancellations, Permits"
-  description="Answers on booking a Bagdogra Airport taxi: fares, flight delays, cancellation and refunds, payment, night travel and Sikkim permits."
+  title={wordsText('faq', 'seoTitle')}
+  description={wordsText('faq', 'seoDescription')}
   crumbs={[{ name: 'FAQ', path: '/faq/' }]}
   schema={[faqPage(GENERAL_FAQS, '/faq/')]}
 >
   <div class="wrap mt-6 max-w-3xl">
-    <h1 class="text-3xl font-extrabold sm:text-4xl">Frequently asked questions</h1>
-    <FaqList faqs={GENERAL_FAQS} heading="Booking, payment and travel" edit="faq:main:list" />
+    <Words page="faq" field="title" as="h1" class="text-3xl font-extrabold sm:text-4xl" />
+    <FaqList faqs={GENERAL_FAQS} heading={words('faq', 'listTitle')} headingEdit={editAttr('faq', 'listTitle')} edit="faq:main:list" />
     <BookCta />
   </div>
 </BaseLayout>
