@@ -32,7 +32,7 @@ const faqs = [
 ];
 const others = PACKAGES.filter((p) => p.slug !== pkg.slug).slice(0, 3);
 const dests = pkg.destinations.map(destinationBySlug).filter(Boolean);
-const waText = `Hi, I am interested in the ${pkg.name} tour package (${pkg.nights}N/${pkg.days}D).`;
+const waText = wordsText('package-page', 'waText', vars);
 ---
 
 <BaseLayout

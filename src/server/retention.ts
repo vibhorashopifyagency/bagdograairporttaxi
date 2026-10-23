@@ -30,6 +30,7 @@ import { getDb, schema } from './db';
 import { advanceOf } from './fares';
 import { deleteBookingFiles, forgetDeletedFiles, sweepUnusedFiles } from './files';
 import { summarise } from './payments';
+import { forgetOldInbound } from './whatsapp';
 
 export const RETENTION_MONTHS = 24;
 const LAST_RUN_KEY = 'retention_last_run';
@@ -137,7 +138,10 @@ export async function purgeExpired({ now = new Date(), budgetMs = 10_000 } = {})
   if (Date.now() - started <= budgetMs) result.files += await sweepUnusedFiles();
   if (Date.now() - started <= budgetMs) result.files += await forgetDeletedFiles();
 
-  // 4. The access log is kept for the same 24 months, and old logins are tidied away.
+  // 4. When customers last wrote on WhatsApp is needed for two days at most (src/server/whatsapp.ts).
+  if (Date.now() - started <= budgetMs) await forgetOldInbound(now);
+
+  // 5. The access log is kept for the same 24 months, and old logins are tidied away.
   if (Date.now() - started <= budgetMs) {
     const oldLog = await db.delete(schema.auditLog).where(lt(schema.auditLog.at, new Date(`${cutoff}T00:00:00+05:30`))).returning({ id: schema.auditLog.id });
     result.auditRows = oldLog.length;

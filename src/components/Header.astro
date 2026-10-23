@@ -19,11 +19,12 @@ import { VEHICLES } from '../data/vehicles';
 import { GOOGLE } from '../data/reviews';
 import { destinationPhoto, guidePhoto, packagePhoto } from '../lib/photos';
 import MountainDrive from './MountainDrive.astro';
+import Words from './Words.astro';
+import { editAttr, wordsLinks, wordsText } from '../data/page-text';
+import { escapeHtml } from '../lib/rich-text';
 
 const path = Astro.url.pathname;
 const isActive = (href: string) => path === href || path.startsWith(href);
-const minFare = Math.min(...ROUTES.map(lowestFare));
-const minPkg = Math.min(...PACKAGES.map((p) => p.fromPrice));
 const carPhoto: Record<string, string> = { sedan: 'car-sedan', suv: 'car-suv', innova: 'car-innova', traveller: 'car-traveller' };
 const themes = [...new Set(PACKAGES.flatMap((p) => p.bestFor))].slice(0, 8);
 const menuPackages = PACKAGES.slice(0, 6);
@@ -33,21 +34,22 @@ const airportRoutes = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport');
 const njpRoutes = ROUTES.filter((r) => r.fromShort === 'NJP station');
 const darj = ROUTES.find((r) => r.slug === 'bagdogra-airport-to-darjeeling-taxi') ?? ROUTES[0];
 const MENU_ROWS = 8;
-// Destinations fall into three columns by the region each page names.
-const destGroup = (region: string) => (/Sikkim/.test(region) ? 'Sikkim' : /Darjeeling|Kalimpong/.test(region) ? 'Darjeeling hills' : 'Dooars and Bhutan');
-const destGroups = ['Darjeeling hills', 'Sikkim', 'Dooars and Bhutan'].map((name) => ({ name, items: DESTINATIONS.filter((d) => destGroup(d.region) === name) }));
+// Destinations fall into three columns by the region each page names; the columns' names are page words.
+const destGroup = (region: string) => (/Sikkim/.test(region) ? 'region2' : /Darjeeling|Kalimpong/.test(region) ? 'region1' : 'region3');
+const destGroups = ['region1', 'region2', 'region3'].map((field) => ({ field, items: DESTINATIONS.filter((d) => destGroup(d.region) === field) }));
 
+// Every word in the menu is "Menu and top bar" in the dashboard (src/data/page-text.ts).
 const menus = [
-  { key: 'fares', href: '/taxi/', label: 'Taxi fares', title: 'Fixed fares, shown before you fly', text: `One price per car, one way, with tolls, parking and GST included. From ${inr(minFare)}.`, cta: `All ${ROUTES.length} fares` },
-  { key: 'packages', href: '/tour-packages/', label: 'Tour packages', title: 'Hills, hotels and a car in one price', text: `${PACKAGES.length} private tours from ${inr(minPkg)} per person, with permits arranged.`, cta: 'Browse packages' },
-  { key: 'destinations', href: '/destinations/', label: 'Destinations', title: 'Where we drive', text: 'Darjeeling, Sikkim, the Dooars and the Bhutan border, with how many days each needs.', cta: 'All destinations' },
-  { key: 'guides', href: '/guides/', label: 'Travel guides', title: 'Answers from the driver’s seat', text: 'Permits, seasons and routes, written by the people who drive them every day.', cta: 'Read the guides' },
-];
-const plain = [
-  { href: '/gallery/', label: 'Gallery' },
-  { href: '/about/', label: 'About' },
-  { href: '/contact/', label: 'Contact' },
-];
+  { key: 'fares', href: '/taxi/' },
+  { key: 'packages', href: '/tour-packages/' },
+  { key: 'destinations', href: '/destinations/' },
+  { key: 'guides', href: '/guides/' },
+] as const;
+const plain = wordsLinks('menu', 'links');
+const linksEdit = editAttr('menu', 'links');
+const wa = wordsText('whatsapp', 'general');
+/** The phone number as a link, in the design's classes, for the "Prefer to talk?" lines. */
+const phoneLink = (cls: string) => ({ text: BUSINESS.phone, html: `<a href="${BUSINESS.phoneHref}" class="${cls}">${escapeHtml(BUSINESS.phone)}</a>` });
 ---
 
 <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-white focus:p-3">Skip to content</a>
@@ -63,13 +65,13 @@ const plain = [
     <ul class="flex items-center gap-5">
       <li><a href={BUSINESS.phoneHref} class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="phone" class="h-3.5 w-3.5 text-lime" />{BUSINESS.phone}</a></li>
       <li><a href={`mailto:${BUSINESS.email}`} class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="card" class="h-3.5 w-3.5 text-lime" />{BUSINESS.email}</a></li>
-      <li class="hidden items-center gap-2 lg:inline-flex"><span class="live-dot" aria-hidden="true"></span><span data-ist>{BUSINESS.hours}</span></li>
+      <li class="hidden items-center gap-2 lg:inline-flex"><span class="live-dot" aria-hidden="true"></span><span data-ist={wordsText('menu', 'clock')}>{BUSINESS.hours}</span></li>
     </ul>
     <ul class="flex items-center gap-5">
       {GOOGLE.hasRating && (
         <li><a href={GOOGLE.url} target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-white"><GoogleLogo class="h-3.5 w-3.5" /><strong class="text-white">{GOOGLE.rating.toFixed(1)}</strong><Stars rating={GOOGLE.rating} class="h-3 w-3" /><span>on Google</span></a></li>
       )}
-      <li><a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="whatsapp" class="h-3.5 w-3.5 text-lime" />WhatsApp, replies in minutes</a></li>
+      <li><a href={waLink(wa)} rel="noopener" class="inline-flex items-center gap-1.5 text-white/85 no-underline hover:text-lime"><Icon name="whatsapp" class="h-3.5 w-3.5 text-lime" /><Words page="menu" field="topWhatsapp" /></a></li>
     </ul>
   </div>
 </div>
@@ -84,8 +86,8 @@ const plain = [
         {menus.map((m) => (
           <li class="mega flex h-full items-center" data-mega={m.key}>
             <span class:list={['nav-item', isActive(m.href) && 'is-active']}>
-              <a href={m.href} class="py-2 pr-1 pl-3 font-medium whitespace-nowrap text-ink no-underline" aria-current={isActive(m.href) ? 'page' : undefined}>{m.label}</a>
-              <button type="button" class="mega-toggle py-2 pr-3 pl-0.5 text-ink" aria-expanded="false" aria-haspopup="true" aria-controls={`mega-${m.key}`} aria-label={`Open ${m.label} menu`}>
+              <a href={m.href} class="py-2 pr-1 pl-3 font-medium whitespace-nowrap text-ink no-underline" aria-current={isActive(m.href) ? 'page' : undefined}><Words page="menu" field={`${m.key}Label`} /></a>
+              <button type="button" class="mega-toggle py-2 pr-3 pl-0.5 text-ink" aria-expanded="false" aria-haspopup="true" aria-controls={`mega-${m.key}`} aria-label={`Open ${wordsText('menu', `${m.key}Label`)} menu`}>
                 <svg class="h-4 w-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
               </button>
             </span>
@@ -94,39 +96,39 @@ const plain = [
               <div class="wrap grid gap-x-10 py-8 lg:grid-cols-[250px_minmax(0,1fr)_300px]">
                 <!-- Intro column: what this part of the site is for, one action, and the road home. -->
                 <div class="flex flex-col border-r border-line pr-8">
-                  <h2 class="font-[family-name:var(--font-display)] text-[1.55rem] leading-[1.15] font-extrabold tracking-tight text-ink">{m.title}</h2>
-                  <p class="mt-2.5 text-sm leading-relaxed text-muted">{m.text}</p>
-                  <a href={m.href} class="btn-book mt-4 self-start min-h-11 px-4 py-2 text-sm">{m.cta} <Icon name="arrow" class="h-4 w-4" /></a>
+                  <Words page="menu" field={`${m.key}Title`} as="h2" class="font-[family-name:var(--font-display)] text-[1.55rem] leading-[1.15] font-extrabold tracking-tight text-ink" />
+                  <Words page="menu" field={`${m.key}Text`} as="p" class="mt-2.5 text-sm leading-relaxed text-muted" />
+                  <a href={m.href} class="btn-book mt-4 self-start min-h-11 px-4 py-2 text-sm"><Words page="menu" field={`${m.key}Button`} /> <Icon name="arrow" class="h-4 w-4" /></a>
                   <div class="mt-auto pt-6"><MountainDrive variant="mark" /></div>
                 </div>
 
                 {m.key === 'fares' && (
                   <div class="grid gap-x-8 sm:grid-cols-2">
                     <div>
-                      <h3 class="text-[0.7rem] font-bold tracking-[0.14em] text-muted uppercase">From Bagdogra Airport</h3>
+                      <Words page="menu" field="faresAirport" as="h3" class="text-[0.7rem] font-bold tracking-[0.14em] text-muted uppercase" />
                       <ul class="mt-2 divide-y divide-line">
                         {airportRoutes.slice(0, MENU_ROWS).map((r) => (
                           <li><a href={`/taxi/${r.slug}/`} class="group flex items-center justify-between gap-3 py-[0.45rem] no-underline"><span class="min-w-0"><span class="block truncate text-sm font-semibold text-ink group-hover:text-lime-text">{r.toShort}</span><span class="block text-xs text-muted">{r.km} km · {r.duration}</span></span><span class="shrink-0 text-sm font-bold text-ink">{inr(lowestFare(r))}</span></a></li>
                         ))}
                       </ul>
-                      {airportRoutes.length > MENU_ROWS && <a href="/taxi/" class="mt-2 inline-block text-xs font-semibold text-muted no-underline hover:text-ink">+{airportRoutes.length - MENU_ROWS} more from the airport →</a>}
+                      {airportRoutes.length > MENU_ROWS && <a href="/taxi/" class="mt-2 inline-block text-xs font-semibold text-muted no-underline hover:text-ink"><Words page="menu" field="faresMoreAirport" each={{ more: { text: String(airportRoutes.length - MENU_ROWS) } }} /></a>}
                     </div>
                     <div>
-                      <h3 class="text-[0.7rem] font-bold tracking-[0.14em] text-muted uppercase">From NJP station</h3>
+                      <Words page="menu" field="faresNjp" as="h3" class="text-[0.7rem] font-bold tracking-[0.14em] text-muted uppercase" />
                       <ul class="mt-2 divide-y divide-line">
                         {njpRoutes.slice(0, MENU_ROWS).map((r) => (
                           <li><a href={`/taxi/${r.slug}/`} class="group flex items-center justify-between gap-3 py-[0.45rem] no-underline"><span class="min-w-0"><span class="block truncate text-sm font-semibold text-ink group-hover:text-lime-text">{r.toShort}</span><span class="block text-xs text-muted">{r.km} km · {r.duration}</span></span><span class="shrink-0 text-sm font-bold text-ink">{inr(lowestFare(r))}</span></a></li>
                         ))}
                       </ul>
-                      {njpRoutes.length > MENU_ROWS && <a href="/taxi/" class="mt-2 inline-block text-xs font-semibold text-muted no-underline hover:text-ink">+{njpRoutes.length - MENU_ROWS} more from NJP →</a>}
+                      {njpRoutes.length > MENU_ROWS && <a href="/taxi/" class="mt-2 inline-block text-xs font-semibold text-muted no-underline hover:text-ink"><Words page="menu" field="faresMoreNjp" each={{ more: { text: String(njpRoutes.length - MENU_ROWS) } }} /></a>}
                     </div>
-                    <p class="mt-4 text-xs text-muted sm:col-span-2">Also from Siliguri, the Dooars and the Nepal and Bhutan borders, and every return to the airport, on the <a href="/taxi/" class="font-semibold text-ink">full fare chart</a>.</p>
+                    <Words page="menu" field="faresNote" as="p" link="font-semibold text-ink" class="mt-4 text-xs text-muted sm:col-span-2" />
                   </div>
                 )}
                 {m.key === 'fares' && (
                   <aside class="rounded-2xl bg-cream p-4">
-                    <h3 class="text-sm font-bold text-ink">Choose your car</h3>
-                    <p class="mt-0.5 text-xs text-muted">Fare shown is airport to Darjeeling.</p>
+                    <Words page="menu" field="carsTitle" as="h3" class="text-sm font-bold text-ink" />
+                    <Words page="menu" field="carsNote" as="p" class="mt-0.5 text-xs text-muted" />
                     <ul class="mt-3 space-y-2">
                       {VEHICLES.map((v) => (
                         <li><a href="/book/" class="flex items-center gap-3 rounded-xl p-1 no-underline hover:bg-white">
@@ -136,7 +138,7 @@ const plain = [
                         </a></li>
                       ))}
                     </ul>
-                    <a href="/book/" class="btn-ghost mt-3 w-full min-h-11 text-sm">Check my fare <Icon name="arrow" class="h-4 w-4" /></a>
+                    <a href="/book/" class="btn-ghost mt-3 w-full min-h-11 text-sm"><Words page="menu" field="carsButton" /> <Icon name="arrow" class="h-4 w-4" /></a>
                   </aside>
                 )}
 
@@ -155,12 +157,12 @@ const plain = [
                 )}
                 {m.key === 'packages' && (
                   <aside class="rounded-2xl bg-cream p-4">
-                    <h3 class="text-sm font-bold text-ink">Popular themes</h3>
+                    <Words page="menu" field="themesTitle" as="h3" class="text-sm font-bold text-ink" />
                     <ul class="mt-3 flex flex-wrap gap-1.5">
                       {themes.map((t) => <li><a href="/tour-packages/" class="rounded-full border border-line bg-white px-2.5 py-1 text-xs font-medium text-ink no-underline hover:border-ink">{t}</a></li>)}
                     </ul>
-                    <p class="mt-4 text-xs leading-relaxed text-muted">Every package: one private car for the whole trip, hotels with breakfast and dinner, permits arranged, {BUSINESS.hours.toLowerCase()} support.</p>
-                    <a href={waLink('Hi, I would like a custom tour quote.')} rel="noopener" class="btn-wa mt-4 w-full min-h-11 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> Custom quote</a>
+                    <Words page="menu" field="packagesNote" as="p" class="mt-4 text-xs leading-relaxed text-muted" />
+                    <a href={waLink(wordsText('whatsapp', 'customQuote'))} rel="noopener" class="btn-wa mt-4 w-full min-h-11 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> <Words page="menu" field="customQuote" /></a>
                   </aside>
                 )}
 
@@ -168,7 +170,7 @@ const plain = [
                   <div class="grid gap-x-6 sm:grid-cols-3">
                     {destGroups.map((g) => (
                       <div>
-                        <h3 class="text-[0.7rem] font-bold tracking-[0.14em] text-muted uppercase">{g.name}</h3>
+                        <Words page="menu" field={g.field} as="h3" class="text-[0.7rem] font-bold tracking-[0.14em] text-muted uppercase" />
                         <ul class="mt-2">
                           {g.items.map((d) => (
                             <li><a href={`/destinations/${d.slug}/`} class="group flex items-center gap-3 rounded-xl py-1.5 no-underline">
@@ -185,10 +187,10 @@ const plain = [
                   <aside class="relative overflow-hidden rounded-2xl bg-ink p-5 text-white">
                     <Photo name="pelling" class="absolute inset-0 h-full w-full object-cover opacity-50" sizes="300px" alt="" />
                     <div class="relative flex h-full flex-col">
-                      <p class="text-[0.65rem] font-bold tracking-[0.14em] text-lime uppercase">Not sure where to go?</p>
-                      <h3 class="mt-2 font-[family-name:var(--font-display)] text-xl leading-tight font-extrabold text-white">Tell us your dates and who is travelling.</h3>
-                      <p class="mt-2 text-sm leading-relaxed text-white/80">We will suggest a route that fits, with the fare and the permits worked out.</p>
-                      <a href={waLink('Hi, I am planning a trip and would like some advice.')} rel="noopener" class="btn-wa mt-auto w-full min-h-11 pt-4 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> Ask us</a>
+                      <Words page="menu" field="askEyebrow" as="p" class="text-[0.65rem] font-bold tracking-[0.14em] text-lime uppercase" />
+                      <Words page="menu" field="askTitle" as="h3" class="mt-2 font-[family-name:var(--font-display)] text-xl leading-tight font-extrabold text-white" />
+                      <Words page="menu" field="askText" as="p" class="mt-2 text-sm leading-relaxed text-white/80" />
+                      <a href={waLink(wordsText('whatsapp', 'advice'))} rel="noopener" class="btn-wa mt-auto w-full min-h-11 pt-4 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> <Words page="menu" field="askButton" /></a>
                     </div>
                   </aside>
                 )}
@@ -197,7 +199,7 @@ const plain = [
                   <div class="grid gap-6 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
                     <a href={`/guides/${leadGuide.slug}/`} class="group block no-underline">
                       <span class="block aspect-[16/9] overflow-hidden rounded-xl bg-mist"><Photo name={guidePhoto(leadGuide.slug)} class="zoom h-full w-full object-cover" sizes="420px" alt="" /></span>
-                      <span class="mt-3 block text-[0.7rem] font-bold tracking-[0.14em] text-muted uppercase">Most read</span>
+                      <Words page="menu" field="mostRead" class="mt-3 block text-[0.7rem] font-bold tracking-[0.14em] text-muted uppercase" />
                       <span class="mt-1 block text-base leading-snug font-bold text-ink group-hover:text-lime-text">{leadGuide.title}</span>
                       <span class="mt-1 line-clamp-2 block text-sm leading-relaxed text-muted">{leadGuide.description}</span>
                     </a>
@@ -213,31 +215,31 @@ const plain = [
                 )}
                 {m.key === 'guides' && (
                   <aside class="self-start rounded-2xl bg-cream p-4">
-                    <p class="text-[0.65rem] font-bold tracking-[0.14em] text-lime-text uppercase">Read before you book Sikkim</p>
+                    <Words page="menu" field="permitEyebrow" as="p" class="text-[0.65rem] font-bold tracking-[0.14em] text-lime-text uppercase" />
                     <a href={`/guides/${permitGuide.slug}/`} class="mt-2 block text-sm font-bold text-ink no-underline hover:underline">{permitGuide.title}</a>
                     <p class="mt-2 text-xs leading-relaxed text-muted">{permitGuide.description}</p>
-                    <p class="mt-3 text-xs font-semibold text-ink">We arrange the permits with every booking.</p>
+                    <Words page="menu" field="permitNote" as="p" class="mt-3 text-xs font-semibold text-ink" />
                   </aside>
                 )}
 
                 <div class="mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4 text-sm lg:col-span-3">
-                  <p class="text-muted">Prefer to talk? <a href={BUSINESS.phoneHref} class="font-semibold text-ink no-underline">{BUSINESS.phone}</a>, {BUSINESS.hours.toLowerCase()}.</p>
-                  <a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-wa"><Icon name="whatsapp" class="h-4 w-4 text-wa" /> WhatsApp, replies in minutes</a>
+                  <Words page="menu" field="talk" as="p" class="text-muted" vars={{ phoneLink: phoneLink('font-semibold text-ink no-underline') }} />
+                  <a href={waLink(wa)} rel="noopener" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-wa"><Icon name="whatsapp" class="h-4 w-4 text-wa" /> <Words page="menu" field="topWhatsapp" /></a>
                 </div>
               </div>
             </div>
           </li>
         ))}
         {plain.map((n) => (
-          <li class="flex h-full items-center"><span class:list={['nav-item', isActive(n.href) && 'is-active']}><a href={n.href} class="px-3 py-2 font-medium whitespace-nowrap text-ink no-underline" aria-current={isActive(n.href) ? 'page' : undefined}>{n.label}</a></span></li>
+          <li class="flex h-full items-center"><span class:list={['nav-item', isActive(n.href) && 'is-active']}><a href={n.href} class="px-3 py-2 font-medium whitespace-nowrap text-ink no-underline" aria-current={isActive(n.href) ? 'page' : undefined} data-edit={linksEdit} set:html={n.html} /></span></li>
         ))}
       </ul>
     </nav>
 
     <div class="flex shrink-0 items-center gap-2">
       <a href={BUSINESS.phoneHref} class="hidden items-center gap-1.5 whitespace-nowrap px-2 py-2 text-[0.92rem] font-semibold text-ink no-underline hover:text-lime-text 2xl:flex"><Icon name="phone" class="h-4 w-4" />{BUSINESS.phone}</a>
-      <a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="hidden h-11 w-11 items-center justify-center rounded-xl border border-line text-wa no-underline transition-colors hover:border-ink sm:inline-flex" aria-label="WhatsApp us"><Icon name="whatsapp" class="h-5 w-5" /></a>
-      <a href="/book/" class="btn-book hidden min-h-11 whitespace-nowrap px-5 py-2 sm:inline-flex">Book a taxi</a>
+      <a href={waLink(wa)} rel="noopener" class="hidden h-11 w-11 items-center justify-center rounded-xl border border-line text-wa no-underline transition-colors hover:border-ink sm:inline-flex" aria-label="WhatsApp us"><Icon name="whatsapp" class="h-5 w-5" /></a>
+      <a href="/book/" class="btn-book hidden min-h-11 whitespace-nowrap px-5 py-2 sm:inline-flex"><Words page="menu" field="bookButton" /></a>
 
       <!-- Phone drawer -->
       <details class="mnav xl:hidden">
@@ -248,31 +250,31 @@ const plain = [
         <nav aria-label="Mobile" class="mnav-panel fixed inset-x-0 bottom-0 z-50 overflow-y-auto bg-white pb-28">
           <div class="wrap py-3">
             <div class="grid grid-cols-2 gap-2">
-              <a href="/book/" class="btn-book min-h-11 text-sm">Book a taxi</a>
-              <a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="btn-wa min-h-11 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> WhatsApp</a>
+              <a href="/book/" class="btn-book min-h-11 text-sm"><Words page="menu" field="bookButton" /></a>
+              <a href={waLink(wa)} rel="noopener" class="btn-wa min-h-11 text-sm"><Icon name="whatsapp" class="h-4 w-4" /> <Words page="menu" field="phoneWhatsapp" /></a>
             </div>
             <ul class="mt-3 divide-y divide-line">
               <li>
                 <details class="group">
-                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink">Taxi fares <span class="text-xs text-muted">from {inr(minFare)}</span></summary>
+                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink"><Words page="menu" field="faresLabel" /> <Words page="menu" field="phoneFaresFrom" class="text-xs text-muted" /></summary>
                   <ul class="pb-3">
                     {ROUTES.slice(0, 10).map((r) => <li><a href={`/taxi/${r.slug}/`} class="flex justify-between py-2 text-sm text-body no-underline"><span>{r.fromShort} → {r.toShort}</span><strong class="text-ink">{inr(lowestFare(r))}</strong></a></li>)}
-                    <li><a href="/taxi/" class="block py-2 text-sm font-semibold no-underline">All {ROUTES.length} fares →</a></li>
+                    <li><a href="/taxi/" class="block py-2 text-sm font-semibold no-underline"><Words page="menu" field="phoneAllFares" /></a></li>
                   </ul>
                 </details>
               </li>
               <li>
                 <details class="group">
-                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink">Tour packages <span class="text-xs text-muted">from {inr(minPkg)}</span></summary>
+                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink"><Words page="menu" field="packagesLabel" /> <Words page="menu" field="phonePackagesFrom" class="text-xs text-muted" /></summary>
                   <ul class="pb-3">
                     {PACKAGES.slice(0, 8).map((p) => <li><a href={`/tour-packages/${p.slug}/`} class="flex justify-between gap-3 py-2 text-sm text-body no-underline"><span class="truncate">{p.name}</span><strong class="shrink-0 text-ink">{p.nights}N</strong></a></li>)}
-                    <li><a href="/tour-packages/" class="block py-2 text-sm font-semibold no-underline">All {PACKAGES.length} packages →</a></li>
+                    <li><a href="/tour-packages/" class="block py-2 text-sm font-semibold no-underline"><Words page="menu" field="phoneAllPackages" /></a></li>
                   </ul>
                 </details>
               </li>
               <li>
                 <details class="group">
-                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink">Destinations</summary>
+                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink"><Words page="menu" field="destinationsLabel" /></summary>
                   <ul class="grid grid-cols-2 pb-3">
                     {DESTINATIONS.map((d) => <li><a href={`/destinations/${d.slug}/`} class="block py-2 text-sm text-body no-underline">{d.short ?? d.name}</a></li>)}
                   </ul>
@@ -280,17 +282,15 @@ const plain = [
               </li>
               <li>
                 <details class="group">
-                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink">Travel guides</summary>
+                  <summary class="flex cursor-pointer list-none items-center justify-between py-3.5 font-semibold text-ink"><Words page="menu" field="guidesLabel" /></summary>
                   <ul class="pb-3">
                     {GUIDES.map((g) => <li><a href={`/guides/${g.slug}/`} class="block py-2 text-sm text-body no-underline">{g.title}</a></li>)}
                   </ul>
                 </details>
               </li>
-              <li><a href="/gallery/" class="block py-3.5 font-semibold text-ink no-underline">Gallery</a></li>
-              <li><a href="/about/" class="block py-3.5 font-semibold text-ink no-underline">About</a></li>
-              <li><a href="/contact/" class="block py-3.5 font-semibold text-ink no-underline">Contact</a></li>
+              {plain.map((n) => <li><a href={n.href} class="block py-3.5 font-semibold text-ink no-underline" data-edit={linksEdit} set:html={n.html} /></li>)}
             </ul>
-            <p class="mt-4 text-sm text-muted"><a href={BUSINESS.phoneHref} class="font-semibold text-ink">{BUSINESS.phone}</a> · {BUSINESS.hours}</p>
+            <Words page="menu" field="phoneTalk" as="p" class="mt-4 text-sm text-muted" vars={{ phoneLink: phoneLink('font-semibold text-ink') }} />
           </div>
         </nav>
       </details>
@@ -365,9 +365,10 @@ const plain = [
 <script>
   // Local time at Bagdogra in the top bar, so the "open now" claim is visibly live.
   const ist = document.querySelector<HTMLElement>('[data-ist]');
-  if (ist) {
+  if (ist?.dataset.ist) {
     const fmt = new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
-    const tick = () => { ist.textContent = `Bagdogra ${fmt.format(new Date())} IST · drivers on duty now`; };
+    const words = ist.dataset.ist;
+    const tick = () => { ist.textContent = words.replaceAll('{time}', fmt.format(new Date())); };
     tick(); setInterval(tick, 15000);
   }
 

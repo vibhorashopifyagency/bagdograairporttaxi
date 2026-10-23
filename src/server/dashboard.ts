@@ -431,7 +431,10 @@ export function describeEvent(type: string, data: Record<string, unknown> | null
     case 'payment_reversed':
       return { text: `${data?.kind === 'refund' ? 'Refund' : 'Payment'} of ${amount.replace('-', '')} reversed: ${String(data?.reason ?? '')}`, tone: 'red' };
     case 'itinerary_sent':
-      return { text: Number(data?.count ?? 1) > 1 ? 'Sent an updated itinerary' : 'Sent the itinerary on WhatsApp', tone: 'lime' };
+      return {
+        text: `${Number(data?.count ?? 1) > 1 ? 'Sent an updated itinerary' : 'Sent the itinerary on WhatsApp'}${data?.direct ? ' from the office number' : ''}`,
+        tone: 'lime',
+      };
     case 'itinerary_deleted':
       return { text: `Deleted the itinerary${Number(data?.sentCount ?? 0) > 0 ? ' (the customer’s link now shows only the booking)' : ' (it was a draft)'}`, tone: 'red' };
     case 'qr_sent':

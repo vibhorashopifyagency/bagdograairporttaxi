@@ -1,0 +1,32 @@
+---
+/**
+ * Every travel guide, from its data (src/data/guides.ts, edited in the
+ * dashboard under Edit pages, Travel guides). The airport guide also shows
+ * the two fares it compares beside the text.
+ */
+import GuideLayout from '../../layouts/GuideLayout.astro';
+import RouteCard from '../../components/RouteCard.astro';
+import Words from '../../components/Words.astro';
+import { GUIDES } from '../../data/guides';
+import { routeBySlug } from '../../data/routes';
+
+export function getStaticPaths() {
+  return GUIDES.map((guide) => ({ params: { slug: guide.slug }, props: { guide } }));
+}
+
+const { guide } = Astro.props;
+const fares =
+  guide.slug === 'bagdogra-airport-transport-guide'
+    ? [routeBySlug('bagdogra-airport-to-darjeeling-taxi'), routeBySlug('bagdogra-airport-to-gangtok-taxi')].filter((r) => r !== undefined)
+    : [];
+---
+
+<GuideLayout guide={guide}>
+  {fares.length > 0 && (
+    <section slot="aside" class="card p-5" aria-labelledby="tx-h">
+      <Words page="guide-page" field="faresTitle" as="h2" id="tx-h" class="text-base font-bold" />
+      <div class="mt-3 grid gap-3">{fares.map((r) => <RouteCard route={r} compact />)}</div>
+      <a href="/taxi/" class="mt-3 block text-sm font-semibold text-ink no-underline hover:text-lime-text"><Words page="guide-page" field="faresLink" /></a>
+    </section>
+  )}
+</GuideLayout>

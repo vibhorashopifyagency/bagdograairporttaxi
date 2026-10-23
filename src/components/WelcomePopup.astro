@@ -12,6 +12,7 @@ import Icon from './Icon.astro';
 import Photo from './Photo.astro';
 import Words from './Words.astro';
 import { waLink } from '../data/site';
+import { wordsText } from '../data/page-text';
 ---
 
 <dialog id="welcome" class="hi-dlg" aria-labelledby="hi-title">
@@ -27,7 +28,7 @@ import { waLink } from '../data/site';
     <Words page="welcome" field="text" as="p" class="hi-text" />
     <div class="hi-actions">
       <a class="btn-lime" href="/book/"><Words page="welcome" field="bookButton" /> <Icon name="arrow" /></a>
-      <a class="btn-wa" href={waLink('Hi, I would like to book a taxi from Bagdogra.')} rel="noopener"><Icon name="whatsapp" /> <Words page="welcome" field="whatsappButton" /></a>
+      <a class="btn-wa" href={waLink(wordsText('whatsapp', 'welcome'))} rel="noopener"><Icon name="whatsapp" /> <Words page="welcome" field="whatsappButton" /></a>
       <button type="button" class="hi-later" data-hi-close><Words page="welcome" field="later" /></button>
     </div>
   </div>

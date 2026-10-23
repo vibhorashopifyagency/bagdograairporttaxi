@@ -1,0 +1,203 @@
+---
+/**
+ * A travel guide's main text in the guide form: its parts in order (headings,
+ * paragraphs, small notes, bullet lists, tables), each movable and
+ * removable, with "Add a part below" on each and buttons to add one at the
+ * end. On save the parts go to the server as one JSON value in the hidden
+ * `body` box; without the script the box holds the parts as they were, so a
+ * save never loses the guide. Completely empty parts are left out.
+ */
+import GuideBlockCard from './GuideBlockCard.astro';
+import { BLOCK_NAMES, type GuideBlock, type GuideBlockType } from '../../lib/guide-body';
+
+interface Props {
+  blocks: GuideBlock[];
+  /** "Changed from what is live". */
+  was?: boolean;
+  error?: string;
+  /** Which part the error is in, from 0. */
+  errorIndex?: number;
+}
+const { blocks, was = false, error, errorIndex } = Astro.props;
+const EMPTY: Record<GuideBlockType, GuideBlock> = {
+  heading: { type: 'heading', text: '' },
+  text: { type: 'text', text: '' },
+  note: { type: 'note', text: '' },
+  list: { type: 'list', items: [] },
+  table: { type: 'table', head: ['', ''], rows: [['', '']] },
+};
+const TYPES = Object.keys(BLOCK_NAMES) as GuideBlockType[];
+---
+
+<div class="flex flex-col gap-3" data-gb>
+  {was && <span class="wf-was">Changed from what is live</span>}
+  {error && <span class="wf-err">{error}</span>}
+  <input type="hidden" name="body" value={JSON.stringify(blocks)} data-gb-json />
+  <ol class="m-0 flex list-none flex-col gap-3 p-0" data-gb-list>
+    {blocks.map((b, i) => <GuideBlockCard block={b} error={i === errorIndex} />)}
+  </ol>
+  <div class="flex flex-wrap items-center gap-2">
+    <span class="text-sm font-semibold text-body">Add at the end:</span>
+    {TYPES.map((t) => <button type="button" class="web-add" data-gb-add={t}>+ {BLOCK_NAMES[t]}</button>)}
+  </div>
+  {TYPES.map((t) => <template data-gb-template={t}><GuideBlockCard block={EMPTY[t]} /></template>)}
+</div>
+
+<style is:global>
+  .gb-block.is-error { border: 2px solid #b42318; }
+  .gb-heading { font-family: var(--font-display); font-weight: 700; font-size: 1.125rem; }
+  .gb-note { font-size: 0.875rem; color: #5c6373; }
+  .gb-check { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.25rem; font-size: 0.875rem; font-weight: 600; color: var(--color-body); cursor: pointer; }
+  .gb-check input { width: 1.1rem; height: 1.1rem; accent-color: var(--color-ink); }
+  .gb-table { display: flex; flex-direction: column; gap: 0.625rem; }
+  /* A wide table scrolls sideways inside its card; the spacing is cell padding, so nothing spills over the buttons below. */
+  .gb-grid-scroll { overflow-x: auto; }
+  .gb-grid { width: 100%; border-collapse: collapse; }
+  .gb-grid td { padding: 0 0.375rem 0.375rem 0; vertical-align: top; min-width: 9rem; }
+  .gb-grid td.gb-row-x { min-width: 0; width: 2.5rem; padding-right: 0; }
+  textarea.gb-cell { min-height: 2.5rem; padding: 0.45rem 0.65rem; font-size: 0.9375rem; resize: none; }
+  .gb-grid.has-head tr:first-child .gb-cell, .gb-grid.has-rowheads td:first-child .gb-cell { font-weight: 700; background: var(--color-mist); }
+  .gb-insert summary { cursor: pointer; width: fit-content; font-size: 0.875rem; font-weight: 600; color: #5c6373; }
+  .gb-insert summary:hover { color: var(--color-ink); }
+  [data-theme='dark'] .gb-note, [data-theme='dark'] .gb-insert summary { color: var(--color-muted); }
+  [data-theme='dark'] .gb-grid.has-head tr:first-child .gb-cell, [data-theme='dark'] .gb-grid.has-rowheads td:first-child .gb-cell { background: var(--a-raised); }
+</style>
+
+<script>
+  type Block = { type: 'heading' | 'text' | 'note'; text: string } | { type: 'list'; items: string[] } | { type: 'table'; head: string[]; rows: string[][]; rowHeads?: boolean };
+
+  const root = document.querySelector<HTMLElement>('[data-gb]');
+  if (root) {
+    const list = root.querySelector<HTMLOListElement>('[data-gb-list]')!;
+    const json = root.querySelector<HTMLInputElement>('[data-gb-json]')!;
+    const form = root.closest('form');
+    const changed = () => form?.dispatchEvent(new Event('input', { bubbles: true }));
+    const parts = () => [...list.querySelectorAll<HTMLElement>(':scope > [data-gb-block]')];
+
+    function renumber() {
+      const all = parts();
+      all.forEach((el, i) => {
+        el.querySelector('[data-gb-n]')!.textContent = String(i + 1);
+        el.querySelector<HTMLButtonElement>('[data-gb-move="up"]')!.disabled = i === 0;
+        el.querySelector<HTMLButtonElement>('[data-gb-move="down"]')!.disabled = i === all.length - 1;
+        // A table needs at least one column and one row.
+        const grid = el.querySelector('[data-gb-grid]');
+        if (grid) {
+          const rows = grid.querySelectorAll('[data-gb-tr]');
+          const cols = rows[0]?.querySelectorAll('[data-gb-cell]').length ?? 0;
+          el.querySelector<HTMLButtonElement>('[data-gb-remove-col]')!.disabled = cols <= 1;
+          rows.forEach((r) => (r.querySelector<HTMLButtonElement>('[data-gb-row-remove]')!.disabled = rows.length <= 1));
+        }
+      });
+    }
+
+    function fresh(type: string): HTMLElement {
+      const tpl = root!.querySelector<HTMLTemplateElement>(`template[data-gb-template="${type}"]`)!;
+      return (tpl.content.firstElementChild as HTMLElement).cloneNode(true) as HTMLElement;
+    }
+    function add(type: string, after?: Element) {
+      const el = fresh(type);
+      if (after) after.after(el);
+      else list.append(el);
+      renumber();
+      el.querySelector<HTMLElement>('input:not([type=checkbox]), textarea')?.focus();
+      changed();
+    }
+
+    /** What a part holds; null when it is completely empty, so it is left out. */
+    function read(el: HTMLElement): Block | null {
+      const type = el.dataset.gbBlock as Block['type'];
+      if (type === 'list') {
+        const items = el.querySelector<HTMLTextAreaElement>('[data-gb-items]')!.value.split('\n').map((s) => s.trim()).filter(Boolean);
+        return items.length ? { type, items } : null;
+      }
+      if (type === 'table') {
+        const grid = [...el.querySelectorAll('[data-gb-tr]')].map((tr) => [...tr.querySelectorAll<HTMLTextAreaElement>('[data-gb-cell]')].map((c) => c.value.trim()));
+        const hasHead = el.querySelector<HTMLInputElement>('[data-gb-head]')!.checked;
+        const head = hasHead ? (grid[0] ?? []) : [];
+        const rows = (hasHead ? grid.slice(1) : grid).filter((r) => r.some(Boolean));
+        if (!rows.length && !head.some(Boolean)) return null;
+        return { type, head, rows, ...(el.querySelector<HTMLInputElement>('[data-gb-rowheads]')!.checked && { rowHeads: true }) };
+      }
+      const text = el.querySelector<HTMLInputElement | HTMLTextAreaElement>('[data-gb-text]')!.value.trim();
+      return text ? { type, text } : null;
+    }
+    const hasWords = (el: HTMLElement) => [...el.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-gb-text], [data-gb-items], [data-gb-cell]')].some((x) => x.value.trim());
+
+    root.addEventListener('click', (e) => {
+      const t = e.target as Element;
+      const part = t.closest<HTMLElement>('[data-gb-block]');
+      const addEnd = t.closest<HTMLButtonElement>('[data-gb-add]');
+      if (addEnd) return add(addEnd.dataset.gbAdd!);
+      const insert = t.closest<HTMLButtonElement>('[data-gb-insert]');
+      if (insert && part) {
+        insert.closest('details')?.removeAttribute('open');
+        return add(insert.dataset.gbInsert!, part);
+      }
+      if (!part) return;
+      const mv = t.closest<HTMLButtonElement>('[data-gb-move]');
+      if (mv) {
+        if (mv.dataset.gbMove === 'up' && part.previousElementSibling) part.previousElementSibling.before(part);
+        if (mv.dataset.gbMove === 'down' && part.nextElementSibling) part.nextElementSibling.after(part);
+        renumber();
+        (mv.disabled ? part.querySelector<HTMLButtonElement>('[data-gb-move]:not(:disabled)') : mv)?.focus();
+        return changed();
+      }
+      if (t.closest('[data-gb-remove]')) {
+        // Tables and lists hold a lot of typing: ask first.
+        if ((part.dataset.gbBlock === 'table' || part.dataset.gbBlock === 'list') && hasWords(part) && !confirm('Remove this part of the guide?')) return;
+        const next = (part.nextElementSibling ?? part.previousElementSibling) as HTMLElement | null;
+        part.remove();
+        renumber();
+        (next?.querySelector<HTMLElement>('[data-gb-remove]') ?? root.querySelector<HTMLElement>('[data-gb-add]'))?.focus();
+        return changed();
+      }
+      const grid = part.querySelector<HTMLTableElement>('[data-gb-grid]');
+      if (!grid) return;
+      const body = grid.tBodies[0]!;
+      if (t.closest('[data-gb-add-tr]')) {
+        const last = body.querySelector<HTMLTableRowElement>('[data-gb-tr]:last-child')!;
+        const row = last.cloneNode(true) as HTMLTableRowElement;
+        row.querySelectorAll<HTMLTextAreaElement>('[data-gb-cell]').forEach((c) => (c.value = ''));
+        body.append(row);
+        row.querySelector<HTMLElement>('[data-gb-cell]')?.focus();
+      } else if (t.closest('[data-gb-add-col]')) {
+        body.querySelectorAll('[data-gb-tr]').forEach((tr) => {
+          const td = (tr.querySelector('td:not(.gb-row-x)') as HTMLElement).cloneNode(true) as HTMLElement;
+          td.querySelector<HTMLTextAreaElement>('[data-gb-cell]')!.value = '';
+          tr.querySelector('.gb-row-x')!.before(td);
+        });
+        // The new column's first box, without the page jumping up to it; the table slides sideways to show it.
+        (body.querySelector('[data-gb-tr] td:nth-last-child(2) [data-gb-cell]') as HTMLElement | null)?.focus({ preventScroll: true });
+        const scroller = grid.closest('.gb-grid-scroll');
+        if (scroller) scroller.scrollLeft = scroller.scrollWidth;
+      } else if (t.closest('[data-gb-remove-col]')) {
+        const cells = [...body.querySelectorAll('[data-gb-tr]')].map((tr) => tr.querySelector('td:nth-last-child(2)') as HTMLElement);
+        if (cells.some((c) => c.querySelector<HTMLTextAreaElement>('textarea')!.value.trim()) && !confirm('Take out the last column, with the words in it?')) return;
+        cells.forEach((c) => c.remove());
+      } else {
+        const rm = t.closest('[data-gb-row-remove]');
+        if (!rm) return;
+        const tr = rm.closest('tr')!;
+        if ([...tr.querySelectorAll<HTMLTextAreaElement>('[data-gb-cell]')].some((c) => c.value.trim()) && !confirm('Remove this row?')) return;
+        tr.remove();
+      }
+      renumber();
+      changed();
+    });
+
+    root.addEventListener('change', (e) => {
+      const box = e.target as HTMLInputElement;
+      const grid = box.closest('[data-gb-block]')?.querySelector('[data-gb-grid]');
+      if (box.matches('[data-gb-head]')) grid?.classList.toggle('has-head', box.checked);
+      if (box.matches('[data-gb-rowheads]')) grid?.classList.toggle('has-rowheads', box.checked);
+    });
+
+    form?.addEventListener('submit', () => {
+      json.value = JSON.stringify(parts().map(read).filter(Boolean));
+    });
+
+    renumber();
+    root.querySelector<HTMLElement>('.gb-block.is-error')?.scrollIntoView({ block: 'center' });
+  }
+</script>

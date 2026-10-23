@@ -79,6 +79,20 @@ try {
   if (!/<lastmod>/.test(sm)) warnings.push('sitemap: no <lastmod> on any URL');
 } catch { problems.push('sitemap-0.xml missing'); }
 
+// Publish checks every link typed in the dashboard against the fixed pages
+// in src/data/site-pages.ts, so that list must be exactly the fixed pages
+// built here: a page missing from it could not be linked to, and a page
+// listed but not built would let a broken link through.
+{
+  const src = await readFile('src/data/site-pages.ts', 'utf8');
+  const block = src.match(/export const STATIC_PAGES[^=]*=\s*\[([\s\S]*?)\];/)?.[1] ?? '';
+  const listed = new Set([...block.matchAll(/'([^']+)'/g)].map((m) => m[1]));
+  if (!listed.size) problems.push('src/data/site-pages.ts: STATIC_PAGES could not be read');
+  const fixed = [...pages].filter((p) => p.endsWith('/') && p !== '/404/' && !p.startsWith('/admin') && !/^\/(taxi|tour-packages|destinations|guides)\/[^/]+\/$/.test(p));
+  for (const p of fixed) if (!listed.has(p)) problems.push(`src/data/site-pages.ts: ${p} is built but not in STATIC_PAGES, so Publish would refuse links to it`);
+  for (const p of listed) if (!pages.has(p)) problems.push(`src/data/site-pages.ts: STATIC_PAGES lists ${p}, which the build did not make`);
+}
+
 // Old-site URLs Google indexed must keep landing somewhere real. Rules with
 // patterns (the .php catch-all, the www host) are left to check-live.mjs.
 const literal = (s) => !/[:(*]/.test(s);

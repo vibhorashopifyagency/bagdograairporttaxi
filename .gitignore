@@ -14,5 +14,6 @@ backups/
 .local-files/
 # Website edits published in the dashboard, pulled before each build (scripts/content-pull.mjs)
 .content/
-# Photo files made from the dashboard's photos before each build (scripts/content-photos.mjs)
+# Photo files made from the dashboard's photos, and JPEG copies for WhatsApp, before each build (scripts/content-photos.mjs)
 public/img/v/
+public/img/wa/

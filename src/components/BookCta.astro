@@ -3,13 +3,15 @@ import Icon from './Icon.astro';
 import Photo from './Photo.astro';
 import Words from './Words.astro';
 import { BUSINESS, waLink } from '../data/site';
-import type { WordPageKey } from '../data/page-text';
+import { wordsText, type WordPageKey } from '../data/page-text';
 import type { WordVars } from '../lib/rich-text';
 interface Props {
   bookHref?: string;
   waText?: string;
-  /** A heading written in the page's code (a guide's). */
+  /** A heading of the page's own (a guide's), as plain text. */
   heading?: string;
+  /** "guide:nathula-pass-guide:ctaHeading": marks that heading for the dashboard's page editor. */
+  headingEdit?: string;
   /** The page's own heading from its page words ("packages:ctaTitle"); without either, the shared "Ready to book?". */
   words?: `${WordPageKey}:${string}`;
   /** Fill-ins for that heading. */
@@ -18,8 +20,9 @@ interface Props {
 }
 const {
   bookHref = '/book/',
-  waText = 'Hi, I would like to book a taxi.',
+  waText = wordsText('whatsapp', 'general'),
   heading,
+  headingEdit,
   words = 'book-box:title',
   vars,
   image = 'pelling',
@@ -32,7 +35,7 @@ const [hp, hf] = words.split(':') as [WordPageKey, string];
   <div class="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-ink/40" aria-hidden="true"></div>
   <div class="relative grid grid-cols-1 gap-6 p-7 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-center">
     <div class="max-w-2xl">
-      {heading ? <h2 class="text-2xl font-extrabold text-white sm:text-3xl">{heading}</h2> : <Words page={hp} field={hf} vars={vars} as="h2" class="text-2xl font-extrabold text-white sm:text-3xl" />}
+      {heading ? <h2 class="text-2xl font-extrabold text-white sm:text-3xl" data-edit={headingEdit}>{heading}</h2> : <Words page={hp} field={hf} vars={vars} as="h2" class="text-2xl font-extrabold text-white sm:text-3xl" />}
       <Words page="book-box" field="text" as="p" class="mt-2 text-white/70" />
     </div>
     <div class="flex flex-wrap gap-3">

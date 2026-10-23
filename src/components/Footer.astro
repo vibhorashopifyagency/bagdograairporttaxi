@@ -6,7 +6,7 @@ import GoogleRatingBadge from './GoogleRatingBadge.astro';
 import MsmeBadge from './MsmeBadge.astro';
 import Words from './Words.astro';
 import { BUSINESS, MSME, SITE, waLink } from '../data/site';
-import { editAttr, wordsList } from '../data/page-text';
+import { editAttr, wordsLinks, wordsList, wordsText } from '../data/page-text';
 import { ROUTES } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 import { DESTINATIONS } from '../data/destinations';
@@ -15,16 +15,6 @@ import { VEHICLES } from '../data/vehicles';
 
 const airportRoutes = ROUTES.filter((r) => r.fromShort === 'Bagdogra Airport').slice(0, 7);
 const njpRoutes = ROUTES.filter((r) => r.fromShort === 'NJP station').slice(0, 7);
-const year = new Date().getFullYear();
-
-// Short labels for the guide column; the full titles are too long for a footer list.
-const guideLabel: Record<string, string> = {
-  'sikkim-permit-guide': 'Sikkim permit guide',
-  'bagdogra-airport-transport-guide': 'Bagdogra Airport transport guide',
-  'best-time-to-visit-darjeeling-sikkim': 'Best time to visit',
-  'nathula-pass-guide': 'Nathula Pass guide',
-  'offbeat-places-north-bengal-sikkim': 'Offbeat places near Bagdogra',
-};
 
 // The footer's words are "Footer" in the dashboard (src/data/page-text.ts).
 const promises = [
@@ -69,7 +59,7 @@ const heading = 'text-xs font-semibold tracking-[0.14em] text-white/55 uppercase
       <div class="mt-5 flex flex-wrap gap-2">
         <a href="/book/" class="btn-lime min-h-10 px-4 py-2 text-sm"><Words page="footer" field="bookButton" /> <Icon name="arrow" class="h-4 w-4" /></a>
         <a href={BUSINESS.phoneHref} class="btn-light min-h-10 px-4 py-2 text-sm"><Icon name="phone" class="h-4 w-4" />{BUSINESS.phone}</a>
-        <a href={waLink('Hi, I would like to book a taxi.')} rel="noopener" class="btn-light min-h-10 px-4 py-2 text-sm"><Icon name="whatsapp" class="h-4 w-4" />WhatsApp</a>
+        <a href={waLink(wordsText('whatsapp', 'general'))} rel="noopener" class="btn-light min-h-10 px-4 py-2 text-sm"><Icon name="whatsapp" class="h-4 w-4" /><Words page="footer" field="whatsappButton" /></a>
       </div>
       <GoogleRatingBadge variant="inline" dark class="mt-5" />
       {BUSINESS.gstin && <p class="mt-4 text-xs text-white/55">GSTIN {BUSINESS.gstin}</p>}
@@ -139,51 +129,43 @@ const heading = 'text-xs font-semibold tracking-[0.14em] text-white/55 uppercase
       <div>
         <Words page="footer" field="colAirport" as="h2" class={heading} />
         <ul class="mt-4 space-y-2.5 text-sm">
-          {airportRoutes.map((r) => <li><a href={`/taxi/${r.slug}/`} class={link}>Taxi to {r.toShort}</a></li>)}
-          <li><a href="/taxi/" class={more}>All {ROUTES.length} fares</a></li>
+          {airportRoutes.map((r) => <li><a href={`/taxi/${r.slug}/`} class={link}><Words page="footer" field="routeLink" each={{ to: { text: r.toShort } }} /></a></li>)}
+          <li><a href="/taxi/" class={more}><Words page="footer" field="airportMore" /></a></li>
         </ul>
       </div>
       <div>
         <Words page="footer" field="colNjp" as="h2" class={heading} />
         <ul class="mt-4 space-y-2.5 text-sm">
-          {njpRoutes.map((r) => <li><a href={`/taxi/${r.slug}/`} class={link}>Taxi to {r.toShort}</a></li>)}
-          <li><a href="/taxi/" class={more}>Full fare chart</a></li>
+          {njpRoutes.map((r) => <li><a href={`/taxi/${r.slug}/`} class={link}><Words page="footer" field="routeLink" each={{ to: { text: r.toShort } }} /></a></li>)}
+          <li><a href="/taxi/" class={more}><Words page="footer" field="njpMore" /></a></li>
         </ul>
       </div>
       <div>
         <Words page="footer" field="colPackages" as="h2" class={heading} />
         <ul class="mt-4 space-y-2.5 text-sm">
           {PACKAGES.slice(0, 7).map((p) => <li><a href={`/tour-packages/${p.slug}/`} class={link}>{p.name}</a></li>)}
-          <li><a href="/tour-packages/" class={more}>All {PACKAGES.length} packages</a></li>
+          <li><a href="/tour-packages/" class={more}><Words page="footer" field="packagesMore" /></a></li>
         </ul>
       </div>
       <div>
         <Words page="footer" field="colDestinations" as="h2" class={heading} />
         <ul class="mt-4 space-y-2.5 text-sm">
           {DESTINATIONS.map((d) => <li><a href={`/destinations/${d.slug}/`} class={link}>{d.short ?? d.name}</a></li>)}
-          <li><a href="/destinations/" class={more}>All destinations</a></li>
+          <li><a href="/destinations/" class={more}><Words page="footer" field="destinationsMore" /></a></li>
         </ul>
       </div>
       <div>
         <Words page="footer" field="colGuides" as="h2" class={heading} />
         <ul class="mt-4 space-y-2.5 text-sm">
-          {GUIDES.map((g) => <li><a href={`/guides/${g.slug}/`} class={link}>{guideLabel[g.slug] ?? g.title}</a></li>)}
-          <li><a href="/faq/" class={link}>Frequently asked questions</a></li>
-          <li><a href="/gallery/" class={link}>Photo gallery</a></li>
-          <li><a href="/guides/" class={more}>All guides</a></li>
+          {GUIDES.map((g) => <li><a href={`/guides/${g.slug}/`} class={link} data-edit={`guide:${g.slug}:short`}>{g.short}</a></li>)}
+          {wordsLinks('footer', 'guidesLinks').map((l) => <li><a href={l.href} class={link} data-edit={editAttr('footer', 'guidesLinks')} set:html={l.html} /></li>)}
+          <li><a href="/guides/" class={more}><Words page="footer" field="guidesMore" /></a></li>
         </ul>
       </div>
       <div>
         <Words page="footer" field="colCompany" as="h2" class={heading} />
-        <ul class="mt-4 space-y-2.5 text-sm">
-          <li><a href="/about/" class={link}>About us</a></li>
-          <li><a href="/contact/" class={link}>Contact</a></li>
-          <li><a href="/book/" class={link}>Book a taxi</a></li>
-          <li><a href="/cancellation-refund-policy/" class={link}>Cancellation and refunds</a></li>
-          <li><a href="/terms/" class={link}>Terms of service</a></li>
-          <li><a href="/privacy/" class={link}>Privacy policy</a></li>
-          <li><a href="/photo-credits/" class={link}>Photo credits</a></li>
-          <li><a href="/sitemap-index.xml" class={link}>Sitemap</a></li>
+        <ul class="mt-4 space-y-2.5 text-sm" data-edit={editAttr('footer', 'companyLinks')}>
+          {wordsLinks('footer', 'companyLinks').map((l) => <li><a href={l.href} class={link} set:html={l.html} /></li>)}
         </ul>
       </div>
     </div>
@@ -197,13 +179,11 @@ const heading = 'text-xs font-semibold tracking-[0.14em] text-white/55 uppercase
 
   <div class="border-t border-white/10">
     <div class="wrap flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-5 text-xs text-white/55">
-      <p>© {year} {SITE.name}, a unit of {BUSINESS.legalName}. <Words page="footer" field="rights" /></p>
+      <p><Words page="footer" field="copyright" /> <Words page="footer" field="rights" /></p>
       <ul class="flex flex-wrap items-center gap-x-5 gap-y-1">
-        <li><a href="/privacy/" class="text-white/55 no-underline hover:text-white">Privacy</a></li>
-        <li><a href="/terms/" class="text-white/55 no-underline hover:text-white">Terms</a></li>
-        <li><a href="/cancellation-refund-policy/" class="text-white/55 no-underline hover:text-white">Refunds</a></li>
+        {wordsLinks('footer', 'bottomLinks').map((l) => <li><a href={l.href} class="text-white/55 no-underline hover:text-white" data-edit={editAttr('footer', 'bottomLinks')} set:html={l.html} /></li>)}
         <li>Designed by <a href="https://vibhora.com/" rel="noopener" target="_blank" class="text-white/55 no-underline hover:text-white">Vibhora</a></li>
-        <li><a href="#top" class="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-white/70 no-underline hover:border-white/40 hover:text-white">Back to top <Icon name="up" class="h-3.5 w-3.5" /></a></li>
+        <li><a href="#top" class="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-white/70 no-underline hover:border-white/40 hover:text-white"><Words page="footer" field="backToTop" /> <Icon name="up" class="h-3.5 w-3.5" /></a></li>
       </ul>
     </div>
   </div>

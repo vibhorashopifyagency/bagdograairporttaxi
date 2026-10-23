@@ -6,6 +6,7 @@
  */
 import type { ContentType } from '../data/published';
 import { WORD_PAGES, type WordField } from '../data/page-text';
+import { BLOCK_NAMES, blockTexts, type GuideBlock } from '../lib/guide-body';
 
 export interface DiffLine {
   /** The field, in plain words: "Sedan", "Opening answer", "Day 4". */
@@ -111,7 +112,21 @@ const LABELS: Partial<Record<ContentType, Record<string, string>>> = {
     photo: 'Photo',
   },
   vehicle: { name: 'Name', models: 'Models', seats: 'Seats', bags: 'Luggage', bestFor: 'Best for' },
-  guide: { title: 'Title', description: 'Search description', summary: 'Opening answer' },
+  guide: {
+    title: 'Title',
+    short: 'Short name',
+    seoTitle: 'Title in Google',
+    description: 'Search description',
+    summary: 'Opening answer',
+    facts: 'Fact',
+    body: 'Part',
+    faqs: 'Question',
+    packages: 'Package',
+    askNote: 'Line in the dark card',
+    waText: 'WhatsApp message',
+    bookHref: 'Book button opens',
+    ctaHeading: 'Booking box heading',
+  },
   photo: { title: 'Name', alt: 'What the photo shows', artist: 'Taken by', license: 'Licence', licenseUrl: 'Licence link', source: 'Link to the original', upload: 'The picture', focus: 'What stays in', width: 'Width', height: 'Height' },
 };
 
@@ -165,9 +180,28 @@ const ITEM_TITLE: Record<string, (v: unknown) => string> = {
   itinerary: (v) => (isRecord(v) ? String(v.title ?? '') : String(v)),
   highlights: (v) => (isRecord(v) ? String(v.name ?? '') : String(v)),
   registrations: (v) => (isRecord(v) ? [v.name, v.id].filter(Boolean).join(', ') : String(v)),
+  facts: (v) => (isRecord(v) ? `${v.label}: ${v.value}` : String(v)),
 };
 
+/** A guide's parts, place by place: "Part 4, Paragraph: …plan to be in Gangtok the day before…". */
+function diffBlocks(a: unknown[], b: unknown[], out: DiffLine[]) {
+  const name = (v: unknown) => (isRecord(v) ? (BLOCK_NAMES[v.type as GuideBlock['type']] ?? 'Part') : 'Part');
+  const flat = (v: unknown) => (isRecord(v) ? blockTexts([v as unknown as GuideBlock]).join(' · ') : '');
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    if (i < a.length && i < b.length && JSON.stringify(a[i]) === JSON.stringify(b[i])) continue;
+    const what = `Part ${i + 1}, ${name(i < b.length ? b[i] : a[i])}`;
+    if (i >= a.length) out.push({ what, from: '', to: changedPart('', flat(b[i]))[1] });
+    else if (i >= b.length) out.push({ what, from: changedPart(flat(a[i]), '')[0], to: '' });
+    else {
+      const [x, y] = changedPart(flat(a[i]), flat(b[i]));
+      out.push({ what, from: x, to: x === y ? `${y} (layout)` : y });
+    }
+  }
+}
+
 function diffList(type: ContentType, path: string, label: string, a: unknown[], b: unknown[], out: DiffLine[]) {
+  if (type === 'guide' && path === 'body') return diffBlocks(a, b, out);
   const objects = a.some(isRecord) || b.some(isRecord);
   if (!objects) {
     // Plain lists (stops, tips, places, links): what was added and what was taken out.

@@ -401,6 +401,50 @@ export const itineraries = pgTable('itineraries', {
   updatedAt: updatedAt(),
 });
 
+export type WhatsAppStatus = 'accepted' | 'sent' | 'delivered' | 'read' | 'failed';
+
+/**
+ * Messages sent straight from the dashboard through Meta's WhatsApp Business
+ * Platform (Phase 8, src/server/whatsapp.ts): one row per message, so an
+ * itinerary with photos is several. Meta's webhook (src/pages/api/whatsapp.ts)
+ * moves `status` on as the message is sent, delivered and read. Holds no
+ * name or number; deleted with the booking.
+ */
+export const whatsappMessages = pgTable(
+  'whatsapp_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => bookings.id, { onDelete: 'cascade' }),
+    /** One press of "Send from the office number": a message and its photos share it. */
+    sendId: uuid('send_id').notNull(),
+    /** Meta's id for the message ("wamid…"), which its delivery reports name. */
+    waId: text('wa_id').notNull().unique(),
+    /** 'template' (any time), or 'text' and 'image' (within 24 hours of the customer's last message). */
+    kind: text('kind').$type<'template' | 'text' | 'image'>().notNull(),
+    status: text('status').$type<WhatsAppStatus>().notNull().default('accepted'),
+    /** Meta's reason, in its words, when a message failed. */
+    error: text('error'),
+    sentBy: text('sent_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    statusAt: timestamp('status_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('whatsapp_messages_booking_idx').on(t.bookingId, t.createdAt)],
+);
+
+/**
+ * When each WhatsApp number last wrote to the office's number, from Meta's
+ * webhook. Meta lets a business write freely only within 24 hours of that;
+ * after it, only an approved template. Only the time is kept, never what
+ * they wrote, and the nightly job removes rows older than two days.
+ */
+export const whatsappInbound = pgTable('whatsapp_inbound', {
+  /** Digits with the country code, as Meta sends it: 919800012345. */
+  waNumber: text('wa_number').primaryKey(),
+  lastAt: timestamp('last_at', { withTimezone: true }).notNull(),
+});
+
 /**
  * Pictures uploaded from the dashboard: payment screenshots ('payment') and
  * itinerary photos ('itinerary'). The picture itself is in the private Blob

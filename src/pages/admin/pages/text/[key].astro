@@ -17,6 +17,7 @@ import { discardDraft, getEntry, markForReset, saveDraft } from '../../../../ser
 import { wasNotes } from '../../../../server/content-diff';
 import { ipHash } from '../../../../server/security';
 import { GLOBAL_VARS, WORD_PAGES, varsForPath, type WordField, type WordPage } from '../../../../data/page-text';
+import { linksIn } from '../../../../lib/rich-text';
 import '../../../../styles/admin-web.css';
 
 export const prerender = false;
@@ -48,8 +49,17 @@ if (Astro.request.method === 'POST') {
     error = r.error;
   }
   if (intent === 'save') {
+    // A link list comes as two boxes a line, the words and the page, put back together as [words](/page/).
+    const linkLines = (name: string) => {
+      const pages = f.getAll(`${name}__href`).map((x) => String(x).trim());
+      return f.getAll(`${name}__words`).flatMap((x, i) => {
+        const words = String(x).trim().replace(/[[\]]/g, '');
+        const href = (pages[i] ?? '').replace(/[()\s]/g, '');
+        return words || href ? [`[${words}](${href})`] : [];
+      });
+    };
     posted = Object.fromEntries(
-      fields.map(([name, d]) => [name, Array.isArray(d.text) ? f.getAll(name).map((x) => String(x).trim()).filter(Boolean) : String(f.get(name) ?? '').trim()]),
+      fields.map(([name, d]) => [name, d.links ? linkLines(name) : Array.isArray(d.text) ? f.getAll(name).map((x) => String(x).trim()).filter(Boolean) : String(f.get(name) ?? '').trim()]),
     );
     const r = await saveDraft(ctx, 'text', key, posted);
     if (r.ok) return here(r.message ? 'same' : 'saved');
@@ -78,7 +88,13 @@ const rows = (t: string) => Math.min(8, Math.max(2, Math.ceil(t.length / 75)));
 const groupName = { pages: 'Pages', policies: 'Policies', shared: 'On many pages', templates: 'Page templates' }[page.group];
 const vars = varsForPath(page.path);
 const own = Object.keys(page.vars ?? {});
-const fillIns = [...own, ...Object.keys(GLOBAL_VARS)].filter((n) => vars[n]);
+// A page's own fill-ins are listed even when they have no one value here: some change from spot to spot ("Taxi to {to}").
+const fillIns = [...own, ...Object.keys(GLOBAL_VARS)].filter((n) => vars[n] || own.includes(n));
+/** A link line's words and page, for the two boxes. */
+const linkParts = (line: string) => {
+  const l = linksIn(line)[0];
+  return l ? [l.words, l.href] : [line, ''];
+};
 const usedHere = new Set(fields.flatMap(([, d]) => (Array.isArray(d.text) ? d.text : [d.text]).join(' ').match(/\{([a-zA-Z0-9]+)\}/g) ?? []).map((t) => t.slice(1, -1)));
 ---
 
@@ -120,7 +136,13 @@ const usedHere = new Set(fields.flatMap(([, d]) => (Array.isArray(d.text) ? d.te
               const start = Array.isArray(d.text) ? d.text.join(' ') : d.text;
               return (
                 <div id={`f-${name}`} class="tw-field">
-                  {Array.isArray(d.text) ? (
+                  {d.links ? (
+                    <div class="flex flex-col gap-2">
+                      <span class="wf-label">{d.label}</span>
+                      <RowList id={name} noun="link" addLabel="Add a link" max={Math.min(40, Math.max(6, (d.text as string[]).length * 2))} was={was[name]} error={errorField === name ? error : undefined} fields={[{ name: `${name}__words`, label: 'Words', placeholder: 'Words' }, { name: `${name}__href`, label: 'Opens', placeholder: '/page/' }]} values={(Array.isArray(value) ? value : []).map((x: string) => linkParts(x))} />
+                      <span class="wf-help">{d.help ? `${d.help} ` : ''}The second box is the page it opens: an address on this site such as /about/, or a full https:// link.</span>
+                    </div>
+                  ) : Array.isArray(d.text) ? (
                     <div class="flex flex-col gap-2">
                       <span class="wf-label">{d.label}</span>
                       <RowList id={name} noun="line" addLabel="Add a line" max={Math.min(40, Math.max(6, d.text.length * 2))} was={was[name]} error={errorField === name ? error : undefined} fields={[{ name, label: d.label, rows: d.text.some((x) => x.length > 70) ? 2 : undefined }]} values={(Array.isArray(value) ? value : []).map((x: string) => [x])} />
@@ -172,7 +194,7 @@ const usedHere = new Set(fields.flatMap(([, d]) => (Array.isArray(d.text) ? d.te
               {fillIns.map((n) => (
                 <div class:list={['tw-var', usedHere.has(n) && 'is-used']}>
                   <dt><code class="tw-code">{`{${n}}`}</code></dt>
-                  <dd class="m-0 min-w-0"><span class="block truncate font-semibold text-ink">{vars[n]!.text || '(empty here)'}</span><span class="block text-xs text-muted">{vars[n]!.label}</span></dd>
+                  <dd class="m-0 min-w-0"><span class="block truncate font-semibold text-ink">{vars[n] ? vars[n].text || '(empty here)' : '(changes from spot to spot)'}</span><span class="block text-xs text-muted">{vars[n]?.label ?? page.vars?.[n]}</span></dd>
                 </div>
               ))}
             </dl>
@@ -183,19 +205,6 @@ const usedHere = new Set(fields.flatMap(([, d]) => (Array.isArray(d.text) ? d.te
     </div>
   </div>
 </AdminLayout>
-
-<style is:global>
-  .tw-field { scroll-margin-top: 1rem; border-radius: 14px; }
-  .tw-field:target { outline: 3px solid var(--color-lime); outline-offset: 6px; }
-  .tw-code { padding: 0.05rem 0.35rem; border-radius: 6px; background: var(--color-mist); font-size: 0.8125rem; color: var(--color-ink); white-space: nowrap; }
-  .tw-vars summary { cursor: pointer; }
-  .tw-var { display: grid; grid-template-columns: minmax(0, 10.5rem) minmax(0, 1fr); gap: 0.75rem; align-items: center; padding: 0.45rem 0; border-top: 1px solid #f0f1f3; font-size: 0.875rem; }
-  .tw-var dt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .tw-var.is-used dt .tw-code { background: var(--color-lime-50); }
-  [data-theme='dark'] .tw-code { background: var(--a-raised); color: var(--color-white, #fff); }
-  [data-theme='dark'] .tw-var { border-color: var(--a-edge); }
-  [data-theme='dark'] .tw-var.is-used dt .tw-code { background: #1f2a0b; }
-</style>
 
 <script>
   import { wireCounters, wireDirty, wireLists } from '../../../../lib/admin-web';

@@ -37,6 +37,7 @@ import DriverFields from '../../../../components/admin/DriverFields.astro';
 import { addDriver, checkDriver, driverColumns, getDriver, listDrivers, payLabel, pickerList, type DriverForm } from '../../../../server/drivers';
 import { firstName, phoneLabel } from '../../../../lib/itinerary-text';
 import { asc, count, eq, sql } from 'drizzle-orm';
+import { lastSend, whatsappReady } from '../../../../server/whatsapp';
 
 export const prerender = false;
 
@@ -172,7 +173,7 @@ if (Astro.request.method === 'POST') {
 }
 
 const e = schema.bookingEvents;
-const [payments, events, [itinerary], upi, team, templates, driverRows] = await Promise.all([
+const [payments, events, [itinerary], upi, team, templates, driverRows, ticks] = await Promise.all([
   paymentsFor(booking.id),
   db
     .select({ at: e.at, type: e.type, data: e.data, actor: schema.user.name })
@@ -189,7 +190,16 @@ const [payments, events, [itinerary], upi, team, templates, driverRows] = await 
   db.select({ id: schema.user.id, name: schema.user.name }).from(schema.user).where(sql`coalesce(${schema.user.banned}, false) = false`).orderBy(asc(schema.user.name)),
   allTemplates(),
   listDrivers(),
+  lastSend(booking.id),
 ]);
+// How far the last itinerary sent from the office number got (Phase 8, src/server/whatsapp.ts).
+const TICKS: Record<string, { label: string; tone: string }> = {
+  accepted: { label: 'Taken by WhatsApp', tone: 'bg-mist text-body' },
+  sent: { label: '✓ Sent', tone: 'bg-mist text-body' },
+  delivered: { label: '✓✓ Delivered', tone: 'bg-mist text-ink' },
+  read: { label: '✓✓ Read', tone: 'bg-[#e7f0ff] text-[#1d4ed8]' },
+  failed: { label: 'Not delivered', tone: 'bg-[#fde8e7] text-[#b42318]' },
+};
 /** The pick list: active drivers, plus this booking's driver if they have been switched off since. */
 const pickable = pickerList(driverRows.filter((d) => d.active || d.id === booking.driverId));
 const currentDriver = driverRows.find((d) => d.id === booking.driverId) ?? null;
@@ -386,6 +396,13 @@ const facts: [string, string][] = [
                   ? `Draft saved ${atFmt.format(itinerary.updatedAt)}, not sent yet.`
                   : 'Not sent yet. It fills in from the booking and the package.'}
             </span>
+            {ticks && (
+              <span class="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                <span class:list={['a-badge', TICKS[ticks.status]!.tone]} title={`From the office number, ${atFmt.format(ticks.at)}`}>{TICKS[ticks.status]!.label}</span>
+                <span class="text-muted">from the office number{ticks.status !== 'accepted' && `, ${atFmt.format(ticks.statusAt)}`}</span>
+                {ticks.error && <span class="w-full text-[#b42318]">{ticks.error}</span>}
+              </span>
+            )}
           </div>
           <div class="flex flex-wrap gap-2">
             <button type="button" data-open="dlg-itin" class="btn-book min-h-11 px-4 py-2 text-sm" disabled={removed}>{itinerary ? 'Open itinerary' : 'Start itinerary'}</button>
@@ -783,6 +800,7 @@ const facts: [string, string][] = [
       uploads={uploads.map((f) => ({ key: uploadKey(f.id), src: adminFileSrc(f.id) }))}
       uploadReady={picturesReady}
       drivers={pickable}
+      direct={whatsappReady()}
       autoOpen={open === 'itinerary'}
     />
   )}

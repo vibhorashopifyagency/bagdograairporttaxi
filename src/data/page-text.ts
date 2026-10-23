@@ -16,10 +16,11 @@
  * spot with editAttr() so the page editor can find it. An unknown page or
  * field fails the build, so a typo cannot ship a blank heading.
  */
-import { wordsToHtml, wordsToText, type WordVars } from '../lib/rich-text';
+import { guideBodyHtml } from '../lib/guide-body';
+import { SAFE_HREF, escapeHtml, linksIn, wordsToHtml, wordsToText, type WordVars } from '../lib/rich-text';
 import { DESTINATIONS, type Destination } from './destinations';
 import { GALLERY, GALLERY_CATEGORIES } from './gallery';
-import { GUIDES } from './guides';
+import { GUIDES, type Guide } from './guides';
 import { PACKAGES, type TourPackage } from './packages';
 import { overlayFields } from './published';
 import { ROUTES, inr, lowestFare, routeBySlug, type Route } from './routes';
@@ -32,6 +33,8 @@ export interface WordField {
   text: string | string[];
   /** Plain text only (page titles and search descriptions): no links or bold. */
   plain?: boolean;
+  /** A list of links, each written [words](/page/): the dashboard shows the words and the page as two boxes. */
+  links?: boolean;
   /** Shown under the box. */
   help?: string;
 }
@@ -62,6 +65,8 @@ const head = (section: string, prefix: string, w: { eyebrow?: string; title: str
   ...(w.lead !== undefined && { [`${prefix}Lead`]: f(`${section} · Paragraph under the heading`, w.lead) }),
   ...(w.link !== undefined && { [`${prefix}Link`]: f(`${section} · "See all" link`, w.link) }),
 });
+
+const plain = (label: string, text: string, help?: string): WordField => f(label, text, { plain: true, ...(help && { help }) });
 
 export const WORD_PAGES = {
   home: {
@@ -311,6 +316,91 @@ export const WORD_PAGES = {
     },
   },
 
+  book: {
+    name: 'Booking form',
+    group: 'pages',
+    path: '/book/',
+    note: 'Every label, button and message on the booking page. Its routes, cars, fares and packages come from Fares and packages.',
+    vars: {
+      seats: 'How many seats the car has',
+      missing: 'What the visitor left out, such as “pickup date, name”',
+      amount: 'An amount worked out on the page: the advance, or a package price',
+      total: 'The whole fare',
+      rest: 'What is left to pay after the advance',
+      ref: 'The booking reference, such as BAT-7KQ2MX',
+      payee: 'The name the office QR code pays',
+    },
+    fields: {
+      ...seo('Book a Bagdogra Airport Taxi Online: Instant Fare, UPI Advance', 'Book a fixed-fare taxi from Bagdogra Airport, NJP or Siliguri in under a minute. See the full fare, pay a {advance}% advance by UPI and get instant WhatsApp confirmation.'),
+      title: f('Top · Main heading', 'Book your taxi'),
+      lead: f('Top · Paragraph', 'Takes under a minute. You see the full fare before you pay anything.'),
+      step1: f('1. Trip · Heading', '1. Trip'),
+      kindTaxi: f('1. Trip · First choice', 'Taxi transfer'),
+      kindPackage: f('1. Trip · Second choice', 'Tour package'),
+      routeLabel: f('1. Trip · Route box', 'Route'),
+      packageLabel: f('1. Trip · Package box', 'Tour package'),
+      step2: f('2. Car · Heading', '2. Car'),
+      seats: f('2. Car · After each car’s name', '{seats} seats'),
+      step3: f('3. When and where · Heading', '3. When and where'),
+      dateLabel: plain('3. When and where · Date box', 'Pickup date'),
+      timeLabel: plain('3. When and where · Time box', 'Pickup time (or landing time)'),
+      nightTag: plain('3. When and where · Tag on night-time pickups', '+{nightCharge} night charge'),
+      flightLabel: f('3. When and where · Flight box', 'Flight or train number'),
+      optional: f('3. When and where · After the flight box’s name', '(optional)'),
+      flightHint: plain('3. When and where · Grey example in the flight box', 'e.g. 6E 6521'),
+      paxLabel: f('3. When and where · Passengers box', 'Passengers'),
+      dropLabel: f('3. When and where · Drop box', 'Hotel or drop address'),
+      dropHint: plain('3. When and where · Grey example in the drop box', 'Hotel name and area'),
+      step4: f('4. Your details · Heading', '4. Your details'),
+      nameLabel: f('4. Your details · Name box', 'Full name'),
+      phoneLabel: f('4. Your details · Mobile box', 'Mobile (WhatsApp)'),
+      missing: plain('4. Your details · When something is left out', 'Please add your {missing}.'),
+      missingDate: plain('4. Your details · Left out: the date', 'pickup date'),
+      missingTime: plain('4. Your details · Left out: the time', 'pickup time'),
+      missingName: plain('4. Your details · Left out: the name', 'name'),
+      missingPhone: plain('4. Your details · Left out: the mobile', 'mobile number'),
+      fareLabel: plain('Your fare · Top line, taxi', 'Your fare'),
+      fareLabelPackage: plain('Your fare · Top line, package', 'Package price'),
+      baseLabel: plain('Your fare · First line, taxi', 'Base fare'),
+      baseLabelPackage: plain('Your fare · First line, package', 'Per person'),
+      nightLabel: plain('Your fare · Second line, taxi', 'Night charge'),
+      nightLabelPackage: plain('Your fare · Second line, package', 'Travellers'),
+      advanceLabel: f('Your fare · Advance line', 'Advance now ({advance}%)'),
+      balanceLabel: plain('Your fare · Last line, taxi', 'Pay driver after trip'),
+      balanceLabelPackage: plain('Your fare · Last line, package', 'Balance before the trip'),
+      packageFrom: plain('Your fare · A package amount', 'from {amount}', 'Package prices are “from”, since the season and hotels set the final price.'),
+      packageNote: plain('Your fare · Note under a package price', 'Lowest season price. Final price confirmed on WhatsApp once season, hotels and group size are known.'),
+      waButton: f('Your fare · WhatsApp button', 'Confirm on WhatsApp'),
+      payButton: f('Your fare · Pay button', 'Pay advance by UPI'),
+      payNote: plain('Your fare · Under the buttons, taxi', 'Pay by scanning our UPI QR code with any UPI app. No card details, no payment page.'),
+      payNotePackage: plain('Your fare · Under the buttons, package', 'For tour packages we confirm the final price on WhatsApp first, then send our UPI QR code for the advance.'),
+      privacy: f('Your fare · Privacy line', 'We save your name, mobile number and trip details to arrange this booking. [Privacy policy](/privacy/)'),
+      promise1: f('Your fare · Promise 1', 'Free cancellation up to {freeCancel} hours before pickup. [Policy](/cancellation-refund-policy/)'),
+      promise2: f('Your fare · Promise 2', '{freeWait} minutes free waiting after landing'),
+      promise3: f('Your fare · Promise 3', 'Tolls, parking, driver allowance and GST included'),
+      talk: f('Your fare · Under the box', 'Prefer to talk? Call {phoneLink}, open 24 hours.'),
+      payTitle: f('Pay popup · Heading', 'Pay the advance by UPI'),
+      payFor: f('Pay popup · Above the amount', 'Advance for booking {ref}'),
+      payRest: plain('Pay popup · Under the amount', '{advance}% of {total}. The other {rest} is paid to your driver after the trip.'),
+      payLoading: plain('Pay popup · While the QR code loads', 'Loading our UPI QR code…'),
+      payScan: f('Pay popup · Beside the QR code', 'Scan with any UPI app'),
+      payApps: f('Pay popup · Under that', 'Google Pay, PhonePe, Paytm, BHIM or your bank\'s app.'),
+      payPays: plain('Pay popup · Who the QR code pays', 'Pays {payee}'),
+      payId: f('Pay popup · UPI ID label', 'UPI ID'),
+      payCopy: plain('Pay popup · Copy button', 'Copy'),
+      payCopied: plain('Pay popup · Copy button, once copied', 'Copied'),
+      payApp: plain('Pay popup · Button on a phone', 'Pay {amount} with a UPI app'),
+      payNone: f('Pay popup · When no QR code is set up', 'Our UPI QR code is sent with your confirmation on WhatsApp. Your booking is saved; press the button below to send it to us.'),
+      payStep1: f('Pay popup · Step 1', 'Pay {amount} and write {ref} in the note, if your app asks for one.'),
+      payStep2: f('Pay popup · Step 2', 'Send us the payment screenshot on WhatsApp. We confirm your booking there.'),
+      paySend: plain('Pay popup · WhatsApp button, after paying', 'I have paid: send it on WhatsApp'),
+      payConfirm: plain('Pay popup · WhatsApp button, with no QR code', 'Confirm on WhatsApp'),
+      payFoot: f('Pay popup · Last line', 'Free cancellation up to {freeCancel} hours before pickup. [Refund policy](/cancellation-refund-policy/)'),
+      waIntro: plain('WhatsApp message · First line', 'New booking request', 'The lines after it list the trip for the office: reference, route, car, fare, date, name and mobile.'),
+      waPaid: plain('WhatsApp message · Last line, after paying', 'Advance paid: {amount} by UPI. I am sending the payment screenshot.'),
+    },
+  },
+
   'not-found': {
     name: 'Page not found (404)',
     group: 'pages',
@@ -410,6 +500,67 @@ export const WORD_PAGES = {
     },
   },
 
+  menu: {
+    name: 'Menu and top bar',
+    group: 'shared',
+    path: '/',
+    note: 'The top of every page: the black bar, the menu with its four drop-down panels, the phone menu, and the Call, WhatsApp and Book bar along the bottom of a phone. The routes, packages, places and guides in the panels come from their own forms.',
+    vars: { more: 'How many more routes the panel leaves out', time: 'The time in India, ticking' },
+    fields: {
+      topWhatsapp: f('Top bar · WhatsApp link (also at the bottom of each panel)', 'WhatsApp, replies in minutes'),
+      clock: plain('Top bar · Live clock', 'Bagdogra {time} IST · drivers on duty now', 'Replaces the opening hours as soon as the page has loaded.'),
+      bookButton: f('Menu · Book button', 'Book a taxi'),
+      faresLabel: f('Menu · First item', 'Taxi fares'),
+      packagesLabel: f('Menu · Second item', 'Tour packages'),
+      destinationsLabel: f('Menu · Third item', 'Destinations'),
+      guidesLabel: f('Menu · Fourth item', 'Travel guides'),
+      links: f('Menu · The other links', ['[Gallery](/gallery/)', '[About](/about/)', '[Contact](/contact/)'], { links: true, help: 'After the four items with panels, and in the phone menu. Each needs the words and the page it opens.' }),
+      faresTitle: f('Taxi fares panel · Heading', 'Fixed fares, shown before you fly'),
+      faresText: f('Taxi fares panel · Text', 'One price per car, one way, with tolls, parking and GST included. From {lowestFare}.'),
+      faresButton: f('Taxi fares panel · Button', 'All {routes} fares'),
+      faresAirport: f('Taxi fares panel · First column', 'From Bagdogra Airport'),
+      faresNjp: f('Taxi fares panel · Second column', 'From NJP station'),
+      faresMoreAirport: f('Taxi fares panel · Under the first column', '+{more} more from the airport →'),
+      faresMoreNjp: f('Taxi fares panel · Under the second column', '+{more} more from NJP →'),
+      faresNote: f('Taxi fares panel · Note under the columns', 'Also from Siliguri, the Dooars and the Nepal and Bhutan borders, and every return to the airport, on the [full fare chart](/taxi/).'),
+      carsTitle: f('Taxi fares panel · Cars heading', 'Choose your car'),
+      carsNote: f('Taxi fares panel · Under the cars heading', 'Fare shown is airport to Darjeeling.'),
+      carsButton: f('Taxi fares panel · Cars button', 'Check my fare'),
+      packagesTitle: f('Tour packages panel · Heading', 'Hills, hotels and a car in one price'),
+      packagesText: f('Tour packages panel · Text', '{packages} private tours from {packagesFrom} per person, with permits arranged.'),
+      packagesButton: f('Tour packages panel · Button', 'Browse packages'),
+      themesTitle: f('Tour packages panel · Themes heading', 'Popular themes'),
+      packagesNote: f('Tour packages panel · Under the themes', 'Every package: one private car for the whole trip, hotels with breakfast and dinner, permits arranged, {hoursLower} support.'),
+      customQuote: f('Tour packages panel · WhatsApp button', 'Custom quote'),
+      destinationsTitle: f('Destinations panel · Heading', 'Where we drive'),
+      destinationsText: f('Destinations panel · Text', 'Darjeeling, Sikkim, the Dooars and the Bhutan border, with how many days each needs.'),
+      destinationsButton: f('Destinations panel · Button', 'All destinations'),
+      region1: f('Destinations panel · First column', 'Darjeeling hills', { help: 'Places whose region names Darjeeling or Kalimpong.' }),
+      region2: f('Destinations panel · Second column', 'Sikkim', { help: 'Places whose region names Sikkim.' }),
+      region3: f('Destinations panel · Third column', 'Dooars and Bhutan', { help: 'Every other place.' }),
+      askEyebrow: f('Destinations panel · Photo card, small heading', 'Not sure where to go?'),
+      askTitle: f('Destinations panel · Photo card, heading', 'Tell us your dates and who is travelling.'),
+      askText: f('Destinations panel · Photo card, text', 'We will suggest a route that fits, with the fare and the permits worked out.'),
+      askButton: f('Destinations panel · Photo card, WhatsApp button', 'Ask us'),
+      guidesTitle: f('Travel guides panel · Heading', 'Answers from the driver’s seat'),
+      guidesText: f('Travel guides panel · Text', 'Permits, seasons and routes, written by the people who drive them every day.'),
+      guidesButton: f('Travel guides panel · Button', 'Read the guides'),
+      mostRead: f('Travel guides panel · Over the first guide', 'Most read'),
+      permitEyebrow: f('Travel guides panel · Side card, small heading', 'Read before you book Sikkim'),
+      permitNote: f('Travel guides panel · Side card, last line', 'We arrange the permits with every booking.'),
+      talk: f('Bottom of each panel · Phone line', 'Prefer to talk? {phoneLink}, {hoursLower}.'),
+      phoneWhatsapp: f('Phone menu · WhatsApp button', 'WhatsApp'),
+      phoneFaresFrom: f('Phone menu · Beside “Taxi fares”', 'from {lowestFare}'),
+      phonePackagesFrom: f('Phone menu · Beside “Tour packages”', 'from {packagesFrom}'),
+      phoneAllFares: f('Phone menu · Last fare link', 'All {routes} fares →'),
+      phoneAllPackages: f('Phone menu · Last package link', 'All {packages} packages →'),
+      phoneTalk: f('Phone menu · Phone line', '{phoneLink} · {hours}'),
+      barCall: f('Bar along the bottom of a phone · First button', 'Call'),
+      barWhatsapp: f('Bar along the bottom of a phone · Second button', 'WhatsApp'),
+      barBook: f('Bar along the bottom of a phone · Third button', 'Book'),
+    },
+  },
+
   'book-box': {
     name: 'Booking box',
     group: 'shared',
@@ -444,9 +595,14 @@ export const WORD_PAGES = {
     name: 'The journey story',
     group: 'shared',
     path: '/',
-    note: 'The six moments on the home page. The heading with the changing word stays as designed.',
+    note: 'The six moments on the home page, and the heading with the word that types itself out in different languages.',
     fields: {
-      lead: f('Top · Paragraph under the heading', 'Here is how a trip with us goes: six moments between the arrivals door at Bagdogra and the drive back down, told the way our travellers tell it when they get home.'),
+      titleStart: f('Top · Heading, before the changing word', 'A'),
+      titleWords: f('Top · The changing word', ['memorable', 'यादगार', 'স্মরণীয়', 'अविस्मरणीय', 'याद रैवाळो', 'inolvidable', 'mémorable'], {
+        help: 'One word or phrase per line, in any language. The first one shows when the page opens and is the one screen readers say; the others type themselves out in turn.',
+      }),
+      titleEnd: f('Top · Heading, after the changing word', 'journey to the hills, from the moment you land'),
+      lead: f('Top · Paragraph under the heading','Here is how a trip with us goes: six moments between the arrivals door at Bagdogra and the drive back down, told the way our travellers tell it when they get home.'),
       m1Moment: f('Moment 1 · Label', 'Touchdown'),
       m1Title: f('Moment 1 · Heading', 'You step out of arrivals, and your name is already on a board'),
       m1Text: f('Moment 1 · Text', 'We track your flight, so your driver is at the door when you walk out, not stuck in a queue. Waiting is free for {freeWait} minutes after you land, and a delay never cancels the booking. Bags in, seat belts on, the mountains are three hours away.'),
@@ -511,7 +667,8 @@ export const WORD_PAGES = {
     name: 'Footer',
     group: 'shared',
     path: '/',
-    note: 'The dark band at the bottom of every page. Links to pages stay as designed.',
+    note: 'The dark band at the bottom of every page. The routes, packages, places and guides in its link columns come from their own forms.',
+    vars: { to: 'Where each route goes, in the first two link columns' },
     fields: {
       p1Title: f('Promises row · 1 heading', 'Fixed, all-inclusive fares'),
       p1Text: f('Promises row · 1 text', 'Tolls, parking, driver allowance and GST are in the price you see.'),
@@ -525,6 +682,7 @@ export const WORD_PAGES = {
       p5Text: f('Promises row · 5 text', 'A local office in Bagdogra that answers calls and WhatsApp day and night.'),
       blurb: f('About us · Paragraph under the tagline', 'Private airport taxis and tour packages from Bagdogra across Darjeeling, Sikkim, the Dooars and Bhutan. A local office, one phone number, fixed fares, and drivers who know these roads in every season.'),
       bookButton: f('About us · Book button', 'Book a taxi'),
+      whatsappButton: f('About us · WhatsApp button', 'WhatsApp'),
       fleetTitle: f('About us · Cars heading', 'Our fleet'),
       contactTitle: f('Get in touch · Heading', 'Get in touch'),
       callLabel: f('Get in touch · Phone label', 'Call or WhatsApp, 24 hours a day'),
@@ -535,16 +693,27 @@ export const WORD_PAGES = {
       pickupsText: f('Get in touch · Pickups text', 'Arrivals gate at Bagdogra Airport, the NJP station forecourt, or any hotel or address in Siliguri. Night charge of {nightCharge} between {nightFrom} and {nightTo}.'),
       stepsNote: f('Get in touch · Booking note', '**Booking in three steps.** Tell us your route, date and vehicle on WhatsApp or the [booking form](/book/). Pay {advance}% to confirm. Your driver\'s name, number and car details reach you the evening before pickup.'),
       colAirport: f('Link columns · 1 heading', 'From Bagdogra Airport'),
+      routeLink: f('Link columns · Each route in columns 1 and 2', 'Taxi to {to}'),
+      airportMore: f('Link columns · 1, last link', 'All {routes} fares'),
       colNjp: f('Link columns · 2 heading', 'From NJP station'),
+      njpMore: f('Link columns · 2, last link', 'Full fare chart'),
       colPackages: f('Link columns · 3 heading', 'Tour packages'),
+      packagesMore: f('Link columns · 3, last link', 'All {packages} packages'),
       colDestinations: f('Link columns · 4 heading', 'Destinations'),
+      destinationsMore: f('Link columns · 4, last link', 'All destinations'),
       colGuides: f('Link columns · 5 heading', 'Travel guides'),
+      guidesLinks: f('Link columns · 5, links after the guides', ['[Frequently asked questions](/faq/)', '[Photo gallery](/gallery/)'], { links: true, help: 'Each guide is listed by its short name, from its form.' }),
+      guidesMore: f('Link columns · 5, last link', 'All guides'),
       colCompany: f('Link columns · 6 heading', 'Company'),
+      companyLinks: f('Link columns · 6 links', ['[About us](/about/)', '[Contact](/contact/)', '[Book a taxi](/book/)', '[Cancellation and refunds](/cancellation-refund-policy/)', '[Terms of service](/terms/)', '[Privacy policy](/privacy/)', '[Photo credits](/photo-credits/)', '[Sitemap](/sitemap-index.xml)'], { links: true }),
       areasLabel: f('Small print · "Where we drive" label', 'Where we drive.'),
       areas: f('Small print · Places we drive to', ['Bagdogra Airport (IXB)', 'NJP station', 'Siliguri', 'Darjeeling', 'Kurseong', 'Mirik', 'Kalimpong', 'Gangtok', 'Pelling', 'Lachung and Lachen', 'Ravangla', 'Namchi', 'Zuluk and the Silk Route', 'Lava and Lolegaon', 'Jaldapara', 'Gorumara', 'Phuentsholing (Bhutan border)', 'Kakarbhitta (Nepal border)']),
       faresLabel: f('Small print · "About the fares" label', 'About the fares.'),
       faresText: f('Small print · About the fares', 'Every fare on this site is one way, per vehicle, in Indian rupees, and includes fuel, driver allowance, tolls, parking and GST. Permit fees for Sikkim\'s protected areas and the night charge are stated beside each table. Fares last updated {faresUpdated}.'),
-      rights: f('Bottom line · After the company name', 'All rights reserved.'),
+      copyright: f('Bottom line · Copyright', '© {year} {siteName}, a unit of {company}.'),
+      rights: f('Bottom line · After the copyright', 'All rights reserved.'),
+      bottomLinks: f('Bottom line · Links', ['[Privacy](/privacy/)', '[Terms](/terms/)', '[Refunds](/cancellation-refund-policy/)'], { links: true }),
+      backToTop: f('Bottom line · Last button', 'Back to top'),
     },
   },
 
@@ -560,6 +729,29 @@ export const WORD_PAGES = {
       bookButton: f('Book button', 'Book my taxi'),
       whatsappButton: f('WhatsApp button', 'Ask on WhatsApp'),
       later: f('"Not now" link', 'Maybe later'),
+    },
+  },
+
+  whatsapp: {
+    name: 'WhatsApp messages',
+    group: 'shared',
+    path: '/',
+    note: 'The message already typed in WhatsApp when a visitor taps a WhatsApp button, so the office knows where they came from. They can change it before sending. Route, package, destination and guide pages have their own, in their templates and forms.',
+    vars: { name: 'The customer’s name on the booking', ref: 'The booking reference, such as BAT-7KQ2MX' },
+    fields: {
+      general: plain('Most WhatsApp buttons', 'Hi, I would like to book a taxi.', 'The menu, the footer, the bar along the bottom of a phone, and the dark booking box on most pages.'),
+      home: plain('Home page, top', 'Hi, I would like to book a taxi from Bagdogra Airport.'),
+      journey: plain('Home page, journey story', 'Hi, I am planning a trip to the hills from Bagdogra Airport. Can you help?'),
+      welcome: plain('Welcome popup', 'Hi, I would like to book a taxi from Bagdogra.'),
+      customQuote: plain('Menu, tour packages panel', 'Hi, I would like a custom tour quote.'),
+      advice: plain('Menu, destinations panel, and the destinations page', 'Hi, I am planning a trip and would like some advice.'),
+      packages: plain('Tour packages page', 'Hi, I would like a quote for a tour package.'),
+      guides: plain('Travel guides page', 'Hi, I have a question about travelling from Bagdogra.'),
+      gallery: plain('Gallery page, booking box', 'Hi, I saw a place in your gallery and would like to plan a trip there.'),
+      galleryShare: plain('Gallery page, “Share photos” button', 'Hi, I travelled with you and would like to share some photos for your gallery.'),
+      contact: plain('Contact page', 'Hi, I have a question about a booking.'),
+      trip: plain('A customer’s trip page, top', 'Namaste, this is {name} about my booking {ref}.', 'The customer types their question after it.'),
+      tripFoot: plain('A customer’s trip page, bottom', 'Namaste, I have a question about my trip page.'),
     },
   },
 
@@ -607,6 +799,7 @@ export const WORD_PAGES = {
       sideNote: f('Side box · Under the price', 'one way · tolls, parking and GST included'),
       bookButton: f('Side box · Book button', 'Book this taxi'),
       whatsappButton: f('Side box · WhatsApp button', 'WhatsApp'),
+      waText: plain('Side box · Message already typed in WhatsApp', 'Hi, I would like to book a taxi from {fromFull} to {toFull}.', 'Also used by the booking box at the bottom.'),
       side1: f('Side box · Promise 1', '{freeWait} minutes free waiting after landing'),
       side2: f('Side box · Promise 2', 'Free cancellation up to {freeCancel} hours before'),
       side3: f('Side box · Promise 3', 'Pay {advance}% now, the rest after the trip'),
@@ -637,6 +830,7 @@ export const WORD_PAGES = {
       sideFrom: f('Side box · Before the price', 'from'),
       bookButton: f('Side box · Book button', 'Get this package'),
       whatsappButton: f('Side box · WhatsApp button', 'Ask on WhatsApp'),
+      waText: plain('Side box · Message already typed in WhatsApp', 'Hi, I am interested in the {name} tour package ({nights}N/{days}D).', 'Also used by the booking box at the bottom.'),
       side1: f('Side box · Promise 1', 'Only {advance}% advance to confirm'),
       side2: f('Side box · Promise 2', 'Same private car and driver throughout'),
       side3: f('Side box · Promise 3', 'Clear [cancellation terms](/cancellation-refund-policy/)'),
@@ -669,6 +863,38 @@ export const WORD_PAGES = {
       bookButton: f('Side box · Button', 'Book a taxi'),
       packagesTitle: f('Lower down · Packages heading', 'Tour packages with {short}'),
       ctaTitle: f('Booking box · Heading', 'Plan your {short} trip'),
+      waText: plain('Booking box · Message already typed in WhatsApp', 'Hi, I am planning a trip to {name}.'),
+    },
+  },
+
+  'guide-page': {
+    name: 'Every travel guide',
+    group: 'templates',
+    path: `/guides/${GUIDES[0]?.slug ?? ''}/`,
+    note: 'The fixed headings and lines on all travel guides at once, and on the guide cards. Each guide’s own words, sections, tables and questions are under its form.',
+    vars: { title: 'The guide’s title', short: 'Its short name', updated: 'The day it was last checked', updatedDate: 'The same, marked as a date for Google', minutes: 'Minutes it takes to read' },
+    fields: {
+      heroEyebrow: f('Top · Small heading above', 'Travel guide'),
+      readTime: f('Top · First chip', '{minutes} min read'),
+      updatedChip: f('Top · Second chip', 'Updated {updatedDate}'),
+      writers: f('Top · Third chip', 'Written by our drivers'),
+      answerEyebrow: f('The short answer · Small heading above', 'The short answer'),
+      faqTitle: f('Questions · Heading', 'Frequently asked questions', { help: 'Also the last line of the contents.' }),
+      contents: f('Side · Contents heading', 'In this guide'),
+      askEyebrow: f('Side · Dark card, small heading', 'Team on duty now'),
+      askTitle: f('Side · Dark card, heading', 'Ask our local team, not a call centre'),
+      askWhatsapp: f('Side · Dark card, WhatsApp button', 'WhatsApp us'),
+      faresTitle: f('Side · Fares card on the airport guide, heading', 'Our fixed fares'),
+      faresLink: f('Side · Fares card on the airport guide, link', 'See all {routes} fares →'),
+      packagesEyebrow: f('Lower down · Packages, small heading', 'Book it as a trip'),
+      packagesTitle: f('Lower down · Packages heading', 'Packages that use this guide'),
+      packagesLink: f('Lower down · Packages, “see all” link', 'All {packages} packages'),
+      moreEyebrow: f('Lower down · More guides, small heading', 'Keep reading'),
+      moreTitle: f('Lower down · More guides heading', 'More from the drivers’ seat'),
+      moreLink: f('Lower down · More guides, “see all” link', 'All guides'),
+      cardBadge: f('Guide cards · Badge on the photo', 'Travel guide'),
+      cardUpdated: f('Guide cards · Date on the photo', 'Updated {updatedDate}'),
+      cardRead: f('Guide cards · Link', 'Read the guide'),
     },
   },
 } satisfies Record<string, WordPage>;
@@ -732,6 +958,10 @@ export const GLOBAL_VARS: WordVars = {
   gangtokInnova: t(inr(gangtok.fares.innova), 'Airport to Gangtok, Innova'),
   gangtokKm: t(gangtok.km, 'Airport to Gangtok, km'),
   gangtokTime: t(gangtok.duration, 'Airport to Gangtok, driving time'),
+  lowestFare: t(inr(Math.min(...ROUTES.map(lowestFare))), 'Lowest fare on any route'),
+  hoursLower: t(BUSINESS.hours.toLowerCase(), 'Opening hours, in small letters'),
+  phoneLink: t(BUSINESS.phone, 'Phone number, as a link to call', `<a href="${BUSINESS.phoneHref}">${escapeHtml(BUSINESS.phone)}</a>`),
+  year: t(new Date().getFullYear(), 'This year'),
 };
 
 /** A route page's own fill-ins. */
@@ -772,6 +1002,28 @@ export function destinationVars(d: Destination): WordVars {
   return { name: t(d.name, v.name), short: t(d.short ?? d.name, v.short), region: t(d.region, v.region), altitude: t(d.altitude, v.altitude) };
 }
 
+/** A travel guide's own fill-ins, for its words and the guide template's. */
+export function guideVars(g: Guide): WordVars {
+  const v = WORD_PAGES['guide-page'].vars;
+  return {
+    title: t(g.title, v.title),
+    short: t(g.short, v.short),
+    updated: t(g.updatedLabel, v.updated),
+    updatedDate: t(g.updatedLabel, v.updatedDate, `<time datetime="${g.updated}">${escapeHtml(g.updatedLabel)}</time>`),
+    minutes: t(guideReadMinutes(g), v.minutes),
+  };
+}
+
+/** A guide's words as plain text, its fill-ins written in: its summary for llms.txt. */
+export const guideText = (g: Guide, src: string) => wordsToText(src, { ...GLOBAL_VARS, ...guideVars(g) });
+
+/** Minutes to read a guide: its main text and answers at 200 words a minute, never under 2. */
+export function guideReadMinutes(g: Guide): number {
+  const vars = { ...GLOBAL_VARS, updated: t(g.updatedLabel, '') };
+  const words = guideBodyHtml(g.body, vars).replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length + g.faqs.reduce((n, f) => n + wordsToText(f.a, vars).split(/\s+/).length, 0);
+  return Math.max(2, Math.round(words / 200));
+}
+
 /** The fill-in names a page may use: everyone's plus its own. */
 export function allowedVars(page: string): string[] {
   return [...Object.keys(GLOBAL_VARS), ...Object.keys(pages[page]?.vars ?? {})];
@@ -787,6 +1039,11 @@ export function varsForPath(path: string): WordVars {
   if (m?.[1] === 'tour-packages') {
     const p = PACKAGES.find((x) => x.slug === m[2]);
     if (p) return { ...GLOBAL_VARS, ...packageVars(p) };
+  }
+  const g = path.match(/^\/guides\/([^/]+)\/$/);
+  if (g) {
+    const guide = GUIDES.find((x) => x.slug === g[1]);
+    if (guide) return { ...GLOBAL_VARS, ...guideVars(guide) };
   }
   if (m?.[1] === 'destinations') {
     const d = DESTINATIONS.find((x) => x.slug === m[2]);
@@ -836,6 +1093,21 @@ export function wordsList(page: WordPageKey, field: string, vars: WordVars = {},
 export function editAttr(page: WordPageKey, field: string): string {
   raw(page, field);
   return `text:${page}:${field}`;
+}
+
+/** A list as plain text, one string per line: the journey heading's changing words. */
+export function wordsTextList(page: WordPageKey, field: string, vars: WordVars = {}): string[] {
+  const v = raw(page, field);
+  return (Array.isArray(v) ? v : [v]).map((x) => wordsToText(x, { ...GLOBAL_VARS, ...vars }));
+}
+
+/** A list of links ("[Gallery](/gallery/)" per line) as the words, in HTML and plain, and where each goes. */
+export function wordsLinks(page: WordPageKey, field: string, vars: WordVars = {}): { href: string; html: string; text: string }[] {
+  const v = raw(page, field);
+  return (Array.isArray(v) ? v : [v]).flatMap((x) => {
+    const l = linksIn(x)[0];
+    return l && SAFE_HREF.test(l.href) ? [{ href: l.href, html: wordsToHtml(l.words, { ...GLOBAL_VARS, ...vars }), text: wordsToText(l.words, { ...GLOBAL_VARS, ...vars }) }] : [];
+  });
 }
 
 /** Whether a page has a field (SectionHead uses it to find a section's parts). */

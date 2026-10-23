@@ -51,8 +51,8 @@ const groups: { title: string; text: string; rows: Row[]; add?: { href: string; 
     ],
   },
   { title: 'Policies', text: 'The cancellation, terms and privacy pages. Hours, refund % and days are fill-ins from Business details, Policies.', rows: wordRows('policies') },
-  { title: 'On many pages', text: 'Parts that repeat across the site: change them once and every page shows it.', rows: wordRows('shared') },
-  { title: 'Page templates', text: 'The fixed headings and lines on every route, package and destination page at once. Each one’s own words are in the groups below.', rows: wordRows('templates') },
+  { title: 'On many pages', text: 'Parts that repeat across the site, the menu and footer links among them: change them once and every page shows it.', rows: wordRows('shared') },
+  { title: 'Page templates', text: 'The fixed headings and lines on every route, package, destination and guide page at once. Each one’s own words are in the groups below.', rows: wordRows('templates') },
   {
     title: 'Destination guides',
     text: 'Opening answer, best time, days needed, highlights, how to reach, permits, questions and the photo.',
@@ -61,7 +61,7 @@ const groups: { title: string; text: string; rows: Row[]; add?: { href: string; 
   },
   {
     title: 'Travel guides',
-    text: 'Title, search description and the short answer at the top.',
+    text: 'Everything in each guide: the short answer, facts, headings, paragraphs, lists and tables, questions and the booking box.',
     rows: guides.map((e) => ({ name: nameOf(e, (d) => d.title), path: `/guides/${e.key}/`, form: `/admin/pages/guide/${e.key}/`, e })),
   },
   {

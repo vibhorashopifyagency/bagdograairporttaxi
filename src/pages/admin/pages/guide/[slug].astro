@@ -1,18 +1,25 @@
 ---
 /**
- * A travel guide's title, search description and opening answer. The rest
- * of a guide is written in its page (src/pages/guides/), so it stays as it
- * is. Admin only; saves are drafts until Publish; Publish dates the guide
- * "Updated" by itself.
+ * Everything in one travel guide: its title and short name, the short answer
+ * and facts at the top, the main text (headings, paragraphs, notes, lists and
+ * tables, in GuideBlocks), its questions, the booking box and WhatsApp
+ * message, and its Google listing. Admin only; saves are drafts until
+ * Publish, and Publish dates the guide "Updated" by itself. The fixed lines
+ * around every guide are the "Every travel guide" page words.
  */
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import PublishBar from '../../../../components/admin/PublishBar.astro';
 import WebField from '../../../../components/admin/WebField.astro';
+import RowList from '../../../../components/admin/RowList.astro';
+import GuideBlocks from '../../../../components/admin/GuideBlocks.astro';
 import VersionHistory from '../../../../components/admin/VersionHistory.astro';
 import { isAdmin } from '../../../../server/admin';
-import { discardDraft, getEntry, markForReset, saveDraft } from '../../../../server/content';
+import { discardDraft, getEntry, listEntries, markForReset, saveDraft } from '../../../../server/content';
 import { wasNotes } from '../../../../server/content-diff';
+import { guideFromForm } from '../../../../server/content-forms';
 import { ipHash } from '../../../../server/security';
+import { GLOBAL_VARS, WORD_PAGES, guideVars } from '../../../../data/page-text';
+import type { Guide } from '../../../../data/guides';
 import '../../../../styles/admin-web.css';
 
 export const prerender = false;
@@ -43,8 +50,7 @@ if (Astro.request.method === 'POST') {
     error = r.error;
   }
   if (intent === 'save') {
-    const s = (k: string) => String(f.get(k) ?? '').trim();
-    posted = { ...(entry.current as Data), title: s('title'), description: s('description'), summary: s('summary') };
+    posted = guideFromForm(f, entry.current as Data);
     const r = await saveDraft(ctx, 'guide', slug, posted);
     if (r.ok) return here(r.message ? 'same' : 'saved');
     error = r.error;
@@ -54,8 +60,27 @@ if (Astro.request.method === 'POST') {
 entry = (await getEntry('guide', slug))!;
 const g: Data = posted ?? (entry.current as Data);
 const was = wasNotes('guide', entry.live, entry.current);
-const err = (path: string) => (errorField === path ? error : undefined);
+const top = errorField.split('.')[0];
+const err = (path: string) => (top === path ? error : undefined);
+const errorIndex = top === 'body' ? Number(errorField.split('.')[1]) : undefined;
 const done = Astro.url.searchParams.get('done');
+
+const packages = (await listEntries('package')).filter((e) => e.current).map((e) => ({ slug: e.key, name: String((e.current as Data).name) }));
+const BOOK_TARGETS = [
+  { href: '/book/', name: 'The booking form' },
+  { href: '/tour-packages/', name: 'All tour packages' },
+  { href: '/taxi/', name: 'The fare chart' },
+  { href: '/contact/', name: 'The contact page' },
+  ...packages.map((p) => ({ href: `/tour-packages/${p.slug}/`, name: `Package: ${p.name}` })),
+];
+if (!BOOK_TARGETS.some((t) => t.href === g.bookHref)) BOOK_TARGETS.unshift({ href: g.bookHref, name: g.bookHref });
+
+const own = guideVars(g as Guide);
+const ownNames = Object.keys(WORD_PAGES['guide-page'].vars);
+const ownFillIns = ownNames.filter((n) => n !== 'minutes');
+const siteFillIns = Object.keys(GLOBAL_VARS);
+const vars = { ...GLOBAL_VARS, ...own };
+const usedHere = new Set((JSON.stringify(g).match(/\{([a-zA-Z0-9]+)\}/g) ?? []).map((t) => t.slice(1, -1)));
 ---
 
 <AdminLayout title={String(g.title)}>
@@ -87,23 +112,105 @@ const done = Astro.url.searchParams.get('done');
       <form method="post" data-web-form class="flex min-w-0 flex-[1_1_620px] flex-col gap-5">
         <input type="hidden" name="intent" value="save" />
         <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
-          <WebField label="Title" name="title" value={g.title} was={was.title} error={err('title')} count={[30, 70]} maxlength={90} help="The heading at the top of the guide, and its title in Google." />
-          <WebField label="Search description" name="description" rows={3} value={g.description} was={was.description && 'Changed from what is live'} error={err('description')} count={[70, 160]} maxlength={170} help="Shown under the title in Google." />
-          <WebField label="The short answer" name="summary" rows={5} value={g.summary} was={was.summary && 'Changed from what is live'} error={err('summary')} count={[160, 500]} maxlength={700} help="The answer at the top of the guide, which Google and AI answers quote. Once it is changed here, the page shows this text in place of its own." />
-          <p class="m-0 rounded-2xl bg-mist p-4 text-sm text-body">The rest of the guide, its sections and tables, is part of the page's design and changes with the website's code.</p>
+          <h2 class="m-0 font-display text-xl font-bold">Top of the guide</h2>
+          <div id="title"><WebField label="Title" name="title" value={g.title} was={was.title} error={err('title')} count={[30, 70]} maxlength={90} help="The heading at the top of the guide and on guide cards." /></div>
+          <div id="short"><WebField label="Short name" name="short" value={g.short} was={was.short} error={err('short')} maxlength={60} help="In the breadcrumb at the top and the footer's list of guides." /></div>
+          <div id="summary"><WebField label="The short answer" name="summary" rows={5} value={g.summary} was={was.summary && 'Changed from what is live'} error={err('summary')} count={[160, 500]} maxlength={700} help="The answer at the top of the guide, which Google and AI answers quote. Fill-ins such as {darjeelingSedan} keep a fare in it right." /></div>
+          <div id="facts" class="flex flex-col gap-2">
+            <span class="wf-label">Facts in tiles under the answer</span>
+            <RowList id="facts" noun="fact" addLabel="Add a fact" max={4} numbered cards was={was.facts} error={err('facts')} fields={[{ name: 'factLabel', label: 'Label', placeholder: 'Open' }, { name: 'factValue', label: 'Fact', placeholder: 'Wednesday to Sunday' }]} values={(g.facts ?? []).map((x: Data) => [x.label, x.value])} />
+            <span class="wf-help">Up to four, each a short label and a fact.</span>
+          </div>
         </section>
+
+        <section class="a-card flex flex-col gap-3 p-5 lg:p-6" id="body">
+          <div class="flex flex-col gap-1">
+            <h2 class="m-0 font-display text-xl font-bold">The guide</h2>
+            <p class="m-0 text-sm text-muted">Its parts in order. Each heading is a line in the guide's contents. Links, bold and fill-ins work in every box, tables included.</p>
+          </div>
+          <GuideBlocks blocks={g.body ?? []} was={Boolean(was.body)} error={err('body')} errorIndex={errorIndex} />
+        </section>
+
+        <section class="a-card flex flex-col gap-3 p-5 lg:p-6" id="faqs">
+          <h2 class="m-0 font-display text-xl font-bold">Questions travellers ask</h2>
+          <RowList id="faqs" noun="question" addLabel="Add a question" max={10} cards was={was.faqs} error={err('faqs')} fields={[{ name: 'faqQ', label: 'Question' }, { name: 'faqA', label: 'Answer', rows: 3 }]} values={(g.faqs ?? []).map((x: Data) => [x.q, x.a])} />
+        </section>
+
+        <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+          <h2 class="m-0 font-display text-xl font-bold">Booking and WhatsApp</h2>
+          <div id="askNote"><WebField label="Line in the dark “Ask our local team” card" name="askNote" rows={3} value={g.askNote} was={was.askNote && 'Changed from what is live'} error={err('askNote')} maxlength={300} /></div>
+          <WebField label="Message already typed in WhatsApp" name="waText" value={g.waText} was={was.waText} error={err('waText')} maxlength={300} help="When a visitor taps WhatsApp on this guide. Plain words, no links." />
+          <div id="ctaHeading"><WebField label="Booking box heading" name="ctaHeading" value={g.ctaHeading} was={was.ctaHeading} error={err('ctaHeading')} maxlength={100} help="The dark box at the bottom of the guide." /></div>
+          <label class="wf">
+            <span class="wf-label">The booking box's Book button opens</span>
+            <select name="bookHref" class="wf-input">
+              {BOOK_TARGETS.map((t) => <option value={t.href} selected={t.href === g.bookHref}>{t.name}</option>)}
+            </select>
+            {was.bookHref && <span class="wf-was">{was.bookHref}</span>}
+          </label>
+          <div class="flex flex-col gap-2" id="packages">
+            <span class="wf-label">Tour packages shown after the guide</span>
+            {was.packages && <span class="wf-was">Changed from what is live</span>}
+            {err('packages') && <span class="wf-err">{err('packages')}</span>}
+            <div class="flex flex-wrap gap-2">
+              {packages.map((p) => (
+                <label class="a-pill"><input type="checkbox" name="packages" value={p.slug} checked={(g.packages ?? []).includes(p.slug)} class="sr-only" /><span>{p.name}</span></label>
+              ))}
+            </div>
+            <span class="wf-help">Up to three.</span>
+          </div>
+        </section>
+
+        <section class="a-card flex flex-col gap-4 p-5 lg:p-6">
+          <h2 class="m-0 font-display text-xl font-bold">Google listing</h2>
+          <WebField label="Title in Google" name="seoTitle" value={g.seoTitle} was={was.seoTitle} error={err('seoTitle')} count={[30, 65]} maxlength={100} help="The blue link in Google and the browser tab. Usually tighter than the heading." />
+          <WebField label="Search description" name="description" rows={3} value={g.description} was={was.description && 'Changed from what is live'} error={err('description')} count={[70, 160]} maxlength={170} help="Shown under the title in Google, and on guide cards." />
+        </section>
+
         <div class="web-save">
           <span class="web-save-note"><span data-when-clean>Nothing changes on the website until you publish.</span><span data-when-dirty>You have changes that are not saved yet.</span></span>
           <button type="submit" class="btn-book min-h-12">Save as draft</button>
         </div>
       </form>
-      <aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-4 xl:max-w-[400px]" data-chrome>
+      <aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-4 xl:sticky xl:top-4 xl:max-w-[400px]" data-chrome>
         {(entry.pending || entry.state === 'edited') && (
           <section class="a-card flex flex-col gap-2.5 p-5">
             {entry.pending === 'save' && <form method="post"><input type="hidden" name="intent" value="discard" /><button class="btn-ghost min-h-11 w-full">Discard my changes</button></form>}
             {entry.state === 'edited' && <form method="post"><input type="hidden" name="intent" value="reset" /><button class="btn-ghost min-h-11 w-full">Back to the starting copy</button></form>}
           </section>
         )}
+        <section class="a-card flex flex-col gap-3 p-5" aria-labelledby="tw-marks">
+          <h2 id="tw-marks" class="m-0 font-display text-lg font-bold">Links, bold and fill-ins</h2>
+          <ul class="m-0 flex list-none flex-col gap-2 p-0 text-sm text-body">
+            <li><code class="tw-code">[our fares](/taxi/)</code> a link</li>
+            <li><code class="tw-code">**Nathula Pass**</code> bold</li>
+            <li><code class="tw-code">{'{updated}'}</code> a fill-in: the live value, so it changes by itself</li>
+          </ul>
+          <p class="m-0 text-sm text-muted">A link must open a page on this website, or start with https://. Publish checks every one.</p>
+        </section>
+        <section class="a-card flex flex-col gap-2 p-5" aria-labelledby="tw-vars">
+          <h2 id="tw-vars" class="m-0 font-display text-lg font-bold">Fill-ins for guides</h2>
+          <p class="m-0 text-sm text-muted">Type one in {'{curly brackets}'} anywhere on this form.</p>
+          <dl class="m-0 flex flex-col">
+            {ownFillIns.map((n) => (
+              <div class:list={['tw-var', usedHere.has(n) && 'is-used']}>
+                <dt><code class="tw-code">{`{${n}}`}</code></dt>
+                <dd class="m-0 min-w-0"><span class="block truncate font-semibold text-ink">{vars[n]?.text || '(empty here)'}</span><span class="block text-xs text-muted">{vars[n]?.label}</span></dd>
+              </div>
+            ))}
+          </dl>
+          <details class="tw-vars">
+            <summary class="text-sm font-semibold">The {siteFillIns.length} for the whole site: fares, policies, business details</summary>
+            <dl class="m-0 mt-2 flex flex-col">
+              {siteFillIns.map((n) => (
+                <div class:list={['tw-var', usedHere.has(n) && 'is-used']}>
+                  <dt><code class="tw-code">{`{${n}}`}</code></dt>
+                  <dd class="m-0 min-w-0"><span class="block truncate font-semibold text-ink">{vars[n]?.text || '(empty here)'}</span><span class="block text-xs text-muted">{vars[n]?.label}</span></dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        </section>
         <VersionHistory type="guide" itemKey={slug} />
       </aside>
     </div>
@@ -111,8 +218,8 @@ const done = Astro.url.searchParams.get('done');
 </AdminLayout>
 
 <script>
-  import { wireAutosize, wireCounters, wireDirty } from '../../../../lib/admin-web';
+  import { wireCounters, wireDirty, wireLists } from '../../../../lib/admin-web';
+  wireLists();
   wireCounters();
   wireDirty();
-  wireAutosize();
 </script>

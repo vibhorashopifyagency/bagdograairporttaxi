@@ -107,6 +107,37 @@ for (const f of await readdir(OUT)) {
   const base = f.replace(/-(?:400|800|1600|16x9|4x3|1x1)\.webp$/, '');
   if (!keep.has(base)) await rm(new URL(f, OUT), { force: true });
 }
+// WhatsApp takes no WebP pictures, so every photo also gets a JPEG of its
+// 16:9 crop, for itineraries sent from the dashboard (src/server/whatsapp.ts,
+// whatsappPhotoFile in src/data/photo-library.ts): /img/hero-16x9.webp makes
+// /img/wa/hero.jpg, and a dashboard photo's /img/v/<key>.<version>-16x9.webp
+// makes /img/wa/v/<key>.<version>.jpg. Only while sending from the dashboard
+// is switched on (WHATSAPP_TOKEN set; a changed setting needs a new deploy
+// anyway), so other builds do not carry 4 MB they never use.
+const WA = new URL('public/img/wa/', ROOT);
+const wantJpegs = Boolean(process.env.WHATSAPP_TOKEN);
+await mkdir(new URL('v/', WA), { recursive: true });
+const wanted = new Set();
+let jpegs = 0;
+for (const p of wantJpegs ? library.values() : []) {
+  const base = made[p.key] ?? `/img/${p.key}`;
+  const name = base.replace(/^\/img\//, '');
+  const target = new URL(`${name}.jpg`, WA);
+  wanted.add(`${name}.jpg`);
+  if (existsSync(target)) continue;
+  const source = new URL(`public${base}-16x9.webp`, ROOT);
+  if (!existsSync(source)) continue;
+  try {
+    await sharp(await readFile(source)).flatten({ background: '#ffffff' }).jpeg({ quality: 82, mozjpeg: true }).toFile(target.pathname);
+    jpegs++;
+  } catch (e) {
+    console.warn(`[photos] no WhatsApp copy of "${p.key}" (${e.message}).`);
+  }
+}
+for (const dir of ['', 'v/']) {
+  for (const f of await readdir(new URL(dir, WA))) if (f.endsWith('.jpg') && !wanted.has(dir + f)) await rm(new URL(dir + f, WA), { force: true });
+}
+
 await mkdir(new URL('.content/', ROOT), { recursive: true });
 await writeFile(MANIFEST, JSON.stringify(made, null, 1) + '\n');
-console.log(`[photos] ${Object.keys(made).length} dashboard photo${Object.keys(made).length === 1 ? '' : 's'} ready (${fresh} made now)`);
+console.log(`[photos] ${Object.keys(made).length} dashboard photo${Object.keys(made).length === 1 ? '' : 's'} ready (${fresh} made now); ${wanted.size} WhatsApp copies (${jpegs} made now)`);

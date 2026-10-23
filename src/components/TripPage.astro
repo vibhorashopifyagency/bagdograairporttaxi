@@ -10,6 +10,7 @@
  */
 import '../styles/global.css';
 import { BUSINESS, SITE } from '../data/site';
+import { wordsText } from '../data/page-text';
 import { dateRange, dayDate, firstName, shortRange } from '../lib/itinerary-text';
 import { qrSrc, upiLink, type Upi } from '../lib/upi';
 import type { ItineraryData } from '../server/db/schema';
@@ -52,7 +53,8 @@ const showQr = !cancelled && Boolean(qr) && pay.due > 0 && (hasPlan ? d.showQr :
 const src = qr && showQr ? qrSrc(qr) : '';
 // On a phone the QR code cannot scan itself: the UPI ID opens their UPI app with the amount filled in.
 const link = showQr && upi?.id ? upiLink(upi, ask, ref) : '';
-const waUs = `https://wa.me/${BUSINESS.whatsapp}?text=${encodeURIComponent(`Namaste, this is ${d.name || 'a customer'} about my booking ${ref}. `)}`;
+// A space after the words, so the customer types their question straight after them.
+const waUs = `https://wa.me/${BUSINESS.whatsapp}?text=${encodeURIComponent(`${wordsText('whatsapp', 'trip', { name: { text: d.name || 'a customer' }, ref: { text: ref } })} `)}`;
 const message = d.message.trim();
 // An uploaded photo is the office's own (src/server/files.ts): signed for the customer, the admin's copy in a preview.
 const coverUploaded = Boolean(uploadIdOf(cover));

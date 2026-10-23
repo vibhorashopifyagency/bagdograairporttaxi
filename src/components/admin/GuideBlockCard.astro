@@ -1,0 +1,82 @@
+---
+/**
+ * One part of a travel guide's main text in the guide form (GuideBlocks):
+ * a heading, a paragraph, a small grey note, a bullet list (one point a
+ * line) or a table (a grid of boxes, rows and columns added and taken out
+ * with the buttons under it). A strip along the top numbers the part and
+ * moves or removes it; "Add a part below" opens under it.
+ */
+import { BLOCK_NAMES, type GuideBlock, type GuideBlockType } from '../../lib/guide-body';
+
+interface Props {
+  block: GuideBlock;
+  /** The part a save was refused for. */
+  error?: boolean;
+}
+const { block: b, error = false } = Astro.props;
+const TYPES = Object.keys(BLOCK_NAMES) as GuideBlockType[];
+const icon = {
+  up: '<path d="m18 15-6-6-6 6"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+};
+const svg = (d: string, size = 16) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const name = BLOCK_NAMES[b.type].toLowerCase();
+const grid = b.type === 'table' ? [...(b.head.length ? [b.head] : []), ...b.rows] : [];
+const rows = (t: string) => Math.min(12, Math.max(2, Math.ceil(t.length / 80)));
+---
+
+<li class:list={['web-card gb-block', error && 'is-error']} data-gb-block={b.type}>
+  <div class="web-card-head">
+    <span class="web-card-title"><span class="web-card-n" data-gb-n aria-hidden="true"></span>{BLOCK_NAMES[b.type]}</span>
+    <div class="web-tools">
+      <span class="web-move" role="group" aria-label={`Move this ${name}`}>
+        <button type="button" data-gb-move="up" aria-label={`Move this ${name} up`} set:html={svg(icon.up)} />
+        <button type="button" data-gb-move="down" aria-label={`Move this ${name} down`} set:html={svg(icon.down)} />
+      </span>
+      <button type="button" data-gb-remove class="web-remove" aria-label={`Remove this ${name}`} set:html={svg(icon.remove)} />
+    </div>
+  </div>
+
+  {b.type === 'heading' && <input class="wf-input gb-heading" data-gb-text value={b.text} aria-label="Heading" maxlength="120" />}
+  {(b.type === 'text' || b.type === 'note') && <textarea class:list={['wf-input', b.type === 'note' && 'gb-note']} data-gb-text rows={rows(b.text)} aria-label={BLOCK_NAMES[b.type]}>{b.text}</textarea>}
+  {b.type === 'list' && (
+    <>
+      <textarea class="wf-input" data-gb-items rows={Math.max(3, b.items.length + 1)} aria-label="Points, one a line">{b.items.join('\n')}</textarea>
+      <span class="wf-help">One point a line.</span>
+    </>
+  )}
+  {b.type === 'table' && (
+    <div class="gb-table">
+      <div class="flex flex-wrap gap-x-5 gap-y-1">
+        <label class="gb-check"><input type="checkbox" data-gb-head checked={b.head.length > 0} /> First row is the heading</label>
+        <label class="gb-check"><input type="checkbox" data-gb-rowheads checked={Boolean(b.rowHeads)} /> First column names each row</label>
+      </div>
+      <div class="gb-grid-scroll">
+        <table class:list={['gb-grid', b.head.length > 0 && 'has-head', b.rowHeads && 'has-rowheads']} data-gb-grid>
+          <tbody>
+            {grid.map((r) => (
+              <tr data-gb-tr>
+                {r.map((c) => <td><textarea class="wf-input gb-cell" rows="1" data-gb-cell aria-label="Cell">{c}</textarea></td>)}
+                <td class="gb-row-x"><button type="button" class="web-remove is-sm" data-gb-row-remove aria-label="Remove this row" set:html={svg(icon.x, 14)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="web-add" data-gb-add-tr>+ Row</button>
+        <button type="button" class="web-add" data-gb-add-col>+ Column</button>
+        <button type="button" class="web-add" data-gb-remove-col>Take out the last column</button>
+      </div>
+    </div>
+  )}
+
+  <details class="gb-insert">
+    <summary>+ Add a part below</summary>
+    <div class="flex flex-wrap gap-2 pt-2">
+      {TYPES.map((t) => <button type="button" class="web-add" data-gb-insert={t}>{BLOCK_NAMES[t]}</button>)}
+    </div>
+  </details>
+</li>

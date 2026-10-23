@@ -86,6 +86,16 @@ export function photoFile(key: string, size: PhotoSize): string {
   return `${base}-${size}.webp`;
 }
 
+/**
+ * A JPEG of the photo's 16:9 crop, for WhatsApp, which takes no WebP
+ * pictures (src/server/whatsapp.ts). scripts/content-photos.mjs makes these
+ * before every build: /img/hero-16x9.webp becomes /img/wa/hero.jpg.
+ */
+export function whatsappPhotoFile(key: string): string {
+  const base = PHOTOS[key]?.base ?? '/img/hero';
+  return `${base.replace(/^\/img\//, '/img/wa/')}.jpg`;
+}
+
 /** The library key a photo address belongs to, for structured data built from a page's share image. */
 export function photoKeyOf(url: string): string | undefined {
   const m = url.match(/\/img\/(?:v\/([a-z0-9-]+)\.[a-z0-9]+|([a-z0-9-]+))-(?:400|800|1600|16x9|4x3|1x1)\.webp$/);

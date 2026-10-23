@@ -20,7 +20,7 @@ robots.txt rewritten; 404 page configured for every supported host.
 Pending from the owner (details in the sections below): the main phone,
 email and WhatsApp confirmation; registered legal name and founding year;
 GSTIN; profile URLs for `sameAs`; registrations; the four claims in section
-4; fares and package prices; payment page URL; own photos; Places API key;
+4; fares and package prices; the office UPI QR code; own photos; Places API key;
 and the Business Profile hours changed to Open 24 hours.
 
 ## 1. Business details (`src/data/site.ts`)
@@ -55,9 +55,12 @@ The site shows these numbers next to every Book button. Confirm or change:
 - [ ] ID copies for permits are deleted within 30 days (privacy page)
 
 ## 5. Payment
-- [ ] Create a Razorpay / Cashfree / PhonePe payment page and put its URL in
-      `PAYMENT.advanceUrl`. Until then the "Pay advance securely" button is
-      hidden and the booking page says the link is sent on WhatsApp.
+Payments are by UPI QR code or cash only, with no payment gateway (owner's
+decision, 21 Oct 2026), so there is no payment page to set up.
+- [ ] Upload the office UPI QR code on Payments in the dashboard (admin
+      only), then scan the saved code with a phone and check the payee
+      (docs/admin-setup.md, step 9). It appears in the "Pay advance by UPI"
+      popup on `/book/` and on each customer's trip page.
 
 ## 6. Photos
 The site ships with licensed Wikimedia Commons photographs of every

@@ -18,7 +18,7 @@ const contact = { '@type': 'ContactPage', name: `Contact ${SITE.name}`, url: `${
   <div class="wrap section">
     <Words page="contact" field="answer" as="p" class="answer max-w-3xl" />
     <div class="mt-10 grid gap-4 md:grid-cols-3">
-      <a href={waLink('Hi, I have a question about a booking.')} rel="noopener" class="card lift flex flex-col gap-3 p-6 no-underline">
+      <a href={waLink(wordsText('whatsapp', 'contact'))} rel="noopener" class="card lift flex flex-col gap-3 p-6 no-underline">
         <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-wa/10 text-wa"><Icon name="whatsapp" class="h-6 w-6" /></span><Words page="contact" field="cardWhatsapp" as="strong" class="text-lg text-ink" /><span>{BUSINESS.phone}</span>
       </a>
       <a href={BUSINESS.phoneHref} class="card lift flex flex-col gap-3 p-6 no-underline">

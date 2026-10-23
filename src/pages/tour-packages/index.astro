@@ -28,6 +28,6 @@ const itemList = {
     <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>{PACKAGES.map((p) => <PackageCard pkg={p} />)}</div>
     <section class="mt-14"><TrustStrip /></section>
     <Words page="packages" field="customNote" as="p" class="mt-8 max-w-3xl" />
-    <BookCta waText="Hi, I would like a quote for a tour package." words="packages:ctaTitle" image="north-sikkim" />
+    <BookCta waText={wordsText('whatsapp', 'packages')} words="packages:ctaTitle" image="north-sikkim" />
   </div>
 </BaseLayout>

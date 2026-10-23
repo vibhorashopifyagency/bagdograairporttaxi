@@ -36,6 +36,7 @@ next. The plan is in `docs/admin-cms-todo.md`.
    | `BOOKING_EMAIL_TO` | optional, defaults to the email shown on the site | All |
    | `CRON_SECRET` | output of `openssl rand -hex 32` | Production |
    | `VERCEL_DEPLOY_HOOK_URL` | Project Settings, Git, Deploy Hooks: create one named "Publish" for the `main` branch and paste its URL | Production |
+   | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | optional, step 14 | Production |
 
 4. **Deploy.** The build runs the database migrations by itself before the site goes live, then copies in the website edits published in the dashboard. Keep the deploy hook URL private: anyone with it can start a deploy (it cannot change the site's content).
 5. **Create the admin.** Open `https://bagdograairporttaxi.com/admin/setup/`, enter the `SETUP_TOKEN`, choose a username and password. Write down the 8 recovery codes it shows: they are the only way back in without the password. Then delete `SETUP_TOKEN` from Vercel. The page closes for good once an account exists.
@@ -47,6 +48,22 @@ next. The plan is in `docs/admin-cms-todo.md`.
 11. **Test.** Make a booking on `/book/`, press Confirm on WhatsApp, and check it appears at `/admin/` with the same `BAT-` reference as the WhatsApp message. Then press Pay advance by UPI on `/book/` and check the office QR code shows with the amount.
 12. **Nightly clean-up.** `vercel.json` runs `/api/cron/retention/` every night at 02:00 India time; Vercel sends `CRON_SECRET` with it. It removes customer names, numbers, addresses and notes 24 months after the trip (fares and payments stay) and old access-log rows. The Team page says when it last ran. Without `CRON_SECRET` it refuses to run, and the Team page says so. To try it at once, open Project Settings, Cron Jobs, and press Run. It runs only on the production deployment.
 13. **Move the domain, last.** Steps 1 to 12 work on the `….vercel.app` address while the old site stays on the domain. Once tested, add `bagdograairporttaxi.com` and `www.bagdograairporttaxi.com` in Project Settings, Domains. Vercel shows one A record and one CNAME: change only those two where the domain's DNS is managed (the company the domain is renewed with). Do not move the nameservers to Vercel, which would drop any email set up on the domain. Then set `BETTER_AUTH_URL` to `https://bagdograairporttaxi.com` and redeploy.
+
+14. **WhatsApp from the dashboard (optional, any time).** Without this, the itinerary popup opens WhatsApp with the message typed, as it does now. With it, "Send from the office number" sends the itinerary from the dashboard itself, and the booking shows whether it was delivered and read. It uses Meta's WhatsApp Business Platform (the Cloud API) directly, with no company in between.
+    1. In Meta Business Suite (business.facebook.com), verify the business under Settings, Security centre.
+    2. At developers.facebook.com create an app of type Business, add the WhatsApp product, and connect the office number. **Check first** whether the office number can keep working in the WhatsApp Business app on the office phone at the same time: Meta allows this ("coexistence") only through its own sign-up flow and only for some numbers. An ordinary connection moves the number off the phone app.
+    3. In WhatsApp Manager, Message templates, create a template named `trip_itinerary`, category **Utility**, language **English**:
+       - Header: **Image** (upload any photo as the sample).
+       - Body: `Namaste {{1}}, your trip {{2}} is ready. The day-by-day plan, your driver and the payment details are on your trip page: {{3}} . Reply here if you would like to change anything.`
+       - Samples: `Rahul`, `Darjeeling and Gangtok, 12 to 16 Nov`, `https://bagdograairporttaxi.com/trip/7KQ2MX-a1b2c3d4e5/`
+       Wait for Meta to approve it (minutes to a day). The dashboard fills in the photo, the first name, the trip's title and the link. A different name or language goes in `WHATSAPP_TEMPLATE` and `WHATSAPP_TEMPLATE_LANG` (default `trip_itinerary` and `en`).
+    4. In Business Settings, Users, System users: add one with the Admin role, give it the app and the WhatsApp account, and generate a token that never expires, with the `whatsapp_business_messaging` and `whatsapp_business_management` permissions.
+    5. In Vercel set `WHATSAPP_TOKEN` (that token), `WHATSAPP_PHONE_NUMBER_ID` (the app's WhatsApp, API Setup, Phone number ID), `WHATSAPP_APP_SECRET` (the app's Settings, Basic, App secret) and `WHATSAPP_VERIFY_TOKEN` (output of `openssl rand -hex 16`), then redeploy. The build then also makes a JPEG copy of every website photo for WhatsApp, which takes no WebP pictures.
+    6. In the app's WhatsApp, Configuration, Webhook: Callback URL `https://<the site's address>/api/whatsapp/`, Verify token the same `WHATSAPP_VERIFY_TOKEN`, press Verify and save, then subscribe to the **messages** field. This brings the delivered and read ticks, and tells the dashboard when a customer last wrote.
+    7. Test on a booking with your own number. With no message from you in the last 24 hours, the approved template arrives: the cover photo, your first name, the trip and its link. Reply to it from your phone and send again: within 24 hours of a customer's own message, Meta lets the office write freely, so the popup's message arrives exactly as written, followed by each photo.
+    8. Costs: Meta charges for each template message outside the 24 hours (see Meta's WhatsApp pricing page for India); messages within 24 hours of the customer's own message are free. If a send fails, the popup says why in plain words and "Open in WhatsApp instead" sends it the old way.
+
+    The webhook keeps only when each number last wrote, never what they wrote, and the nightly job forgets it after two days.
 
 Check on the first deploy that the old `.php` redirects in `vercel.json` and the security headers still apply now that the site uses the Vercel adapter, for example that `/about.php` redirects to `/about/`.
 

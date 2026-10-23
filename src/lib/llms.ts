@@ -17,6 +17,7 @@ import { ROUTES, ROUTE_GROUPS, inr, lowestFare } from '../data/routes';
 import { PACKAGES } from '../data/packages';
 import { DESTINATIONS } from '../data/destinations';
 import { GUIDES } from '../data/guides';
+import { guideText } from '../data/page-text';
 import { GENERAL_FAQS } from '../data/faqs';
 import { VEHICLES } from '../data/vehicles';
 import { GOOGLE } from '../data/reviews';
@@ -72,7 +73,7 @@ const quickAnswers = () => [
   `- Flights and trains are tracked. Waiting is free for ${POLICY.freeWaitMinutes} minutes after landing; the driver meets you at arrivals with a name board even when the flight is late.`,
   `- Cancellation: free up to ${POLICY.freeCancelHours} hours before pickup with the advance refunded in full; ${POLICY.lateCancelRefundPercent}% of the advance is refunded inside ${POLICY.freeCancelHours} hours. Refunds take up to ${POLICY.refundDays} working days.`,
   `- Pickups are also made from NJP railway station and Siliguri at the fares listed below.`,
-  ...GUIDES.filter((g) => ['sikkim-permit-guide', 'best-time-to-visit-darjeeling-sikkim'].includes(g.slug)).map((g) => `- ${g.summary} (${abs(`/guides/${g.slug}/`)})`),
+  ...GUIDES.filter((g) => ['sikkim-permit-guide', 'best-time-to-visit-darjeeling-sikkim'].includes(g.slug)).map((g) => `- ${guideText(g, g.summary)} (${abs(`/guides/${g.slug}/`)})`),
   '',
   '### Fares from Bagdogra Airport (one way, per car, all inclusive)',
   '',
@@ -103,7 +104,7 @@ export function llmsIndex() {
     '',
     '## Travel guides',
     '',
-    ...GUIDES.map((g) => `- [${g.title}](${abs(`/guides/${g.slug}/`)}): ${g.summary} Updated ${g.updatedLabel}.`),
+    ...GUIDES.map((g) => `- [${g.title}](${abs(`/guides/${g.slug}/`)}): ${guideText(g, g.summary)} Updated ${g.updatedLabel}.`),
     '',
     '## Booking, policies and contact',
     '',
@@ -183,7 +184,7 @@ export function llmsFull() {
   }
 
   out.push('## Travel guides', '');
-  for (const g of GUIDES) out.push(`### ${g.title}`, '', `URL: ${abs(`/guides/${g.slug}/`)} (updated ${g.updatedLabel})`, '', g.summary, '', g.description, '');
+  for (const g of GUIDES) out.push(`### ${g.title}`, '', `URL: ${abs(`/guides/${g.slug}/`)} (updated ${g.updatedLabel})`, '', guideText(g, g.summary), '', g.description, '');
 
   out.push('## Frequently asked questions', '');
   for (const f of GENERAL_FAQS) out.push(`Q: ${f.q}`, `A: ${f.a}`, '');

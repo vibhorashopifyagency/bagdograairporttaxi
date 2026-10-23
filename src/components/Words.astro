@@ -3,6 +3,9 @@
  * One piece of page words (src/data/page-text.ts) in the element the design
  * puts it in, marked for the dashboard's page editor:
  *   <Words page="home" field="heroLead" as="p" class="mt-4 text-lg" />
+ * `each` holds fill-ins that change from spot to spot on one page (the place
+ * in each "Taxi to {to}" link): they are written in like `vars`, and also
+ * onto the element, so the page editor's preview of a draft can use them.
  */
 import { editAttr, words, type WordOpts, type WordPageKey } from '../data/page-text';
 import type { WordVars } from '../lib/rich-text';
@@ -13,11 +16,13 @@ interface Props extends WordOpts {
   /** The element: p, h2, span... */
   as?: string;
   vars?: WordVars;
+  each?: WordVars;
   class?: string;
   id?: string;
   [attr: string]: unknown;
 }
-const { page, field, as: Tag = 'span', vars, accent, strong, link, ...rest } = Astro.props;
+const { page, field, as: Tag = 'span', vars, each, accent, strong, link, ...rest } = Astro.props;
+const eachText = each && JSON.stringify(Object.fromEntries(Object.entries(each).map(([k, v]) => [k, { text: v.text, ...(v.html !== undefined && { html: v.html }) }])));
 ---
 
-<Tag {...rest} data-edit={editAttr(page, field)} set:html={words(page, field, vars, { accent, strong, link })} />
+<Tag {...rest} data-edit={editAttr(page, field)} data-edit-each={eachText} set:html={words(page, field, { ...vars, ...each }, { accent, strong, link })} />

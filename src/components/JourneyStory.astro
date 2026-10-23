@@ -11,23 +11,22 @@ import SectionHead from './SectionHead.astro';
 import Photo from './Photo.astro';
 import Icon from './Icon.astro';
 import Words from './Words.astro';
+import { editAttr, words, wordsText, wordsTextList } from '../data/page-text';
 import { BUSINESS, waLink } from '../data/site';
 
 /*
- * "Memorable", typed out one language at a time in the heading. English first
- * so the static (no-JS, reduced-motion) heading reads naturally; the script
- * below cycles through the rest. Indic words fall back to the system
- * Devanagari and Bengali faces, since the self-hosted fonts are Latin-only.
+ * "Memorable", typed out one language at a time in the heading. The words
+ * are page words ("The journey story", The changing word): the first shows
+ * in the static (no-JS, reduced-motion) heading and is what screen readers
+ * say; the script below cycles through the rest. Indic words fall back to the
+ * system Devanagari and Bengali faces, since the self-hosted fonts are
+ * Latin-only. A word's language is known for the starting words, and read
+ * from its script for new ones.
  */
-const memorable = [
-  { lang: 'en', word: 'memorable' },
-  { lang: 'hi', word: 'यादगार' },
-  { lang: 'bn', word: 'স্মরণীয়' },
-  { lang: 'ne', word: 'अविस्मरणीय' },
-  { lang: 'raj', word: 'याद रैवाळो' },
-  { lang: 'es', word: 'inolvidable' },
-  { lang: 'fr', word: 'mémorable' },
-];
+const KNOWN_LANG: Record<string, string> = { memorable: 'en', यादगार: 'hi', স্মরণীয়: 'bn', अविस्मरणीय: 'ne', 'याद रैवाळो': 'raj', inolvidable: 'es', mémorable: 'fr' };
+const langOf = (w: string) => KNOWN_LANG[w] ?? (/[\u0980-\u09FF]/.test(w) ? 'bn' : /[\u0900-\u097F]/.test(w) ? 'hi' : 'en');
+const memorable = wordsTextList('journey', 'titleWords').map((word) => ({ lang: langOf(word), word }));
+const first = memorable[0] ?? { lang: 'en', word: '' };
 
 // The words of each moment are "The journey story" in the dashboard (src/data/page-text.ts); photos and links stay here.
 const chapters = [
@@ -46,9 +45,9 @@ const chapters = [
   <div class="absolute -top-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-lime/15 blur-3xl" aria-hidden="true"></div>
   <div class="wrap relative">
     <div data-reveal>
-      <SectionHead light eyebrow={`${BUSINESS.tagline}`} words="journey:" id="journey" title="A memorable journey to the hills, from the moment you land">
+      <SectionHead light eyebrow={`${BUSINESS.tagline}`} words="journey:" id="journey" title={`${wordsText('journey', 'titleStart')} ${first.word} ${wordsText('journey', 'titleEnd')}`}>
         <Fragment slot="title">
-          A <span class="word-cycle" data-word-cycle data-words={JSON.stringify(memorable)}><span class="sr-only">memorable</span><span class="word-cycle-text" aria-hidden="true" lang="en">memorable</span><span class="word-cycle-caret" aria-hidden="true"></span></span> journey to the hills, from the moment you land
+          <span data-edit={editAttr('journey', 'titleStart')} set:html={words('journey', 'titleStart')} /> <span class="word-cycle" data-word-cycle data-words={JSON.stringify(memorable)} data-edit={editAttr('journey', 'titleWords')}><span class="sr-only">{first.word}</span><span class="word-cycle-text" aria-hidden="true" lang={first.lang}>{first.word}</span><span class="word-cycle-caret" aria-hidden="true"></span></span> <span data-edit={editAttr('journey', 'titleEnd')} set:html={words('journey', 'titleEnd')} />
         </Fragment>
       </SectionHead>
     </div>
@@ -77,7 +76,7 @@ const chapters = [
 
     <div class="mt-10 flex flex-wrap items-center gap-4" data-reveal>
       <a href="/book/" class="btn-lime"><Words page="journey" field="bookButton" /> <Icon name="arrow" /></a>
-      <a href={waLink('Hi, I am planning a trip to the hills from Bagdogra Airport. Can you help?')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> <Words page="journey" field="whatsappButton" /></a>
+      <a href={waLink(wordsText('whatsapp', 'journey'))} rel="noopener" class="btn-light"><Icon name="whatsapp" /> <Words page="journey" field="whatsappButton" /></a>
       <Words page="journey" field="note" class="text-sm text-white/70" />
     </div>
   </div>

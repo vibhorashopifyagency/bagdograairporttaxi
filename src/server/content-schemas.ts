@@ -188,11 +188,61 @@ export const gallerySchema = list(
   1,
 );
 
+/**
+ * Words that may hold the page-words marks: fill-ins this part of the site
+ * knows, and links that go somewhere safe. Whether a link's page exists is
+ * checked at Publish (src/server/content.ts), since a new page may still be a
+ * draft.
+ */
+const marked = (label: string, min: number, max: number, allowed: Set<string>) =>
+  text(label, min, max)
+    .refine((v) => tokensIn(v).every((t) => allowed.has(t)), { message: `${label} has a fill-in in {curly brackets} this page does not know. Use one from the list on this form, or take the brackets away.` })
+    .refine((v) => linksIn(v).every((l) => SAFE_HREF.test(l.href)), { message: `A link in ${label.toLowerCase()} must go to a page on this site (starting with /), or start with https://, mailto: or tel:.` });
+
+/** A page on this site, as a link's address: "/tour-packages/". */
+const sitePath = z.string().trim().regex(/^\/[a-z0-9\-/]*$/, 'The page must be an address on this site, starting with /, such as /book/.').max(120);
+
+const GUIDE_VARS = new Set(allowedVars('guide-page'));
+const cell = (label: string) => z.string().trim().max(400, `${label} is too long (at most 400 characters).`)
+  .refine((v) => tokensIn(v).every((t) => GUIDE_VARS.has(t)), { message: `${label} has a fill-in in {curly brackets} this page does not know.` })
+  .refine((v) => linksIn(v).every((l) => SAFE_HREF.test(l.href)), { message: `A link in a table must go to a page on this site (starting with /), or start with https://.` });
+
+/** One part of a guide's main text (src/lib/guide-body.ts). */
+const guideBlock = z.discriminatedUnion(
+  'type',
+  [
+    z.object({ type: z.literal('heading'), text: marked('A heading', 2, 120, GUIDE_VARS) }),
+    z.object({ type: z.literal('text'), text: marked('A paragraph', 2, 2500, GUIDE_VARS) }),
+    z.object({ type: z.literal('note'), text: marked('A small note', 2, 800, GUIDE_VARS) }),
+    z.object({ type: z.literal('list'), items: list('points', marked('A point', 2, 800, GUIDE_VARS), 30, 1) }),
+    z
+      .object({
+        type: z.literal('table'),
+        head: z.array(cell('A column heading')).max(8, 'A table can have at most 8 columns.'),
+        rows: z.array(z.array(cell('A cell')).min(1).max(8, 'A table can have at most 8 columns.')).min(1, 'A table needs at least one row.').max(60, 'A table can have at most 60 rows.'),
+        rowHeads: z.boolean().optional(),
+      })
+      .refine((t) => t.rows.every((r) => r.length === t.rows[0]!.length) && (!t.head.length || t.head.length === t.rows[0]!.length), { message: 'Every row of a table needs the same number of columns.' })
+      .refine((t) => t.rows.every((r) => r.some((c) => c.trim())), { message: 'A table has an empty row. Fill it in or remove it.' }),
+  ],
+  'Choose what kind of part this is.',
+);
+
 export const guideSchema = z.object({
   slug,
   title: text('The title', 20, 90),
+  short: text('The short name', 3, 60),
+  seoTitle: text('The title in Google', 20, 100),
   description: text('The description', 70, 170),
-  summary: text('The opening answer', 60, 700),
+  summary: marked('The short answer', 60, 700, GUIDE_VARS),
+  facts: list('facts', z.object({ label: text('A fact’s label', 2, 40), value: marked('A fact', 2, 80, GUIDE_VARS) }), 4),
+  body: list('parts', guideBlock, 80, 1),
+  faqs: list('questions', z.object({ q: marked('A question', 5, 200, GUIDE_VARS), a: marked('An answer', 10, 900, GUIDE_VARS) }), 10),
+  packages: list('packages', slug, 3),
+  askNote: marked('The line in the dark card', 10, 300, GUIDE_VARS),
+  waText: text('The WhatsApp message', 5, 300).refine((v) => !linksIn(v).length && !/\*/.test(v), { message: 'The WhatsApp message is plain text: no links, bold or stars.' }),
+  bookHref: sitePath,
+  ctaHeading: marked('The booking box heading', 5, 100, GUIDE_VARS),
   published: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   updated: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   updatedLabel: z.string(),
@@ -241,7 +291,8 @@ export function wordsSchema(page: string) {
       .max(max, `${name} is too long (at most ${max} characters).`)
       .refine((v) => tokensIn(v).every((t) => allowed.has(t)), { message: `${name} has a fill-in in {curly brackets} this page does not know. Use one from the list on this form, or take the brackets away.` })
       .refine((v) => linksIn(v).every((l) => SAFE_HREF.test(l.href)), { message: `A link in ${name} must go to a page on this site (starting with /), or start with https://, mailto: or tel:.` })
-      .refine((v) => !f.plain || (!linksIn(v).length && !/\*/.test(v)), { message: `${name} is plain text: no links, bold or stars.` });
+      .refine((v) => !f.plain || (!linksIn(v).length && !/\*/.test(v)), { message: `${name} is plain text: no links, bold or stars.` })
+      .refine((v) => !f.links || /^\[[^\]\n]+\]\([^)\s]+\)$/.test(v), { message: `${name}: every line needs its words and the page it opens.` });
     shape[key] = Array.isArray(f.text) ? list(name.toLowerCase(), one, Math.min(40, Math.max(6, f.text.length * 2)), 1) : one;
   }
   return z.object(shape).partial();

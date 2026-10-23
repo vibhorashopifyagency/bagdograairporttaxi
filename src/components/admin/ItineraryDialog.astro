@@ -6,7 +6,10 @@
  *
  * It saves a draft a moment after each change. "Send on WhatsApp" opens the
  * chat in the same tap (browsers block windows opened after a wait) and
- * publishes the itinerary to the customer's trip page alongside it.
+ * publishes the itinerary to the customer's trip page alongside it. Once the
+ * office number is connected to Meta's WhatsApp Business Platform (`direct`,
+ * src/server/whatsapp.ts), "Send from the office number" sends it straight
+ * from the dashboard, and the link stays as the way round.
  */
 import type { ItineraryData } from '../../server/db/schema';
 import type { LibraryPhoto } from '../../server/trip';
@@ -35,12 +38,14 @@ interface Props {
   uploadReady: boolean;
   /** The drivers list (active drivers, and this booking's driver). */
   drivers: { id: string; name: string; phone: string; car: string; label: string }[];
+  /** Sending straight from the dashboard is switched on. */
+  direct?: boolean;
   autoOpen?: boolean;
 }
-const { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, uploads, uploadReady, drivers, autoOpen = false } = Astro.props;
+const { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, uploads, uploadReady, drivers, direct = false, autoOpen = false } = Astro.props;
 const first = firstName(draft.name) || 'the customer';
 const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
-const config = { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, uploads, uploadReady, drivers };
+const config = { booking, draft, place, sent, saved, tripUrl, previewUrl, pay, upiReady, templates, library, uploads, uploadReady, drivers, direct };
 const closeIcon = '<path d="M18 6 6 18M6 6l12 12"/>';
 const waIcon = '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.5 8.5 0 1 1 21 11.5z"/>';
 const photoIcon = '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>';
@@ -191,10 +196,16 @@ const field = 'a-field it-field';
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={photoIcon} />
         Share with photos
       </button>
-      <a href="#" target="_blank" rel="noopener" class="btn-wa" data-send>
+      <a href="#" target="_blank" rel="noopener" class={direct ? 'btn-ghost border-ink' : 'btn-wa'} data-send>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={waIcon} />
-        <span data-send-label>{sent ? 'Send update on WhatsApp' : 'Send on WhatsApp'}</span>
+        <span data-send-label>{direct ? 'Open in WhatsApp instead' : sent ? 'Send update on WhatsApp' : 'Send on WhatsApp'}</span>
       </a>
+      {direct && (
+        <button type="button" class="btn-wa" data-send-direct>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg>
+          <span data-direct-label>{sent ? 'Send update from the office number' : 'Send from the office number'}</span>
+        </button>
+      )}
     </footer>
   </div>
 </dialog>
@@ -280,6 +291,7 @@ const field = 'a-field it-field';
     uploads: { key: string; src: string }[];
     uploadReady: boolean;
     drivers: { id: string; name: string; phone: string; car: string }[];
+    direct: boolean;
   };
 
   const root = document.querySelector<HTMLElement>('[data-itin]');
@@ -503,7 +515,24 @@ const field = 'a-field it-field';
     });
 
     /* ---------- Photos ---------- */
+    // The first photo is the cover of the trip page and of the link preview in
+    // WhatsApp, so the order matters: arrows on each photo (they work on a
+    // phone), or drag a photo onto another's place with a mouse.
     const photosBox = $('[data-photos]');
+    let dragFrom = -1;
+    function movePhoto(from: number, to: number, focus?: 'earlier' | 'later') {
+      if (to < 0 || to >= d.photos.length || from === to) return;
+      const [key] = d.photos.splice(from, 1);
+      d.photos.splice(to, 0, key!);
+      changed();
+      renderPhotos();
+      if (!focus) return;
+      const tile = photosBox.children[to];
+      const btn = tile?.querySelector<HTMLButtonElement>(`[data-photo-move="${focus}"]:not(:disabled)`) ?? tile?.querySelector<HTMLButtonElement>('[data-photo-move]:not(:disabled)');
+      btn?.focus();
+    }
+    const arrow = (dir: 'earlier' | 'later') =>
+      `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${dir === 'earlier' ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'}"/></svg>`;
     function renderPhotos() {
       const tiles = d.photos.map((key, i) => {
         const tile = el('div', 'it-photo');
@@ -511,12 +540,52 @@ const field = 'a-field it-field';
         watch(img, key);
         img.src = srcOf(key, 400);
         img.alt = titleOf(key);
+        img.draggable = false;
         const rm = el('button', 'it-photo-x') as HTMLButtonElement;
         rm.type = 'button';
         rm.setAttribute('aria-label', `Remove ${titleOf(key)}`);
         rm.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
         rm.addEventListener('click', () => { d.photos.splice(i, 1); changed(); renderPhotos(); });
         tile.append(img, rm);
+        if (i === 0 && d.photos.length > 1) tile.append(el('span', 'it-photo-cover', 'Cover'));
+        if (d.photos.length > 1) {
+          const moves = el('span', 'it-photo-moves');
+          for (const dir of ['earlier', 'later'] as const) {
+            const b = el('button', 'it-photo-mv') as HTMLButtonElement;
+            b.type = 'button';
+            b.dataset.photoMove = dir;
+            b.innerHTML = arrow(dir);
+            b.disabled = dir === 'earlier' ? i === 0 : i === d.photos.length - 1;
+            b.setAttribute('aria-label', dir === 'earlier' ? (i === 1 ? `Make ${titleOf(key) || 'this photo'} the cover` : `Move ${titleOf(key) || 'this photo'} earlier`) : `Move ${titleOf(key) || 'this photo'} later`);
+            b.addEventListener('click', () => movePhoto(i, dir === 'earlier' ? i - 1 : i + 1, dir));
+            moves.append(b);
+          }
+          tile.append(moves);
+          tile.draggable = true;
+          tile.addEventListener('dragstart', (e) => {
+            dragFrom = i;
+            e.dataTransfer?.setData('text/plain', String(i));
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+            tile.classList.add('is-dragging');
+          });
+          tile.addEventListener('dragend', () => {
+            dragFrom = -1;
+            tile.classList.remove('is-dragging');
+            photosBox.querySelectorAll('.is-drop').forEach((t) => t.classList.remove('is-drop'));
+          });
+          tile.addEventListener('dragover', (e) => {
+            if (dragFrom < 0 || dragFrom === i) return;
+            e.preventDefault();
+            tile.classList.add('is-drop');
+          });
+          tile.addEventListener('dragleave', () => tile.classList.remove('is-drop'));
+          tile.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const from = dragFrom;
+            dragFrom = -1;
+            movePhoto(from, i);
+          });
+        }
         return tile;
       });
       const add = el('button', 'it-photo-add') as HTMLButtonElement;
@@ -525,7 +594,7 @@ const field = 'a-field it-field';
       add.setAttribute('aria-label', 'Add photos');
       add.addEventListener('click', () => openPicker({}));
       photosBox.replaceChildren(...tiles, add);
-      $('[data-photo-count]').textContent = d.photos.length ? `${d.photos.length} selected` : '';
+      $('[data-photo-count]').textContent = d.photos.length > 1 ? `${d.photos.length} selected · the first is the cover` : d.photos.length ? '1 selected' : '';
       prepareShare();
     }
 
@@ -711,7 +780,8 @@ const field = 'a-field it-field';
     }
     function sent() {
       sentOnce = true;
-      $('[data-send-label]').textContent = 'Send update on WhatsApp';
+      if (cfg.direct) $('[data-direct-label]').textContent = 'Send update from the office number';
+      else $('[data-send-label]').textContent = 'Send update on WhatsApp';
     }
 
     send.addEventListener('click', (e) => {
@@ -727,6 +797,52 @@ const field = 'a-field it-field';
       // WhatsApp opens from the link itself; the save runs alongside it.
       clearTimeout(timer);
       post('send').then((ok) => ok && sent());
+    });
+
+    /* ---------- Straight from the office number (src/server/whatsapp.ts) ---------- */
+    const direct = root.querySelector<HTMLButtonElement>('[data-send-direct]');
+    direct?.addEventListener('click', async () => {
+      const p = problem();
+      if (p) {
+        errorBox.textContent = p;
+        errorBox.hidden = false;
+        errorBox.scrollIntoView({ block: 'nearest' });
+        return;
+      }
+      errorBox.hidden = true;
+      clearTimeout(timer);
+      direct.disabled = true;
+      status.textContent = 'Sending from the office number…';
+      let r: { ok?: boolean; error?: string; direct?: 'session' | 'template'; warning?: string } = {};
+      try {
+        const res = await fetch('/admin/api/itinerary/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: cfg.booking.id, action: 'send-direct', data: payload(), text: fullText() }),
+        });
+        r = await res.json().catch(() => ({ error: 'The server did not answer.' }));
+      } catch {
+        r = { error: 'No connection. Check it and try again.' };
+      }
+      direct.disabled = false;
+      if (!r.ok) {
+        status.textContent = 'Not sent.';
+        errorBox.textContent = `${r.error ?? 'It did not go.'} You can still send it with “Open in WhatsApp instead”.`;
+        errorBox.hidden = false;
+        errorBox.scrollIntoView({ block: 'nearest' });
+        return;
+      }
+      dirty = false;
+      sent();
+      const photos = d.photos.length;
+      status.textContent =
+        r.direct === 'session'
+          ? `Sent from the office number: the message${photos ? ` and ${photos} ${photos === 1 ? 'photo' : 'photos'}` : ''}. The ticks show on the booking.`
+          : 'Sent from the office number as your approved message, with the cover photo and the trip link. The ticks show on the booking.';
+      if (r.warning) {
+        errorBox.textContent = r.warning;
+        errorBox.hidden = false;
+      }
     });
 
     /* ---------- Phone: share the photos and the text together ---------- */
@@ -845,6 +961,19 @@ const field = 'a-field it-field';
   @media (min-width: 1024px) { .it-photo, .it-photo-add { width: auto; height: auto; aspect-ratio: 1; } }
   .it-photo img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
   .it-photo-x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 999px; background: rgb(17 17 17 / 72%); color: #fff; }
+  .it-photo-cover { position: absolute; top: 6px; left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--color-lime); color: #111; font-size: 11px; font-weight: 700; line-height: 1.6; pointer-events: none; }
+  .it-photo-moves { position: absolute; left: 4px; right: 4px; bottom: 4px; display: flex; justify-content: space-between; }
+  .it-photo-mv { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 999px; background: rgb(17 17 17 / 72%); color: #fff; cursor: pointer; }
+  .it-photo-mv:disabled { visibility: hidden; }
+  .it-photo-mv:focus-visible, .it-photo-x:focus-visible { outline: 3px solid var(--color-lime); outline-offset: 1px; }
+  .it-photo[draggable='true'] { cursor: grab; }
+  .it-photo.is-dragging { opacity: 0.45; }
+  .it-photo.is-drop { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  /* With a mouse the arrows wait for the pointer, so the grid stays calm; on a touch screen they always show. */
+  @media (hover: hover) and (pointer: fine) {
+    .it-photo-moves { opacity: 0; transition: opacity 0.15s; }
+    .it-photo:hover .it-photo-moves, .it-photo:focus-within .it-photo-moves { opacity: 1; }
+  }
   .it-photo-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem; border: 1px dashed #b9bfca; background: #fff; font: inherit; font-size: 0.8125rem; font-weight: 600; color: var(--color-ink); order: -1; }
   @media (min-width: 1024px) { .it-photo-add { order: 0; } }
   .it-switch { display: flex; align-items: center; gap: 0.65rem; min-height: 2.75rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }

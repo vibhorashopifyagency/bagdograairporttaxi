@@ -83,7 +83,9 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
   import { wordsToHtml, type WordVars } from '../../../lib/rich-text';
 
   /** Fields edited in a form beside the page rather than on it. */
-  const PANEL_FIELDS = new Set(['faqs', 'highlights', 'itinerary', 'includes', 'excludes', 'stops', 'tips', 'fares', 'fromPrice', 'list', 'photo']);
+  const PANEL_FIELDS = new Set(['faqs', 'highlights', 'itinerary', 'includes', 'excludes', 'stops', 'tips', 'fares', 'fromPrice', 'list', 'photo', 'body', 'facts', 'packages']);
+  /** Kinds whose words are written with marks and fill-ins, so they are edited as written: page words and guides. */
+  const MARKED = new Set(['text', 'guide']);
   const FORM: Record<string, (key: string) => string> = {
     route: (k) => `/admin/fares/route/${k}/`,
     package: (k) => `/admin/fares/package/${k}/`,
@@ -96,6 +98,7 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
     faqs: 'Questions', highlights: 'Top things to see', itinerary: 'Day by day', includes: 'Included', excludes: 'Not included',
     stops: 'Stops on the way', tips: 'Tips', fares: 'Fares', fromPrice: 'Price', list: 'General questions', photo: 'Photo',
     summary: 'Opening answer', bestTime: 'Best time to visit', daysNeeded: 'Days needed', howToReach: 'How to reach', permit: 'Permits', title: 'Title',
+    body: 'The guide', facts: 'Facts', packages: 'Tour packages', askNote: 'Line in the dark card', ctaHeading: 'Booking box heading', short: 'Short name',
   };
 
   type Words = { name: string; group: string; labels: Record<string, string> };
@@ -166,7 +169,14 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
   };
   const preview = (el: HTMLElement, src: string) => {
     const o = optsOf(el);
-    let html = wordsToHtml(src, vars, { accent: o.accent });
+    // A spot's own fill-ins ("Taxi to {to}" in each footer link) are written on it by the Words component.
+    let each: WordVars = {};
+    try {
+      each = JSON.parse(el.dataset.editEach ?? '{}');
+    } catch {
+      /* none */
+    }
+    let html = wordsToHtml(src, { ...vars, ...each }, { accent: o.accent });
     if (o.strong) html = html.replace(/<strong>/g, `<strong class="${o.strong}">`);
     if (o.link) html = html.replace(/<a href="([^"]*)">/g, `<a href="$1" class="${o.link}">`);
     return html;
@@ -185,7 +195,7 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
       const now = name ? field(it.current, name) : it.current;
       const was = name ? field(it.live, name) : it.live;
       const changed = it.pending && JSON.stringify(now ?? null) !== JSON.stringify(was ?? null);
-      const words = parts(el).type === 'text';
+      const words = MARKED.has(parts(el).type);
       // Plain words: show the draft right on the page (inside the one paragraph a spot may wrap); page words with their fill-ins and marks.
       if (words && !inPanel(el) && !changed) el.innerHTML = el.dataset.peLive ?? el.innerHTML;
       if (changed && name && !inPanel(el) && typeof now === 'string') {
@@ -264,7 +274,7 @@ const back = '<path d="M15 18l-6-6 6-6"/>';
     const before = el.innerHTML;
     const { type, id, f } = parts(el);
     // Page words are edited as written, so a fill-in stays a fill-in: "Free cancellation up to {freeCancel} h".
-    const src = type === 'text' ? field(items[id]?.current, f) : undefined;
+    const src = MARKED.has(type) ? field(items[id]?.current, f) : undefined;
     if (typeof src === 'string') {
       optsOf(el);
       el.textContent = src;

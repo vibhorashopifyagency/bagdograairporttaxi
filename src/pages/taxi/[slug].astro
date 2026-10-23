@@ -31,9 +31,9 @@ const dest = route.destination ? destinationBySlug(route.destination) : undefine
 const returnRoute = route.returnSlug ? routeBySlug(route.returnSlug) : undefined;
 const related = ROUTES.filter((r) => r.slug !== route.slug && r.group === route.group).slice(0, 4);
 const packages = route.destination ? PACKAGES.filter((p) => p.destinations.includes(route.destination!)).slice(0, 3) : [];
-const waText = `Hi, I would like to book a taxi from ${route.from} to ${route.to}.`;
 // The fixed words are "Every taxi route page" in the dashboard (src/data/page-text.ts), with this route's numbers as fill-ins.
 const vars = routeVars(route);
+const waText = wordsText('route-page', 'waText', vars);
 const w = (field: string) => wordsText('route-page', field, vars);
 
 // Every route page answers the same core questions in its own numbers, plus

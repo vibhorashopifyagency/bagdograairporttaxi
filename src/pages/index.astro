@@ -94,7 +94,7 @@ const [leadGuide, ...moreGuides] = GUIDES;
         </ul>
         <div class="mt-5 flex flex-wrap items-center gap-3">
           <a href="/book/" class="btn-lime lg:hidden"><Words page="home" field="heroBook" /> <Icon name="arrow" /></a>
-          <a href={waLink('Hi, I would like to book a taxi from Bagdogra Airport.')} rel="noopener" class="btn-light"><Icon name="whatsapp" /> <Words page="home" field="heroWhatsapp" /></a>
+          <a href={waLink(wordsText('whatsapp', 'home'))} rel="noopener" class="btn-light"><Icon name="whatsapp" /> <Words page="home" field="heroWhatsapp" /></a>
           <GoogleRatingBadge variant="chip" dark />
         </div>
         <ul class="mt-4 flex flex-wrap items-center gap-2" aria-label="Popular fares">

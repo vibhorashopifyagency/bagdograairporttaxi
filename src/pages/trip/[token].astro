@@ -8,6 +8,7 @@
  */
 import TripPage from '../../components/TripPage.astro';
 import { BUSINESS, SITE, waLink } from '../../data/site';
+import { wordsText } from '../../data/page-text';
 import { getDb, schema } from '../../server/db';
 import { advanceOf } from '../../server/fares';
 import { getUpi, paymentsFor, summarise } from '../../server/payments';
@@ -71,7 +72,7 @@ if (!gone) {
     <body>
       <h1>This trip page is not available</h1>
       <p>The link may be mistyped, or the trip details have been removed after 24 months, as our privacy policy promises.</p>
-      <p><a href="/">{SITE.name}</a> · <a href={waLink('Namaste, I have a question about my trip page.')}>Message us on WhatsApp</a> · <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a></p>
+      <p><a href="/">{SITE.name}</a> · <a href={waLink(wordsText('whatsapp', 'tripFoot'))}>Message us on WhatsApp</a> · <a href={BUSINESS.phoneHref}>{BUSINESS.phone}</a></p>
     </body>
   </html>
 )}

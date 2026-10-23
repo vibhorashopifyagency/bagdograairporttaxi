@@ -29,6 +29,6 @@ import { wordsText } from '../../data/page-text';
       </div>
       <div class="mt-8"><PhotoMarquee items={GALLERY.filter((g) => g.category !== 'Our cars')} /></div>
     </section>
-    <BookCta waText="Hi, I am planning a trip and would like some advice." words="destinations:ctaTitle" image="tsomgo" />
+    <BookCta waText={wordsText('whatsapp', 'advice')} words="destinations:ctaTitle" image="tsomgo" />
   </div>
 </BaseLayout>

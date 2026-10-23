@@ -93,7 +93,7 @@ const steps = ['step1', 'step2', 'step3'];
           ))}
         </ol>
         <div class="mt-8 flex flex-wrap gap-3">
-          <a class="btn-wa" href={waLink('Hi, I have a question about travelling from Bagdogra.')} rel="noopener"><Icon name="whatsapp" /> <Words page="guides" field="howWhatsapp" /></a>
+          <a class="btn-wa" href={waLink(wordsText('whatsapp', 'guides'))} rel="noopener"><Icon name="whatsapp" /> <Words page="guides" field="howWhatsapp" /></a>
           <a class="btn-ghost" href={BUSINESS.phoneHref}><Icon name="phone" /> {BUSINESS.phone}</a>
         </div>
       </div>
@@ -121,6 +121,6 @@ const steps = ['step1', 'step2', 'step3'];
 
   <div class="wrap section">
     <TrustStrip />
-    <BookCta waText="Hi, I have a question about travelling from Bagdogra." words="guides:ctaTitle" image="nathula" />
+    <BookCta waText={wordsText('whatsapp', 'guides')} words="guides:ctaTitle" image="nathula" />
   </div>
 </BaseLayout>

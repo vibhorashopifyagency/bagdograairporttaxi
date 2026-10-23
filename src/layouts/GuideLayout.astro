@@ -1,12 +1,14 @@
 ---
 /**
- * The page frame for every travel guide. The body of the guide goes in the
- * default slot; this layout wraps it with the photo hero, a facts strip, a
- * sticky sidebar (contents and ask-the-team), the FAQ, related
- * tour packages, the "more guides" band and the booking call to action.
+ * Every travel guide (src/pages/guides/[slug].astro): the photo hero, the
+ * short answer, a facts strip, the guide's main text, its questions, a sticky
+ * sidebar (contents and ask-the-team), related tour packages, the "more
+ * guides" band and the booking call to action. All of a guide's words are its
+ * data (src/data/guides.ts, editable in the dashboard); the fixed lines around
+ * them are the "Every travel guide" page words.
  *
- * The contents list is built from the h2s in the body: each gets an id if it
- * has none, so no page has to maintain anchors by hand.
+ * The contents list is built from the headings in the main text: each gets
+ * an id, so no guide has to maintain anchors by hand.
  */
 import BaseLayout from './BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
@@ -16,93 +18,84 @@ import GuideCard from '../components/GuideCard.astro';
 import PackageCard from '../components/PackageCard.astro';
 import Photo from '../components/Photo.astro';
 import Icon from '../components/Icon.astro';
-import { GUIDES, GUIDES_START } from '../data/guides';
+import Words from '../components/Words.astro';
+import { GUIDES, type Guide } from '../data/guides';
 import { PACKAGES } from '../data/packages';
+import { GLOBAL_VARS, editAttr, guideVars, words, wordsText } from '../data/page-text';
 import { BUSINESS, waLink } from '../data/site';
-import type { Faq } from '../data/routes';
 import { guidePhoto } from '../lib/photos';
+import { guideBodyHtml } from '../lib/guide-body';
+import { wordsToHtml, wordsToText } from '../lib/rich-text';
 import { article, faqPage } from '../lib/schema';
 import { photoFile } from '../data/photo-library';
 
 interface Props {
-  guide: (typeof GUIDES)[number];
-  /** The <title>, which is usually tighter than the guide heading. */
-  title: string;
-  /** Short breadcrumb label. */
-  crumb: string;
-  faqs: Faq[];
-  /** Two to four facts shown as a strip under the short answer. */
-  facts?: { label: string; value: string }[];
-  /** Slugs of tour packages to show after the article. */
-  packages?: string[];
-  /** Short line for the sidebar card, e.g. "Send us your ID photos and we apply for the permit." */
-  askNote?: string;
-  waText: string;
-  bookHref?: string;
-  ctaHeading: string;
+  guide: Guide;
 }
-const { guide: g, title, crumb, faqs, facts = [], packages = [], askNote, waText, bookHref = '/book/', ctaHeading } = Astro.props;
+const { guide: g } = Astro.props;
 const path = `/guides/${g.slug}/`;
 const photo = guidePhoto(g.slug);
+const own = guideVars(g);
+const vars = { ...GLOBAL_VARS, ...own };
+const html = (s: string) => wordsToHtml(s, vars);
+const text = (s: string) => wordsToText(s, vars);
+const edit = (field: string) => `guide:${g.slug}:${field}`;
+const faqs = g.faqs.map((f) => ({ q: text(f.q), a: text(f.a) }));
 
-// Render the body once, give every h2 an id and collect them for the contents list.
-const raw = await Astro.slots.render('default');
+// Give every heading in the main text an id and collect them for the contents list.
 const toc: { id: string; label: string }[] = [];
 const slugify = (s: string) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-const body = raw.replace(/<h2([^>]*)>([\s\S]*?)<\/h2>/g, (_m, attrs: string, inner: string) => {
+const body = guideBodyHtml(g.body, vars).replace(/<h2([^>]*)>([\s\S]*?)<\/h2>/g, (_m, attrs: string, inner: string) => {
   const label = inner.replace(/<[^>]+>/g, '').trim();
-  const existing = attrs.match(/\sid="([^"]+)"/);
-  const id = existing ? existing[1] : slugify(label) || `section-${toc.length + 1}`;
+  let id = slugify(label) || `section-${toc.length + 1}`;
+  while (toc.some((t) => t.id === id)) id += '-2';
   toc.push({ id, label });
-  return existing ? `<h2${attrs}>${inner}</h2>` : `<h2 id="${id}"${attrs}>${inner}</h2>`;
+  return `<h2 id="${id}"${attrs}>${inner}</h2>`;
 });
-toc.push({ id: 'faq-h', label: 'Frequently asked questions' });
-const words = body.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length + faqs.reduce((n, f) => n + f.a.split(/\s+/).length, 0);
-const readMinutes = Math.max(2, Math.round(words / 200));
+toc.push({ id: 'faq-h', label: wordsText('guide-page', 'faqTitle') });
 
 // One hue per fact tile: lime, amber, teal, coral. Each shows as a soft shadow and fills the tile on hover.
 const TINTS = ['#a1e005', '#ffb300', '#14b8a6', '#fb7185'];
-const summaryEdited = g.summary !== GUIDES_START.find((x) => x.slug === g.slug)?.summary;
 const others = GUIDES.filter((x) => x.slug !== g.slug);
-const pkgs = packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Boolean) as typeof PACKAGES;
+const pkgs = g.packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Boolean) as typeof PACKAGES;
+const waText = text(g.waText);
 ---
 
 <BaseLayout
-  title={title}
+  title={g.seoTitle}
   description={g.description}
-  crumbs={[{ name: 'Travel guides', path: '/guides/' }, { name: crumb, path }]}
+  crumbs={[{ name: 'Travel guides', path: '/guides/' }, { name: g.short, path }]}
   schema={[article({ headline: g.title, description: g.description, path, modified: g.updated, published: g.published, image: photoFile(photo, 1600) }), faqPage(faqs, path)]}
   ogType="article"
   ogImage={photoFile(photo, 1600)}
 >
-  <PageHero slot="hero" image={photo} eyebrow="Travel guide" title={g.title} edit={`guide:${g.slug}`} editTitle="title" editPhoto={false}>
+  <PageHero slot="hero" image={photo} words="guide-page" vars={own} title={g.title} edit={`guide:${g.slug}`} editTitle="title" editPhoto={false}>
     <div class="mt-5 flex flex-wrap gap-2">
-      <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> {readMinutes} min read</span>
-      <span class="chip-light"><Icon name="check" class="h-4 w-4" /> Updated <time datetime={g.updated}>{g.updatedLabel}</time></span>
-      <a href="/about/" class="chip-light no-underline hover:bg-white/25"><Icon name="car" class="h-4 w-4" /> Written by our drivers</a>
+      <span class="chip-light"><Icon name="clock" class="h-4 w-4" /> <Words page="guide-page" field="readTime" vars={own} /></span>
+      <span class="chip-light"><Icon name="check" class="h-4 w-4" /> <Words page="guide-page" field="updatedChip" vars={own} /></span>
+      <a href="/about/" class="chip-light no-underline hover:bg-white/25"><Icon name="car" class="h-4 w-4" /> <Words page="guide-page" field="writers" vars={own} /></a>
     </div>
   </PageHero>
 
   <article class="wrap mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-14">
     <div class="min-w-0">
-      <p class="eyebrow">The short answer</p>
-      {/* The page's own answer, until the admin rewrites the guide's summary in the dashboard. */}
-      {summaryEdited ? <p class="answer mt-3" data-edit={`guide:${g.slug}:summary`}>{g.summary}</p> : <div class="mt-3" data-edit={`guide:${g.slug}:summary`}><slot name="answer" /></div>}
+      <Words page="guide-page" field="answerEyebrow" vars={own} as="p" class="eyebrow" />
+      <p class="answer mt-3" data-edit={edit('summary')} set:html={html(g.summary)} />
 
-      {facts.length > 0 && (
-        <dl class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-reveal-stagger data-pop>
-          {facts.map((f, i) => (
+      {g.facts.length > 0 && (
+        <dl class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-reveal-stagger data-pop data-edit={edit('facts')}>
+          {g.facts.map((f, i) => (
             <div class="fact" style={`--tint: ${TINTS[i % TINTS.length]}`}>
               <dt class="fact-label">{f.label}</dt>
-              <dd class="mt-2 font-[family-name:var(--font-display)] text-lg leading-snug font-bold text-ink">{f.value}</dd>
+              <dd class="mt-2 font-[family-name:var(--font-display)] text-lg leading-snug font-bold text-ink" set:html={html(f.value)} />
             </div>
           ))}
         </dl>
       )}
 
-      <div class="prose-site prose-flow mt-4" set:html={body} />
+      <div class="prose-site prose-flow mt-4" data-edit={edit('body')} set:html={body} />
 
-      <FaqList faqs={faqs} />
+      <FaqList faqs={faqs} heading={words('guide-page', 'faqTitle', own)} headingEdit={editAttr('guide-page', 'faqTitle')} edit={edit('faqs')} />
     </div>
 
     <aside class="min-w-0 space-y-5">
@@ -110,7 +103,7 @@ const pkgs = packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Bool
       <div class="space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
         {toc.length > 1 && (
           <nav class="card p-5" aria-labelledby="toc-h">
-            <h2 id="toc-h" class="text-base font-bold">In this guide</h2>
+            <Words page="guide-page" field="contents" vars={own} as="h2" id="toc-h" class="text-base font-bold" />
             <ol class="mt-3 space-y-1">
               {toc.map((t, i) => (
                 <li>
@@ -129,11 +122,11 @@ const pkgs = packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Bool
           <Photo name={photo} class="absolute inset-0 h-full w-full object-cover opacity-25" sizes="360px" alt="" />
           <div class="absolute inset-0 bg-gradient-to-br from-ink via-ink/90 to-ink/60" aria-hidden="true"></div>
           <div class="relative">
-            <p class="inline-flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-white/70 uppercase"><span class="live-dot"></span> Team on duty now</p>
-            <h2 id="ask-h" class="mt-2 text-xl font-extrabold text-white">Ask our local team, not a call centre</h2>
-            <p class="mt-2 text-sm leading-relaxed text-white/75">{askNote ?? 'Send your dates on WhatsApp and we reply with the current road, permit and weather position.'}</p>
+            <p class="inline-flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-white/70 uppercase"><span class="live-dot"></span> <Words page="guide-page" field="askEyebrow" vars={own} /></p>
+            <Words page="guide-page" field="askTitle" vars={own} as="h2" id="ask-h" class="mt-2 text-xl font-extrabold text-white" />
+            <p class="mt-2 text-sm leading-relaxed text-white/75" data-edit={edit('askNote')} set:html={html(g.askNote)} />
             <div class="mt-4 grid gap-2">
-              <a class="btn-lime w-full" href={waLink(waText)} rel="noopener"><Icon name="whatsapp" /> WhatsApp us</a>
+              <a class="btn-lime w-full" href={waLink(waText)} rel="noopener"><Icon name="whatsapp" /> <Words page="guide-page" field="askWhatsapp" vars={own} /></a>
               <a class="btn-light w-full" href={BUSINESS.phoneHref}><Icon name="phone" /> {BUSINESS.phone}</a>
             </div>
           </div>
@@ -146,8 +139,8 @@ const pkgs = packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Bool
   {pkgs.length > 0 && (
     <section class="wrap mt-16" aria-labelledby="pk-h">
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <div><p class="eyebrow">Book it as a trip</p><h2 id="pk-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">Packages that use this guide</h2></div>
-        <a href="/tour-packages/" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-lime-text">All {PACKAGES.length} packages <Icon name="arrow" class="h-4 w-4" /></a>
+        <div><Words page="guide-page" field="packagesEyebrow" vars={own} as="p" class="eyebrow" /><Words page="guide-page" field="packagesTitle" vars={own} as="h2" id="pk-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" /></div>
+        <a href="/tour-packages/" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-lime-text"><Words page="guide-page" field="packagesLink" vars={own} /> <Icon name="arrow" class="h-4 w-4" /></a>
       </div>
       <div class="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3" data-reveal-stagger>{pkgs.slice(0, 3).map((p) => <PackageCard pkg={p} />)}</div>
     </section>
@@ -156,14 +149,14 @@ const pkgs = packages.map((s) => PACKAGES.find((p) => p.slug === s)).filter(Bool
   <section class="mt-16 bg-cream py-14 sm:py-16" aria-labelledby="more-h">
     <div class="wrap">
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <div><p class="eyebrow">Keep reading</p><h2 id="more-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]">More from the drivers’ seat</h2></div>
-        <a href="/guides/" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-lime-text">All guides <Icon name="arrow" class="h-4 w-4" /></a>
+        <div><Words page="guide-page" field="moreEyebrow" vars={own} as="p" class="eyebrow" /><Words page="guide-page" field="moreTitle" vars={own} as="h2" id="more-h" class="mt-2 text-3xl font-extrabold sm:text-[2.5rem] sm:leading-[1.1]" /></div>
+        <a href="/guides/" class="inline-flex items-center gap-1.5 font-semibold text-ink no-underline hover:text-lime-text"><Words page="guide-page" field="moreLink" vars={own} /> <Icon name="arrow" class="h-4 w-4" /></a>
       </div>
       <div class="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4" data-reveal-stagger>{others.map((o) => <GuideCard guide={o} />)}</div>
     </div>
   </section>
 
   <div class="wrap">
-    <BookCta bookHref={bookHref} waText={waText} heading={ctaHeading} image={photo} />
+    <BookCta bookHref={g.bookHref} waText={waText} heading={text(g.ctaHeading)} headingEdit={edit('ctaHeading')} image={photo} />
   </div>
 </BaseLayout>

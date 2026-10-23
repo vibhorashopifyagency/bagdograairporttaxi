@@ -129,6 +129,40 @@ export function destinationFromForm(f: FormData, slug: string): Data {
 
 export const faqsFromForm = (f: FormData) => pairs(f, 'faqQ', 'faqA', 'q', 'a') as { q: string; a: string }[];
 
+/**
+ * A travel guide from its form. The main text comes as one JSON value (the
+ * parts editor writes it on save); if it cannot be read, the guide's parts
+ * stay as they were. The packages keep the order they had, with newly ticked
+ * ones after them.
+ */
+export function guideFromForm(f: FormData, current: Data): Data {
+  let body: unknown = current.body;
+  try {
+    const parsed = JSON.parse(str(f, 'body'));
+    if (Array.isArray(parsed)) body = parsed;
+  } catch {
+    /* keep the parts as they were */
+  }
+  const ticked = all(f, 'packages');
+  const before = ((current.packages as string[]) ?? []).filter((p) => ticked.includes(p));
+  return {
+    ...current,
+    title: str(f, 'title'),
+    short: str(f, 'short'),
+    seoTitle: str(f, 'seoTitle'),
+    description: str(f, 'description'),
+    summary: str(f, 'summary'),
+    facts: pairs(f, 'factLabel', 'factValue', 'label', 'value'),
+    body,
+    faqs: faqsFromForm(f),
+    packages: [...before, ...ticked.filter((p) => !before.includes(p))],
+    askNote: str(f, 'askNote'),
+    waText: str(f, 'waText'),
+    bookHref: str(f, 'bookHref') || '/book/',
+    ctaHeading: str(f, 'ctaHeading'),
+  };
+}
+
 /** The first box that is empty or not a number, so the form can point at it before the schema's message. */
 export function missingNumber(d: Data, paths: string[]): string | null {
   for (const p of paths) {

@@ -26,6 +26,9 @@ import { GUIDES_START } from '../data/guides';
 import { PACKAGES_START } from '../data/packages';
 import { CONTENT_VERSION, fingerprint, pickFields, type ContentType } from '../data/published';
 import { WORD_PAGES, WORDS_START } from '../data/page-text';
+import { LIST_SECTIONS, STATIC_FILES, STATIC_PAGES } from '../data/site-pages';
+import { blockLinks, type GuideBlock } from '../lib/guide-body';
+import { linksIn } from '../lib/rich-text';
 import { GOOGLE } from '../data/reviews';
 import { PHOTOS_START, photoTitle } from '../data/photo-library';
 import { ROUTES_START } from '../data/routes';
@@ -205,7 +208,7 @@ async function actorIsAdmin(actorId: string): Promise<boolean> {
 }
 
 /** Which row of a list a problem is in: "Day 7: A day plan needs at least 10 characters." */
-const ROW_NOUN: Record<string, string> = { itinerary: 'Day', faqs: 'Question', stops: 'Stop', tips: 'Tip', highlights: 'Highlight', includes: 'Included item', excludes: 'Not-included item', registrations: 'Registration', places: 'Place', bestFor: 'Tag', sameAs: 'Profile link' };
+const ROW_NOUN: Record<string, string> = { itinerary: 'Day', faqs: 'Question', stops: 'Stop', tips: 'Tip', highlights: 'Highlight', includes: 'Included item', excludes: 'Not-included item', registrations: 'Registration', places: 'Place', bestFor: 'Tag', sameAs: 'Profile link', body: 'Part', facts: 'Fact', packages: 'Package' };
 
 function firstIssue(e: { issues: { message: string; path: PropertyKey[] }[] }): { error: string; field: string } {
   const issue = e.issues[0];
@@ -457,6 +460,7 @@ export async function findText(phrases: string[]): Promise<TextHit[]> {
   }
   const faq = await getEntry('faq', 'main');
   if (faq?.current && (faq.state !== 'code' || faq.pending)) look('faq', 'main', 'General questions', faq.current);
+  for (const e of await listEntries('guide')) if (e.current && (e.state !== 'code' || e.pending)) look('guide', e.key, titleOf(LISTS.guide, e.key, e.current), e.current);
   for (const key of Object.keys(WORD_PAGES)) {
     const e = await getEntry('text', key);
     if (e?.current && (e.state !== 'code' || e.pending)) look('text', key, WORD_PAGES[key as keyof typeof WORD_PAGES].name, e.current);
@@ -508,7 +512,8 @@ async function siteAfterPublish() {
     const def = defFor(type, key)!;
     return entryOf(def, key, all.find((r) => r.type === type && r.key === key)).current;
   };
-  return { lists, business: one('business', 'main') as Data, policy: one('policy', 'main') as Data, launch: one('site', 'launch') as Data, gallery: (one('gallery', 'main') ?? []) as Data[], photoRows: byType('photo'), textRows: byType('text') };
+  const words = Object.fromEntries(Object.keys(WORD_PAGES).map((k) => [k, one('text', k)])) as Record<string, Data | null>;
+  return { lists, business: one('business', 'main') as Data, policy: one('policy', 'main') as Data, launch: one('site', 'launch') as Data, gallery: (one('gallery', 'main') ?? []) as Data[], photoRows: byType('photo'), textRows: byType('text'), words };
 }
 
 /** The photos the site started with. Page templates name some of them directly, so they can be replaced but never deleted. */
@@ -560,6 +565,30 @@ export async function checkBeforePublish(): Promise<string[]> {
       }
     }
   }
+  // Every link typed in page words or a guide must open a page that will exist: one broken link stops the build, and then nothing goes live.
+  const live: Record<keyof typeof LIST_SECTIONS, Set<string>> = { taxi: routes, 'tour-packages': pkgs, destinations: dest, guides };
+  const opens = (href: string) => {
+    if (!href.startsWith('/')) return true;
+    const path = href.replace(/[?#].*$/, '');
+    if (STATIC_PAGES.includes(path) || STATIC_FILES.includes(path)) return true;
+    const m = path.match(/^\/([a-z-]+)\/([^/]+)\/$/);
+    return Boolean(m && m[1] in live && live[m[1] as keyof typeof LIST_SECTIONS].has(m[2]));
+  };
+  for (const [key, w] of Object.entries(site.words)) {
+    const page = WORD_PAGES[key as keyof typeof WORD_PAGES];
+    if (!page || !isRecord(w)) continue;
+    for (const [field, v] of Object.entries(w)) {
+      for (const l of strings(v).flatMap(linksIn)) {
+        const label = (page.fields as Record<string, { label: string }>)[field]?.label ?? field;
+        if (!opens(l.href)) problems.push(`${page.name}, ${label}: the link “${l.words}” opens ${l.href}, a page that would not be on the website. Change it or take it out.`);
+      }
+    }
+  }
+  for (const g of site.lists.guide) {
+    const hrefs = [...blockLinks((g.body as GuideBlock[]) ?? []), ...strings([g.summary, g.facts, g.faqs, g.askNote, g.ctaHeading]).flatMap((t) => linksIn(t).map((l) => l.href)), String(g.bookHref ?? '/book/')];
+    for (const href of new Set(hrefs)) if (!opens(href)) problems.push(`The guide “${g.title}” links to ${href}, a page that would not be on the website. Change the link or take it out.`);
+  }
+
   // Every photo a page names must be in the library, and described.
   const photos = new Map(site.lists.photo.map((p) => [String(p.key), p]));
   const photoName = (k: string) => photoTitle({ key: k, title: (photos.get(k)?.title as string | null) ?? null });

@@ -44,7 +44,7 @@ const gallery = {
       <div class="card p-6">
         <Words page="gallery" field="shareTitle" as="h2" class="text-xl font-bold" />
         <Words page="gallery" field="shareText" as="p" class="mt-2 leading-relaxed" />
-        <a href={waLink('Hi, I travelled with you and would like to share some photos for your gallery.')} rel="noopener" class="btn-wa mt-5"><Icon name="whatsapp" /> <Words page="gallery" field="shareButton" /></a>
+        <a href={waLink(wordsText('whatsapp', 'galleryShare'))} rel="noopener" class="btn-wa mt-5"><Icon name="whatsapp" /> <Words page="gallery" field="shareButton" /></a>
       </div>
       <div class="card p-6">
         <Words page="gallery" field="aboutTitle" as="h2" class="text-xl font-bold" />
@@ -53,6 +53,6 @@ const gallery = {
       </div>
     </div>
 
-    <BookCta words="gallery:ctaTitle" waText="Hi, I saw a place in your gallery and would like to plan a trip there." image="pelling" />
+    <BookCta words="gallery:ctaTitle" waText={wordsText('whatsapp', 'gallery')} image="pelling" />
   </div>
 </BaseLayout>

@@ -7,7 +7,19 @@ import TimePicker from '../../components/TimePicker.astro';
 import { ROUTES, ROUTE_GROUPS } from '../../data/routes';
 import { PACKAGES } from '../../data/packages';
 import { VEHICLES } from '../../data/vehicles';
+import Words from '../../components/Words.astro';
 import { BUSINESS, POLICY } from '../../data/site';
+import { wordsText } from '../../data/page-text';
+
+// Every word on this page is "Booking form" in the dashboard (src/data/page-text.ts).
+// The ones the script writes go to it as text, with the amounts it works out
+// ({amount}, {total}, {ref}...) still in brackets for it to fill.
+const SCRIPT_WORDS = [
+  'fareLabel', 'fareLabelPackage', 'baseLabel', 'baseLabelPackage', 'nightLabel', 'nightLabelPackage', 'balanceLabel', 'balanceLabelPackage',
+  'packageFrom', 'packageNote', 'payNote', 'payNotePackage', 'missing', 'missingDate', 'missingTime', 'missingName', 'missingPhone',
+  'payRest', 'payPays', 'payCopy', 'payCopied', 'payApp', 'paySend', 'payConfirm', 'waIntro', 'waPaid',
+] as const;
+const w = (field: string) => wordsText('book', field);
 
 // Only what the script needs, so the inline payload stays a few kB.
 const data = {
@@ -16,30 +28,33 @@ const data = {
   vehicles: Object.fromEntries(VEHICLES.map((v) => [v.key, v.name])),
   policy: POLICY,
   whatsapp: BUSINESS.whatsapp,
+  words: Object.fromEntries(SCRIPT_WORDS.map((k) => [k, w(k)])),
 };
+/** An empty element the script fills in, standing where a fill-in is in the words. */
+const slot = (html: string) => ({ text: '', html });
 ---
 
 <BaseLayout
   welcome={false}
-  title="Book a Bagdogra Airport Taxi Online: Instant Fare, UPI Advance"
-  description={`Book a fixed-fare taxi from Bagdogra Airport, NJP or Siliguri in under a minute. See the full fare, pay a ${POLICY.advancePercent}% advance by UPI and get instant WhatsApp confirmation.`}
+  title={w('seoTitle')}
+  description={w('seoDescription')}
   crumbs={[{ name: 'Book a taxi', path: '/book/' }]}
 >
   <div class="wrap mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
     <div>
-      <h1 class="text-3xl font-extrabold sm:text-4xl">Book your taxi</h1>
-      <p class="mt-2 text-muted">Takes under a minute. You see the full fare before you pay anything.</p>
+      <Words page="book" field="title" as="h1" class="text-3xl font-extrabold sm:text-4xl" />
+      <Words page="book" field="lead" as="p" class="mt-2 text-muted" />
       <GoogleRatingBadge variant="chip" class="mt-4" />
 
       <form id="book" class="mt-8 space-y-8" novalidate>
         <fieldset>
-          <legend class="text-lg font-bold text-ink">1. Trip</legend>
+          <Words page="book" field="step1" as="legend" class="text-lg font-bold text-ink" />
           <div class="mt-3 flex gap-2" role="radiogroup">
-            <label class="chip"><input type="radio" name="kind" value="taxi" checked class="sr-only" /><span>Taxi transfer</span></label>
-            <label class="chip"><input type="radio" name="kind" value="package" class="sr-only" /><span>Tour package</span></label>
+            <label class="chip"><input type="radio" name="kind" value="taxi" checked class="sr-only" /><Words page="book" field="kindTaxi" /></label>
+            <label class="chip"><input type="radio" name="kind" value="package" class="sr-only" /><Words page="book" field="kindPackage" /></label>
           </div>
           <label class="field mt-4" data-for="taxi">
-            <span>Route</span>
+            <Words page="book" field="routeLabel" />
             <select name="route" required>
               {ROUTE_GROUPS.map((g) => (
                 <optgroup label={g}>
@@ -49,7 +64,7 @@ const data = {
             </select>
           </label>
           <label class="field mt-4" data-for="package" hidden>
-            <span>Tour package</span>
+            <Words page="book" field="packageLabel" />
             <select name="package">
               {PACKAGES.map((p) => <option value={p.slug}>{p.name} ({p.nights}N/{p.days}D)</option>)}
             </select>
@@ -57,13 +72,13 @@ const data = {
         </fieldset>
 
         <fieldset>
-          <legend class="text-lg font-bold text-ink">2. Car</legend>
+          <Words page="book" field="step2" as="legend" class="text-lg font-bold text-ink" />
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
             {VEHICLES.map((v, i) => (
               <label class="vehicle card flex cursor-pointer items-start gap-3 p-4">
                 <input type="radio" name="vehicle" value={v.key} checked={i === 0} class="mt-1 accent-[#111111]" />
                 <span class="flex-1">
-                  <strong class="block text-ink">{v.name} <span class="font-normal text-muted">· {v.seats} seats</span></strong>
+                  <strong class="block text-ink">{v.name} <span class="font-normal text-muted">· <Words page="book" field="seats" each={{ seats: { text: String(v.seats) } }} /></span></strong>
                   <span class="block text-xs text-muted">{v.models}</span>
                   <span class="mt-1 block text-lg font-bold text-ink" data-price={v.key}></span>
                 </span>
@@ -73,18 +88,18 @@ const data = {
         </fieldset>
 
         <fieldset class="grid gap-4 sm:grid-cols-2">
-          <legend class="mb-3 text-lg font-bold text-ink sm:col-span-2">3. When and where</legend>
-          <DatePicker name="date" label="Pickup date" />
-          <TimePicker name="time" label="Pickup time (or landing time)" nightFrom={POLICY.nightChargeFrom} nightTo={POLICY.nightChargeTo} nightTag={`+₹${POLICY.nightCharge.toLocaleString('en-IN')} night charge`} />
-          <label class="field"><span>Flight or train number <em class="font-normal text-muted">(optional)</em></span><input name="flight" placeholder="e.g. 6E 6521" autocomplete="off" /></label>
-          <label class="field"><span>Passengers</span><input type="number" name="pax" min="1" max="12" value="2" inputmode="numeric" /></label>
-          <label class="field sm:col-span-2"><span>Hotel or drop address</span><input name="drop" placeholder="Hotel name and area" /></label>
+          <Words page="book" field="step3" as="legend" class="mb-3 text-lg font-bold text-ink sm:col-span-2" />
+          <DatePicker name="date" label={w('dateLabel')} />
+          <TimePicker name="time" label={w('timeLabel')} nightFrom={POLICY.nightChargeFrom} nightTo={POLICY.nightChargeTo} nightTag={w('nightTag')} />
+          <label class="field"><span><Words page="book" field="flightLabel" /> <Words page="book" field="optional" as="em" class="font-normal text-muted" /></span><input name="flight" placeholder={w('flightHint')} autocomplete="off" /></label>
+          <label class="field"><Words page="book" field="paxLabel" /><input type="number" name="pax" min="1" max="12" value="2" inputmode="numeric" /></label>
+          <label class="field sm:col-span-2"><Words page="book" field="dropLabel" /><input name="drop" placeholder={w('dropHint')} /></label>
         </fieldset>
 
         <fieldset class="grid gap-4 sm:grid-cols-2">
-          <legend class="mb-3 text-lg font-bold text-ink sm:col-span-2">4. Your details</legend>
-          <label class="field"><span>Full name</span><input name="name" required autocomplete="name" /></label>
-          <label class="field"><span>Mobile (WhatsApp)</span><input name="phone" type="tel" required autocomplete="tel" inputmode="tel" placeholder="+91" /></label>
+          <Words page="book" field="step4" as="legend" class="mb-3 text-lg font-bold text-ink sm:col-span-2" />
+          <label class="field"><Words page="book" field="nameLabel" /><input name="name" required autocomplete="name" /></label>
+          <label class="field"><Words page="book" field="phoneLabel" /><input name="phone" type="tel" required autocomplete="tel" inputmode="tel" placeholder="+91" /></label>
         </fieldset>
         <div class="hp" aria-hidden="true">
           <label>Leave this empty<input name="website" tabindex="-1" autocomplete="off" /></label>
@@ -97,71 +112,71 @@ const data = {
       <div class="ring-shell">
       <div class="card overflow-hidden">
         <div class="bg-ink p-5 text-white">
-          <p class="text-sm text-white/70" id="fare-label">Your fare</p>
+          <p class="text-sm text-white/70" id="fare-label">{w('fareLabel')}</p>
           <p class="text-4xl font-extrabold" id="total" aria-live="polite">–</p>
           <p class="text-sm text-white/70" id="trip-name"></p>
           <p class="mt-1 text-xs text-white/60" id="fare-note" hidden></p>
         </div>
         <dl class="space-y-2 p-5 text-sm">
-          <div class="flex justify-between"><dt id="base-label">Base fare</dt><dd id="base" class="font-semibold text-ink">–</dd></div>
-          <div class="flex justify-between"><dt id="night-label">Night charge</dt><dd id="night" class="font-semibold text-ink">₹0</dd></div>
-          <div class="flex justify-between border-t border-line pt-2"><dt><strong class="text-ink">Advance now ({POLICY.advancePercent}%)</strong></dt><dd id="adv" class="font-bold text-ink">–</dd></div>
-          <div class="flex justify-between"><dt id="bal-label">Pay driver after trip</dt><dd id="bal">–</dd></div>
+          <div class="flex justify-between"><dt id="base-label">{w('baseLabel')}</dt><dd id="base" class="font-semibold text-ink">–</dd></div>
+          <div class="flex justify-between"><dt id="night-label">{w('nightLabel')}</dt><dd id="night" class="font-semibold text-ink">₹0</dd></div>
+          <div class="flex justify-between border-t border-line pt-2"><dt><Words page="book" field="advanceLabel" as="strong" class="text-ink" /></dt><dd id="adv" class="font-bold text-ink">–</dd></div>
+          <div class="flex justify-between"><dt id="bal-label">{w('balanceLabel')}</dt><dd id="bal">–</dd></div>
         </dl>
         <div class="space-y-3 px-5 pb-5">
-          <button type="button" id="wa" class="btn-wa w-full"><Icon name="whatsapp" /> Confirm on WhatsApp</button>
-          <button type="button" id="pay" class="btn-book w-full"><Icon name="shield" /> Pay advance by UPI</button>
+          <button type="button" id="wa" class="btn-wa w-full"><Icon name="whatsapp" /> <Words page="book" field="waButton" /></button>
+          <button type="button" id="pay" class="btn-book w-full"><Icon name="shield" /> <Words page="book" field="payButton" /></button>
           <p class="text-xs text-muted" id="pay-note"></p>
-          <p class="text-xs text-muted">We save your name, mobile number and trip details to arrange this booking. <a href="/privacy/">Privacy policy</a></p>
+          <Words page="book" field="privacy" as="p" class="text-xs text-muted" />
         </div>
         <ul class="space-y-2 border-t border-line bg-mist p-5 text-sm">
-          <li class="flex gap-2"><Icon name="refund" class="h-5 w-5 shrink-0 text-lime-text" />Free cancellation up to {POLICY.freeCancelHours} hours before pickup. <a href="/cancellation-refund-policy/">Policy</a></li>
-          <li class="flex gap-2"><Icon name="clock" class="h-5 w-5 shrink-0 text-lime-text" />{POLICY.freeWaitMinutes} minutes free waiting after landing</li>
-          <li class="flex gap-2"><Icon name="check" class="h-5 w-5 shrink-0 text-lime-text" />Tolls, parking, driver allowance and GST included</li>
+          <li class="flex gap-2"><Icon name="refund" class="h-5 w-5 shrink-0 text-lime-text" /><Words page="book" field="promise1" /></li>
+          <li class="flex gap-2"><Icon name="clock" class="h-5 w-5 shrink-0 text-lime-text" /><Words page="book" field="promise2" /></li>
+          <li class="flex gap-2"><Icon name="check" class="h-5 w-5 shrink-0 text-lime-text" /><Words page="book" field="promise3" /></li>
         </ul>
       </div>
       </div>
-      <p class="mt-4 text-center text-sm">Prefer to talk? <a href={BUSINESS.phoneHref}>Call {BUSINESS.phone}</a>, open 24 hours.</p>
+      <Words page="book" field="talk" as="p" class="mt-4 text-center text-sm" />
     </aside>
   </div>
 
   {/* Paying the advance first: the office UPI QR code, from /api/upi/ when the button is pressed. */}
   <dialog id="pay-dlg" class="pay-dlg" aria-labelledby="pay-title">
     <div class="pay-head">
-      <h2 id="pay-title" class="m-0 text-xl font-extrabold">Pay the advance by UPI</h2>
+      <Words page="book" field="payTitle" as="h2" id="pay-title" class="m-0 text-xl font-extrabold" />
       <button type="button" class="pay-x" data-pay-close aria-label="Close">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
       </button>
     </div>
     <div class="pay-main">
       <div class="pay-amount">
-        <span class="text-sm text-white/70">Advance for booking <strong class="font-mono text-white" data-pay-ref></strong></span>
+        <Words page="book" field="payFor" class="text-sm text-white/70" vars={{ ref: slot('<strong class="font-mono text-white" data-pay-ref></strong>') }} />
         <strong class="text-4xl font-extrabold text-lime" data-pay-amt></strong>
         <span class="text-sm text-white/70" data-pay-rest></span>
       </div>
 
-      <div data-pay-loading class="pay-note">Loading our UPI QR code…</div>
+      <div data-pay-loading class="pay-note">{w('payLoading')}</div>
       <div data-pay-qr hidden class="pay-qr">
         {/* The QR picture and the UPI app link are made by the script once /api/upi/ answers. */}
         <div class="flex min-w-0 flex-col gap-1.5">
-          <span class="font-bold text-ink">Scan with any UPI app</span>
-          <span class="text-sm text-body">Google Pay, PhonePe, Paytm, BHIM or your bank's app.</span>
+          <Words page="book" field="payScan" class="font-bold text-ink" />
+          <Words page="book" field="payApps" class="text-sm text-body" />
           <span class="text-sm text-body" data-pay-payee></span>
           <span class="flex flex-wrap items-center gap-2 text-sm" data-pay-idrow hidden>
-            <span class="text-muted">UPI ID</span>
+            <Words page="book" field="payId" class="text-muted" />
             <code class="pay-id" data-pay-id></code>
-            <button type="button" class="pay-copy" data-pay-copy>Copy</button>
+            <button type="button" class="pay-copy" data-pay-copy>{w('payCopy')}</button>
           </span>
         </div>
       </div>
-      <p data-pay-none hidden class="pay-note">Our UPI QR code is sent with your confirmation on WhatsApp. Your booking is saved; press the button below to send it to us.</p>
+      <Words page="book" field="payNone" as="p" data-pay-none hidden class="pay-note" />
 
       <ol class="pay-steps" data-pay-steps>
-        <li>Pay <strong data-pay-amt2></strong> and write <strong data-pay-ref2></strong> in the note, if your app asks for one.</li>
-        <li>Send us the payment screenshot on WhatsApp. We confirm your booking there.</li>
+        <Words page="book" field="payStep1" as="li" vars={{ amount: slot('<strong data-pay-amt2></strong>'), ref: slot('<strong data-pay-ref2></strong>') }} />
+        <Words page="book" field="payStep2" as="li" />
       </ol>
-      <button type="button" class="btn-wa w-full" data-pay-wa><Icon name="whatsapp" /> <span data-pay-wa-label>I have paid: send it on WhatsApp</span></button>
-      <p class="m-0 text-center text-xs text-muted">Free cancellation up to {POLICY.freeCancelHours} hours before pickup. <a href="/cancellation-refund-policy/">Refund policy</a></p>
+      <button type="button" class="btn-wa w-full" data-pay-wa><Icon name="whatsapp" /> <span data-pay-wa-label>{w('paySend')}</span></button>
+      <Words page="book" field="payFoot" as="p" class="m-0 text-center text-xs text-muted" />
     </div>
   </dialog>
 
@@ -173,8 +188,12 @@ const data = {
       vehicles: Record<string, string>;
       policy: { advancePercent: number; nightCharge: number; nightChargeFrom: string; nightChargeTo: string };
       whatsapp: string;
+      words: Record<string, string>;
     };
     const d: Data = JSON.parse(document.getElementById('book-data')!.textContent!);
+    const W = d.words;
+    /** The page's words with what the script worked out written in: fill(W.payApp, { amount: '₹560' }). */
+    const fill = (words: string, values: Record<string, string>) => words.replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g, (all, k: string) => values[k] ?? all);
     const f = document.getElementById('book') as HTMLFormElement;
     const $ = (id: string) => document.getElementById(id)!;
     const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
@@ -243,10 +262,10 @@ const data = {
       document.querySelectorAll<HTMLElement>('[data-price]').forEach((el) => {
         el.textContent = pkg ? '' : inr(route.fares[el.dataset.price!]);
       });
-      $('fare-label').textContent = pkg ? 'Package price' : 'Your fare';
-      $('base-label').textContent = pkg ? 'Per person' : 'Base fare';
-      $('night-label').textContent = pkg ? 'Travellers' : 'Night charge';
-      $('bal-label').textContent = pkg ? 'Balance before the trip' : 'Pay driver after trip';
+      $('fare-label').textContent = pkg ? W.fareLabelPackage : W.fareLabel;
+      $('base-label').textContent = pkg ? W.baseLabelPackage : W.baseLabel;
+      $('night-label').textContent = pkg ? W.nightLabelPackage : W.nightLabel;
+      $('bal-label').textContent = pkg ? W.balanceLabelPackage : W.balanceLabel;
       $('fare-note').hidden = !pkg;
       if (pkg) {
         // Packages are priced per person (two sharing), so the total is the
@@ -257,12 +276,12 @@ const data = {
         const total = p.fromPrice * pax;
         const adv = Math.round((total * d.policy.advancePercent) / 100);
         $('trip-name').textContent = `${p.name} · ${p.priceNote}`;
-        $('fare-note').textContent = 'Lowest season price. Final price confirmed on WhatsApp once season, hotels and group size are known.';
-        $('total').textContent = `from ${inr(p.fromPrice)}`;
+        $('fare-note').textContent = W.packageNote;
+        $('total').textContent = fill(W.packageFrom, { amount: inr(p.fromPrice) });
         $('base').textContent = inr(p.fromPrice);
         $('night').textContent = `${pax} × ${inr(p.fromPrice)} = ${inr(total)}`;
-        $('adv').textContent = `from ${inr(adv)}`;
-        $('bal').textContent = `from ${inr(total - adv)}`;
+        $('adv').textContent = fill(W.packageFrom, { amount: inr(adv) });
+        $('bal').textContent = fill(W.packageFrom, { amount: inr(total - adv) });
         return { route: null, vehicle, total, adv, pax, pkg: p };
       }
       const base = route.fares[vehicle];
@@ -282,7 +301,8 @@ const data = {
       const missing = ['date', 'time', 'name', 'phone'].filter((n) => !val(n));
       const err = $('err');
       if (missing.length) {
-        err.textContent = 'Please add your ' + missing.map((m) => (m === 'phone' ? 'mobile number' : m === 'time' ? 'pickup time' : m === 'date' ? 'pickup date' : 'name')).join(', ') + '.';
+        const names: Record<string, string> = { date: W.missingDate, time: W.missingTime, name: W.missingName, phone: W.missingPhone };
+        err.textContent = fill(W.missing, { missing: missing.map((m) => names[m]).join(', ') });
         err.classList.remove('hidden');
         // Date and time live in hidden inputs; their picker buttons take the focus instead.
         const first = f.elements.namedItem(missing[0]) as HTMLElement;
@@ -299,7 +319,7 @@ const data = {
         ? [`Tour package: ${c.pkg.name}`, `Car: ${d.vehicles[c.vehicle]}`, `Price shown: from ${inr(c.pkg.fromPrice)} ${c.pkg.priceNote} · ${c.pax} travellers from ${inr(c.total)} (advance ${inr(c.adv)})`]
         : [`Route: ${c.route!.name}`, `Car: ${d.vehicles[c.vehicle]}`, `Fare shown: ${inr(c.total)} (advance ${inr(c.adv)})`];
       return [
-        'New booking request',
+        W.waIntro,
         `Booking ref: ${ref}`,
         ...lines,
         `Date: ${val('date')} at ${val('time')}`,
@@ -335,9 +355,7 @@ const data = {
     function syncPayButton() {
       const pkg = kind() === 'package';
       ($('pay') as HTMLButtonElement).hidden = pkg;
-      $('pay-note').textContent = pkg
-        ? 'For tour packages we confirm the final price on WhatsApp first, then send our UPI QR code for the advance.'
-        : 'Pay by scanning our UPI QR code with any UPI app. No card details, no payment page.';
+      $('pay-note').textContent = pkg ? W.payNotePackage : W.payNote;
     }
     f.addEventListener('change', syncPayButton);
     syncPayButton();
@@ -351,14 +369,14 @@ const data = {
       q1('[data-pay-ref2]').textContent = ref;
       q1('[data-pay-amt]').textContent = inr(c.adv);
       q1('[data-pay-amt2]').textContent = inr(c.adv);
-      q1('[data-pay-rest]').textContent = `${d.policy.advancePercent}% of ${inr(c.total)}. The other ${inr(c.total - c.adv)} is paid to your driver after the trip.`;
+      q1('[data-pay-rest]').textContent = fill(W.payRest, { total: inr(c.total), rest: inr(c.total - c.adv) });
       q1('[data-pay-loading]').hidden = false;
       q1('[data-pay-qr]').hidden = true;
       q1('[data-pay-none]').hidden = true;
       const oldApp = dlg.querySelector<HTMLElement>('[data-pay-app]');
       if (oldApp) oldApp.hidden = true;
       q1('[data-pay-steps]').hidden = false;
-      q1('[data-pay-wa-label]').textContent = 'I have paid: send it on WhatsApp';
+      q1('[data-pay-wa-label]').textContent = W.paySend;
       dlg.showModal();
       const u = await loadUpi();
       q1('[data-pay-loading]').hidden = true;
@@ -366,7 +384,7 @@ const data = {
         // No QR code uploaded yet (or offline): the office sends it on WhatsApp.
         q1('[data-pay-none]').hidden = false;
         q1('[data-pay-steps]').hidden = true;
-        q1('[data-pay-wa-label]').textContent = 'Confirm on WhatsApp';
+        q1('[data-pay-wa-label]').textContent = W.payConfirm;
         return;
       }
       const box = q1('[data-pay-qr]');
@@ -375,7 +393,7 @@ const data = {
       img.width = u.qr.w;
       img.height = u.qr.h;
       img.alt = `UPI QR code of ${u.payee || 'Bagdogra Airport Taxi'}`;
-      q1('[data-pay-payee]').textContent = u.payee ? `Pays ${u.payee}` : '';
+      q1('[data-pay-payee]').textContent = u.payee ? fill(W.payPays, { payee: u.payee }) : '';
       q1('[data-pay-idrow]').hidden = !u.id;
       q1('[data-pay-id]').textContent = u.id;
       q1('[data-pay-qr]').hidden = false;
@@ -388,7 +406,7 @@ const data = {
           box.after(app);
         }
         app.href = upiLink(u, c.adv);
-        app.textContent = `Pay ${inr(c.adv)} with a UPI app`;
+        app.textContent = fill(W.payApp, { amount: inr(c.adv) });
         app.hidden = false;
       }
     });
@@ -399,16 +417,16 @@ const data = {
       const btn = e.currentTarget as HTMLButtonElement;
       try {
         await navigator.clipboard.writeText(q1('[data-pay-id]').textContent ?? '');
-        btn.textContent = 'Copied';
+        btn.textContent = W.payCopied;
       } catch {
         btn.textContent = 'Select and copy';
       }
-      setTimeout(() => (btn.textContent = 'Copy'), 2000);
+      setTimeout(() => (btn.textContent = W.payCopy), 2000);
     });
     q1('[data-pay-wa]').addEventListener('click', () => {
       const paid = !q1('[data-pay-qr]').hidden;
       const c = calc();
-      const text = paid ? `${message()}\nAdvance paid: ${inr(c.adv)} by UPI. I am sending the payment screenshot.` : message();
+      const text = paid ? `${message()}\n${fill(W.waPaid, { amount: inr(c.adv) })}` : message();
       // Opened first and in the same click, or the browser blocks the window.
       window.open(`https://wa.me/${d.whatsapp}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
       dlg.close();

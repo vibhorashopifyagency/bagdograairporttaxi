@@ -95,6 +95,6 @@ const desc = w('seoDescription');
         <div class="grid gap-5 md:grid-cols-3">{packages.slice(0, 3).map((p) => <PackageCard pkg={p} />)}</div>
       </section>
     )}
-    <BookCta waText={`Hi, I am planning a trip to ${d.name}.`} words="destination-page:ctaTitle" vars={vars} image={destinationPhoto(d)} />
+    <BookCta waText={wordsText('destination-page', 'waText', vars)} words="destination-page:ctaTitle" vars={vars} image={destinationPhoto(d)} />
   </div>
 </BaseLayout>

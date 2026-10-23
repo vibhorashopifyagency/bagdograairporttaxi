@@ -34,7 +34,8 @@ export const PHOTOS = {
   'north-sikkim': { file: 'Landscape on the way to Yumthang Valley from Lachung, North Sikkim, India 04.jpg', alt: 'The road from Lachung to Yumthang Valley, North Sikkim' },
   gurudongmar: { file: 'Gurudongmar Lake Sikkim, India.jpg', alt: 'Gurudongmar Lake, North Sikkim, partly frozen' },
   lachung: { file: 'Lachung Monastery at Lachung Village in North Sikkim, India 03.jpg', alt: 'Lachung Monastery above Lachung village, North Sikkim' },
-  'silk-route': { file: 'Zuluk.jpg', alt: 'The zig-zag road at Zuluk on the Old Silk Route, East Sikkim' },
+  // Was Zuluk.jpg until 23 Oct 2026: that file carries another travel company's logo.
+  'silk-route': { file: 'Mysterious road.jpg', alt: 'The zig-zag road at Zuluk on the Old Silk Route, East Sikkim' },
   zuluk: { file: 'Morning at Silk Route.jpg', alt: 'Morning light on the Old Silk Route near Zuluk' },
   dooars: { file: 'Elephant Safari in Jaldapara National Park.jpg', alt: 'Elephant safari in Jaldapara National Park, Dooars' },
   rhino: { file: 'Rhino in a pond at Jaldapara.jpg', alt: 'A one-horned rhino in a pond at Jaldapara National Park' },
