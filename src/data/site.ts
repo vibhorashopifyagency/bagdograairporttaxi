@@ -61,7 +61,7 @@ export const SITE_TEXT_START = {
     'Bagdogra Airport Taxi from ₹600 | Darjeeling, Gangtok & Sikkim Cabs',
   // Under 160 characters: the price, the places, the proof, then the action.
   description:
-    'Fixed-fare taxi from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling and the Dooars from ₹600. Verified drivers, flight tracking, free cancellation.',
+    'Fixed-fare taxi from Bagdogra Airport and NJP to Darjeeling, Gangtok and the Dooars from ₹600. Verified drivers, flight tracking, free cancellation.',
 };
 const SITE_TEXT = overlayOne('site', SITE_TEXT_START);
 

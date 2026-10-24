@@ -147,7 +147,7 @@ export const WORD_PAGES = {
     group: 'pages',
     path: '/about/',
     fields: {
-      ...seo('About Us: Local Bagdogra Taxi and Tour Operator since {founded}', '{siteName} is a local taxi and tour operator based at Bagdogra, running airport transfers and tours across Darjeeling, Sikkim and the Dooars since {founded}.'),
+      ...seo('About Us: Local Bagdogra Taxi and Tour Operator since {founded}', '{siteName}: local taxi and tour operator at Bagdogra Airport since {founded}, running transfers and tours across Darjeeling, Sikkim and the Dooars.'),
       heroEyebrow: f('Top · Small heading above', 'Bagdogra · since {founded}'),
       heroTitle: f('Top · Main heading', 'A local team at Bagdogra, not a call centre'),
       answer: f('Story · Opening answer', '{siteName} is a unit of {company}, a taxi and tour operator based at {town}, a few minutes from the airport. Since {founded} we have driven travellers from Bagdogra Airport and NJP to Darjeeling, Gangtok, Pelling, North Sikkim and the Dooars with our own drivers and cars.'),
@@ -253,7 +253,7 @@ export const WORD_PAGES = {
     path: '/gallery/',
     note: 'The words around the photos. The photos, their titles and links are under Photos.',
     fields: {
-      ...seo('Photo Gallery: Darjeeling, Sikkim, Dooars and Our Cars', '{photos} photographs of the places we drive to from Bagdogra Airport: Darjeeling, Gangtok, Tsomgo Lake, Nathula, Pelling, North Sikkim, the Dooars and Bhutan, plus our cars.'),
+      ...seo('Photo Gallery: Darjeeling, Sikkim, Dooars and Our Cars', '{photos} photos of the places we drive to from Bagdogra Airport: Darjeeling, Gangtok, Tsomgo Lake, Pelling, North Sikkim, the Dooars and Bhutan, plus our cars.'),
       heroEyebrow: f('Top · Small heading above', '{photos} photographs · {regions} regions'),
       heroTitle: f('Top · Main heading', 'The roads we drive, in pictures'),
       heroLead: f('Top · Paragraph', 'Where a taxi from Bagdogra Airport can take you. Open any photo for the place, the fare and the trip it belongs to.'),
@@ -331,7 +331,7 @@ export const WORD_PAGES = {
       payee: 'The name the office QR code pays',
     },
     fields: {
-      ...seo('Book a Bagdogra Airport Taxi Online: Instant Fare, UPI Advance', 'Book a fixed-fare taxi from Bagdogra Airport, NJP or Siliguri in under a minute. See the full fare, pay a {advance}% advance by UPI and get instant WhatsApp confirmation.'),
+      ...seo('Book a Bagdogra Airport Taxi Online: Instant Fare, UPI Advance', 'Book a fixed-fare taxi from Bagdogra Airport, NJP or Siliguri in under a minute. See the full fare, pay a {advance}% advance by UPI and get WhatsApp confirmation.'),
       title: f('Top · Main heading', 'Book your taxi'),
       lead: f('Top · Paragraph', 'Takes under a minute. You see the full fare before you pay anything.'),
       step1: f('1. Trip · Heading', '1. Trip'),
@@ -846,7 +846,7 @@ export const WORD_PAGES = {
     note: 'The fixed headings and lines on all destination pages at once. Each place’s own words are under its form.',
     vars: { name: 'The place’s name', short: 'Its short name', region: 'Its region', altitude: 'Its altitude' },
     fields: {
-      ...seo('{short} Travel Guide: Best Time, Sights, Taxi', '{name} travel guide: best time to visit, how many days, top sights and how to reach from Bagdogra Airport or NJP, with taxi fares and tour packages.'),
+      ...seo('{short} Travel Guide: Best Time, Sights, Taxi', '{name} travel guide: best time, days needed, sights and how to reach from Bagdogra Airport, with taxi fares and packages.'),
       heroEyebrow: f('Top · Small heading above', '{region} · {altitude}'),
       heroTitle: f('Top · Main heading', '{name} travel guide'),
       bestTimeLabel: f('Facts · First box label', 'Best time to visit'),

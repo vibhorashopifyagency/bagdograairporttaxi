@@ -1,8 +1,12 @@
 ---
-/** Five stars filled to the rating, in Google's review yellow. */
+/**
+ * Five stars filled to the rating, in Google's review yellow. The star shape
+ * is drawn once in IconSprite.astro; each star here is two <use> references
+ * (grey base, yellow fill clipped to the fraction), so a page of review cards
+ * stays light.
+ */
 interface Props { rating: number; class?: string }
 const { rating, class: cls = 'h-4 w-4' } = Astro.props;
-const star = 'M12 2.5l2.94 6.1 6.56.8-4.84 4.6 1.22 6.6L12 17.4l-5.88 3.2 1.22-6.6L2.5 9.4l6.56-.8L12 2.5z';
 ---
 
 <span class="inline-flex items-center gap-0.5" role="img" aria-label={`Rated ${rating} out of 5`}>
@@ -10,8 +14,8 @@ const star = 'M12 2.5l2.94 6.1 6.56.8-4.84 4.6 1.22 6.6L12 17.4l-5.88 3.2 1.22-6
     const fill = Math.max(0, Math.min(1, rating - i));
     return (
       <svg class={cls} viewBox="0 0 24 24" aria-hidden="true">
-        <path d={star} fill="#dadce0" />
-        {fill > 0 && <path d={star} fill="#fbbc04" style={fill < 1 ? `clip-path:inset(0 ${Math.round((1 - fill) * 100)}% 0 0)` : undefined} />}
+        <use href="#i-star-solid" fill="#dadce0" />
+        {fill > 0 && <use href="#i-star-solid" fill="#fbbc04" style={fill < 1 ? `clip-path:inset(0 ${Math.round((1 - fill) * 100)}% 0 0)` : undefined} />}
       </svg>
     );
   })}

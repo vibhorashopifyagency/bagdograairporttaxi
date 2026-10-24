@@ -1,0 +1,14 @@
+---
+/**
+ * Every icon path once, as <symbol>s, for the <use> references in Icon.astro,
+ * Stars.astro and GoogleLogo.astro. Placed at the top of <body> in BaseLayout.
+ * It has no size and is hidden from assistive tech; the stroke icons take
+ * their fill and stroke from each referencing <svg>.
+ */
+import { ICONS, SYMBOLS } from '../lib/icons';
+---
+
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+  {Object.entries(ICONS).map(([name, d]) => <symbol id={`i-${name}`} viewBox="0 0 24 24"><path d={d} /></symbol>)}
+  {Object.entries(SYMBOLS).map(([name, s]) => <symbol id={`i-${name}`} viewBox={s.viewBox} set:html={s.body} />)}
+</svg>

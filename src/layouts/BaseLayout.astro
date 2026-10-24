@@ -6,6 +6,7 @@ import MobileActionBar from '../components/MobileActionBar.astro';
 import WelcomePopup from '../components/WelcomePopup.astro';
 import Breadcrumbs from '../components/Breadcrumbs.astro';
 import JsonLd from '../components/JsonLd.astro';
+import IconSprite from '../components/IconSprite.astro';
 import { PRE_LAUNCH, SITE, BUSINESS } from '../data/site';
 import { businessGraph, breadcrumbs as crumbSchema, webPage } from '../lib/schema';
 
@@ -102,6 +103,7 @@ const nodes = [
     <script is:inline>document.documentElement.classList.add('js');</script>
   </head>
   <body id="top" class="min-h-screen">
+    <IconSprite />
     <Header />
     {allCrumbs && !hasHero && <Breadcrumbs items={allCrumbs} />}
     <main id="main">

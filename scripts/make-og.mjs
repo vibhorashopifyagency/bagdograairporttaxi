@@ -12,6 +12,9 @@ const ink = { r: 17, g: 17, b: 17, alpha: 1 };
 await sharp(light).resize(512, 512).png().toFile('public/logo.png');
 await sharp(dark).resize(512, 512).png().toFile('public/logo-dark.png');
 await sharp(light).resize(192, 192).png().toFile('public/logo-192.png');
+// The header, footer and admin badge render at 40–64 px, so they load a 128 px WebP (a few KB) instead of the 512 px PNGs, which stay for the structured data logo and old-site redirects.
+await sharp(light).resize(128, 128).webp({ quality: 88 }).toFile('public/logo-128.webp');
+await sharp(dark).resize(128, 128).webp({ quality: 88 }).toFile('public/logo-dark-128.webp');
 await sharp(light).resize(32, 32).png().toFile('public/favicon-32.png');
 // App icons: the badge on an ink square with a small margin, as launchers crop corners.
 for (const [file, size] of [['apple-touch-icon.png', 180], ['icon-192.png', 192], ['icon-512.png', 512]]) {
