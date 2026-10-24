@@ -21,6 +21,7 @@ import { SAFE_HREF, escapeHtml, linksIn, wordsToHtml, wordsToText, type WordVars
 import { DESTINATIONS, type Destination } from './destinations';
 import { GALLERY, GALLERY_CATEGORIES } from './gallery';
 import { GUIDES, type Guide } from './guides';
+import { FROM_CITIES, type FromCity } from './from-cities';
 import { PACKAGES, type TourPackage } from './packages';
 import { overlayFields } from './published';
 import { ROUTES, inr, lowestFare, routeBySlug, type Route } from './routes';
@@ -227,6 +228,7 @@ export const WORD_PAGES = {
       heroTitle: f('Top · Main heading', 'Darjeeling, Sikkim, Dooars and Bhutan tour packages from Bagdogra'),
       answer: f('Opening answer', 'All {packages} packages start and end at Bagdogra Airport or NJP station, with one private car and driver for the whole trip, hotels with breakfast and dinner, and permits where needed. Prices start at {packagesFrom} per person with two sharing. We are a local Bagdogra operator, so you deal directly with the people who run the trip.'),
       customNote: f('Note under the packages', 'Want a different plan? We build custom tours for any number of days, starting from Kolkata, Delhi, Mumbai, Bengaluru or anywhere you fly in from. [Tell us your dates](/contact/).'),
+      fromCitiesTitle: f('Starting from your city · Line before the city links', 'Flying in from'),
       ctaTitle: f('Booking box · Heading', 'Get a custom tour quote'),
     },
   },
@@ -897,6 +899,33 @@ export const WORD_PAGES = {
       cardRead: f('Guide cards · Link', 'Read the guide'),
     },
   },
+
+  'from-city-page': {
+    name: 'Every "tour packages from a city" page',
+    group: 'templates',
+    path: `/tour-packages/from/${FROM_CITIES[0]?.slug ?? ''}/`,
+    note: 'The fixed headings and lines on the Kolkata, Delhi, Mumbai, Bengaluru, Hyderabad and Chennai pages at once. Each city’s flight, train and arrival facts are in the code (src/data/from-cities.ts).',
+    vars: { city: 'The city’s name', airport: 'Its airport, with the code', flightTime: 'Nonstop flight time to Bagdogra' },
+    fields: {
+      ...seo('Sikkim and Darjeeling Tour Packages from {city}', '{packages} Darjeeling, Sikkim and Bhutan tour packages from {city}. Fly to Bagdogra, be met at arrivals, private car, hotels and permits from {packagesFrom} per person.'),
+      heroEyebrow: f('Top · Small heading above', 'From {airport} · {flightTime} to Bagdogra'),
+      heroTitle: f('Top · Main heading', 'Darjeeling and Sikkim tour packages from {city}'),
+      answer: f('Opening answer', 'Every tour starts when you land at Bagdogra Airport: our driver is at arrivals with your name on a board, and the same private car stays with you until the flight home. From {city} the nonstop flight takes {flightTime}. Packages start at {packagesFrom} per person with two sharing, with hotels, breakfast and dinner, the car, permits and GST included; flights are booked by you, and we plan day 1 around your landing time.'),
+      reachTitle: f('Getting here · Heading', 'Getting from {city} to Bagdogra'),
+      flightLabel: f('Getting here · Flight box label', 'By air'),
+      trainLabel: f('Getting here · Train box label', 'By train'),
+      dayOneTitle: f('Day 1 · Heading', 'What day 1 looks like from {city}'),
+      dayOneText: f('Day 1 · Paragraph after the city’s arrival line', 'Send us your flight number when you book. We track it, so a delay costs you nothing, and {freeWait} minutes of waiting after landing are free. If your flight lands late in the day, we swap day 1 for a night in Siliguri or Kurseong at no extra charge and start the hills the next morning.'),
+      packagesTitle: f('Packages · Heading', 'Packages you can start from {city}'),
+      packagesText: f('Packages · Paragraph under the heading', 'Every package below starts and ends at Bagdogra Airport or NJP station. Prices are per person with two sharing; tell us your dates for the exact quote for your group and hotel category.'),
+      reachQ: f('Questions · How to reach question', 'How do I get from {city} to Darjeeling or Sikkim?'),
+      reachA: f('Questions · How to reach answer', 'Fly from {airport} to Bagdogra Airport ({flightTime} nonstop), where our driver meets you. Darjeeling is a 3-hour drive from the airport and Gangtok 4.5 to 5 hours, both included in every package.'),
+      startQ: f('Questions · Booking question', 'How do I book a package from {city}?'),
+      startA: f('Questions · Booking answer', 'Choose a package, tell us your dates and flight on WhatsApp or the booking form, and pay {advance}% to confirm the hotels and the car. You get a written itinerary and invoice, and the driver’s details the evening before you fly.'),
+      waText: plain('Booking box · Message already typed in WhatsApp', 'Hi, I am coming from {city} and would like a Darjeeling or Sikkim package for'),
+      ctaTitle: f('Booking box · Heading', 'Plan your trip from {city}'),
+    },
+  },
 } satisfies Record<string, WordPage>;
 
 export type WordPageKey = keyof typeof WORD_PAGES;
@@ -996,6 +1025,12 @@ export function packageVars(pkg: TourPackage): WordVars {
   return { name: t(pkg.name, v.name), short: t(pkg.short, v.short), nights: t(pkg.nights, v.nights), days: t(pkg.days, v.days), price: t(inr(pkg.fromPrice), v.price), priceNote: t(pkg.priceNote, v.priceNote) };
 }
 
+/** A "from city" page's own fill-ins. */
+export function fromCityVars(c: FromCity): WordVars {
+  const v = WORD_PAGES['from-city-page'].vars;
+  return { city: t(c.name, v.city), airport: t(c.airport, v.airport), flightTime: t(c.flightTime, v.flightTime) };
+}
+
 /** A destination page's own fill-ins. */
 export function destinationVars(d: Destination): WordVars {
   const v = WORD_PAGES['destination-page'].vars;
@@ -1031,6 +1066,11 @@ export function allowedVars(page: string): string[] {
 
 /** The fill-ins with their values for the page at a web address, for the page editor's previews. */
 export function varsForPath(path: string): WordVars {
+  const fc = path.match(/^\/tour-packages\/from\/([^/]+)\/$/);
+  if (fc) {
+    const c = FROM_CITIES.find((x) => x.slug === fc[1]);
+    if (c) return { ...GLOBAL_VARS, ...fromCityVars(c) };
+  }
   const m = path.match(/^\/(taxi|tour-packages|destinations)\/([^/]+)\/$/);
   if (m?.[1] === 'taxi') {
     const r = ROUTES.find((x) => x.slug === m[2]);

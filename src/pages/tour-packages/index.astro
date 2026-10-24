@@ -7,6 +7,7 @@ import TrustStrip from '../../components/TrustStrip.astro';
 import Words from '../../components/Words.astro';
 import { wordsText } from '../../data/page-text';
 import { PACKAGES } from '../../data/packages';
+import { FROM_CITIES } from '../../data/from-cities';
 import { SITE } from '../../data/site';
 const itemList = {
   '@type': 'ItemList',
@@ -26,6 +27,10 @@ const itemList = {
   <div class="wrap section">
     <Words page="packages" field="answer" as="p" class="answer max-w-3xl" />
     <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>{PACKAGES.map((p) => <PackageCard pkg={p} />)}</div>
+    <p class="mt-10 flex flex-wrap items-center gap-2" aria-label="Packages by starting city">
+      <Words page="packages" field="fromCitiesTitle" as="span" class="mr-1 text-sm font-medium text-muted" />
+      {FROM_CITIES.map((c) => <a href={`/tour-packages/from/${c.slug}/`} class="rounded-full border border-line bg-white px-3.5 py-1.5 text-sm font-semibold text-ink no-underline hover:border-ink">{c.name}</a>)}
+    </p>
     <section class="mt-14"><TrustStrip /></section>
     <Words page="packages" field="customNote" as="p" class="mt-8 max-w-3xl" />
     <BookCta waText={wordsText('whatsapp', 'packages')} words="packages:ctaTitle" image="north-sikkim" />

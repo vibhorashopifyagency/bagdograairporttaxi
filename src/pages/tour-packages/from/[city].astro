@@ -1,0 +1,75 @@
+---
+/**
+ * "Tour packages from <city>": the logistics from that city (flight, train,
+ * what day 1 can hold), then every package. The fixed words are the
+ * "Every 'from city' page" template in the dashboard; the city's own facts are
+ * in src/data/from-cities.ts.
+ */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHero from '../../../components/PageHero.astro';
+import PackageCard from '../../../components/PackageCard.astro';
+import FaqList from '../../../components/FaqList.astro';
+import BookCta from '../../../components/BookCta.astro';
+import TrustStrip from '../../../components/TrustStrip.astro';
+import Words from '../../../components/Words.astro';
+import { FROM_CITIES, type FromCity } from '../../../data/from-cities';
+import { PACKAGES } from '../../../data/packages';
+import { SITE } from '../../../data/site';
+import { fromCityVars, wordsText } from '../../../data/page-text';
+import { faqPage } from '../../../lib/schema';
+
+export function getStaticPaths() {
+  return FROM_CITIES.map((c) => ({ params: { city: c.slug }, props: { c } }));
+}
+const { c } = Astro.props as { c: FromCity };
+const path = `/tour-packages/from/${c.slug}/`;
+const vars = fromCityVars(c);
+const w = (field: string) => wordsText('from-city-page', field, vars);
+const faqs = [{ q: w('reachQ'), a: w('reachA') }, ...c.faqs, { q: w('startQ'), a: w('startA') }];
+const itemList = {
+  '@type': 'ItemList',
+  name: `Tour packages from ${c.name}`,
+  itemListElement: PACKAGES.map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE.url}/tour-packages/${p.slug}/`, name: p.name })),
+};
+---
+
+<BaseLayout
+  title={w('seoTitle')}
+  description={w('seoDescription')}
+  crumbs={[{ name: 'Tour packages', path: '/tour-packages/' }, { name: `From ${c.name}`, path }]}
+  schema={[itemList, faqPage(faqs, path)]}
+  modified={SITE.contentUpdated}
+>
+  <PageHero slot="hero" image="hero" words="from-city-page" vars={vars} compact />
+  <div class="wrap section">
+    <Words page="from-city-page" field="answer" vars={vars} as="p" class="answer max-w-3xl" />
+
+    <section class="mt-12 grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12" aria-labelledby="reach-h">
+      <div class="min-w-0">
+        <Words page="from-city-page" field="reachTitle" vars={vars} as="h2" id="reach-h" class="text-2xl font-extrabold sm:text-3xl" />
+        <dl class="mt-6 grid gap-5 sm:grid-cols-2">
+          <div class="card p-5"><dt class="eyebrow"><Words page="from-city-page" field="flightLabel" vars={vars} /></dt><dd class="mt-2 leading-relaxed">{c.flights} <strong>Flight time {c.flightTime}.</strong></dd></div>
+          <div class="card p-5"><dt class="eyebrow"><Words page="from-city-page" field="trainLabel" vars={vars} /></dt><dd class="mt-2 leading-relaxed">{c.train}</dd></div>
+        </dl>
+        <Words page="from-city-page" field="dayOneTitle" vars={vars} as="h2" class="mt-10 text-2xl font-extrabold sm:text-3xl" />
+        <p class="mt-4 leading-relaxed">{c.arrival}</p>
+        <Words page="from-city-page" field="dayOneText" vars={vars} as="p" class="mt-3 leading-relaxed" />
+      </div>
+      <aside class="grid content-start gap-3">
+        {c.facts.map((f) => (
+          <div class="card p-5"><p class="eyebrow">{f.label}</p><p class="mt-1 text-lg font-bold text-ink">{f.value}</p></div>
+        ))}
+      </aside>
+    </section>
+
+    <section class="mt-14" aria-labelledby="pk-h">
+      <Words page="from-city-page" field="packagesTitle" vars={vars} as="h2" id="pk-h" class="text-2xl font-extrabold sm:text-3xl" />
+      <Words page="from-city-page" field="packagesText" vars={vars} as="p" class="mt-3 max-w-3xl" />
+      <div class="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" data-reveal-stagger>{PACKAGES.map((p) => <PackageCard pkg={p} />)}</div>
+    </section>
+
+    <section class="mt-14"><TrustStrip /></section>
+    <FaqList faqs={faqs} />
+    <BookCta waText={w('waText')} words="from-city-page:ctaTitle" vars={vars} image="north-sikkim" />
+  </div>
+</BaseLayout>

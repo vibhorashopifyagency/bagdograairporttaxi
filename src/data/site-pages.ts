@@ -21,6 +21,12 @@ export const STATIC_PAGES: readonly string[] = [
   '/taxi/',
   '/terms/',
   '/tour-packages/',
+  '/tour-packages/from/kolkata/',
+  '/tour-packages/from/delhi/',
+  '/tour-packages/from/mumbai/',
+  '/tour-packages/from/bengaluru/',
+  '/tour-packages/from/hyderabad/',
+  '/tour-packages/from/chennai/',
 ];
 
 export const STATIC_FILES: readonly string[] = ['/sitemap-index.xml', '/llms.txt', '/llms-full.txt', '/feed.xml'];

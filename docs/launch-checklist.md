@@ -48,6 +48,25 @@ The site shows these numbers next to every Book button. Confirm or change:
 - [ ] Every package price, hotel category and inclusion in `src/data/packages.ts`
 - [ ] Update `faresUpdated` / `faresUpdatedLabel` in `site.ts` when fares change
 
+## 3a. Added 24 Oct 2026: new routes, guides and city pages
+- [ ] Confirm the fares of the 10 routes added on 24 Oct (`src/data/routes.ts`,
+      marked "Added 24 Oct 2026"). The North Sikkim and Zuluk fares assume a
+      Sikkim-registered SUV at about ₹7,000 one way Gangtok–Lachung/Lachen and
+      ₹5,500 Rongli–Zuluk on top of our own leg; check with the Gangtok and
+      Rongli operators you use
+- [ ] Confirm that West Bengal taxis still drop at Gangtok hotels (the July
+      2022 taxi-association agreement). The Gangtok route page and the
+      "taxi, helicopter or shared jeep" guide say so; if the Deorali rule is
+      back, change both and the FAQ answer
+- [ ] Confirm the helicopter fare quoted in that guide (about ₹3,100 a seat
+      on the STDC service after the late-2025 cut) and the shared-jeep fare
+      (₹400–600 a seat Siliguri–Gangtok)
+- [ ] Check the flight facts on the six "from city" pages against the
+      current timetables before each season (`src/data/from-cities.ts`)
+- [ ] Keep publishing: aim for two to four dated guides a month (road status,
+      snow and season updates, holiday rush). Guides are added in
+      `src/data/guides.ts` and edited in the dashboard
+
 ## 4. Claims to confirm are true
 - [ ] West Bengal taxis go into Gangtok with no change of car
 - [ ] Drivers are police-verified

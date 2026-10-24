@@ -50,6 +50,8 @@ const GUIDE: Record<string, PhotoKey> = {
   'nathula-pass-guide': 'nathula',
   'best-time-to-visit-darjeeling-sikkim': 'hero',
   'offbeat-places-north-bengal-sikkim': 'silk-route',
+  'bagdogra-to-gangtok-taxi-helicopter-shared-jeep': 'gangtok',
+  'nh10-road-status-gangtok-alternative-route': 'teesta',
 };
 
 /** A destination's photo: its own choice, or the one for its slug. */

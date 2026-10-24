@@ -14,6 +14,7 @@
  */
 import { BUSINESS, POLICY, SITE } from '../data/site';
 import { ROUTES, ROUTE_GROUPS, inr, lowestFare } from '../data/routes';
+import { FROM_CITIES } from '../data/from-cities';
 import { PACKAGES } from '../data/packages';
 import { DESTINATIONS } from '../data/destinations';
 import { GUIDES } from '../data/guides';
@@ -97,6 +98,8 @@ export function llmsIndex() {
     'Prices are per person with two sharing a room, with a private car for the whole trip, hotels with breakfast and dinner, fuel, tolls, parking and GST included. Each page has the day-wise itinerary and the exact inclusions.',
     '',
     ...PACKAGES.map((p) => `- [${p.name}, ${p.nights} nights / ${p.days} days](${abs(`/tour-packages/${p.slug}/`)}): ${p.places.join(', ')}; from ${inr(p.fromPrice)} ${p.priceNote}; best for ${p.bestFor.join(', ').toLowerCase()}`),
+    '',
+    `Starting from another city: ${FROM_CITIES.map((c) => `[${c.name}](${abs(`/tour-packages/from/${c.slug}/`)})`).join(', ')}. Each page gives the nonstop flight time to Bagdogra, the train option and what day 1 can hold.`,
     '',
     '## Destination guides',
     '',

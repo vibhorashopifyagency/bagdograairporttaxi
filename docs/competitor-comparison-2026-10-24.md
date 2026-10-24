@@ -14,7 +14,11 @@
 > | 4. Mobile speed: home DOM / HTML weight | Done 24 Oct: icons are drawn once as an SVG sprite and referenced with `<use>` (home HTML drops by about 150 KB uncompressed). See the measurements at the end of this file |
 > | 5. Old URL redirects | Mapped one-to-one 21 Oct (77 URLs). The `*.php → /` catch-all stays for unknown stray URLs; every URL the old site actually published has its own target |
 > | 10. Destination meta descriptions | Done 24 Oct: template shortened so every destination is under 160 characters |
-> | 1, 6–9, 11–15 | Owner, content and off-page work; not code. See `launch-checklist.md` |
+> | 6. Missing route pages | Done 24 Oct: 10 new routes (Darjeeling ↔ Gangtok, Gangtok ↔ Pelling, Siliguri → Kalimpong and Mirik, Gangtok → Lachung, Bagdogra → Lachung, Lachen and Zuluk), 42 in all. North Sikkim and Silk Route transfers are priced as two legs (your car to Gangtok or Rongli, then the Sikkim-registered SUV the rules require). Yumthang is a day trip from Lachung, not a transfer, so it has no page. Fares are set at the existing per-km level and flagged for the owner |
+> | 7. Gangtok local details | Done 24 Oct: the Bagdogra → Gangtok route now answers the Deorali drop rule (relaxed by the July 2022 taxi-association agreement), private taxi vs shared jeep vs helicopter, and what happens when NH10 closes |
+> | 8. Publishing rhythm | Started 24 Oct with two dated guides: taxi vs helicopter vs shared jeep, and NH10 road status with the NH717A alternative. Both carry a "last checked" date the dashboard moves on with each publish |
+> | 9. "From city" package pages | Done 24 Oct: `/tour-packages/from/` Kolkata, Delhi, Mumbai, Bengaluru, Hyderabad and Chennai, each with the nonstop flight time, the train option and what day 1 can hold, plus every package. Fixed words are a dashboard template; city facts are in `src/data/from-cities.ts` |
+> | 1, 11–15 | Owner and off-page work: go live, reviews (on hold at the owner's request), listings, links, registrations, post-launch measurement. See `launch-checklist.md` |
 
 Checked 24 Oct 2026. Our side is https://bagdograairporttaxi.vercel.app (branch `astro-redesign`, commit d775b99). Builds on the 19 Oct competitor research and the North Bengal Tourism comparison, without redoing them.
 

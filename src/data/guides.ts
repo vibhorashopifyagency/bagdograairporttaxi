@@ -631,6 +631,183 @@ export const GUIDES_START: Guide[] = [
     updated: '2026-10-19',
     updatedLabel: '19 October 2026',
   },
+
+  // --- Added 24 Oct 2026: the first of the dated posts the competitor comparison asked for. ---
+  {
+    slug: 'bagdogra-to-gangtok-taxi-helicopter-shared-jeep',
+    title: 'Bagdogra to Gangtok: private taxi, helicopter or shared jeep?',
+    short: 'Taxi, helicopter or shared jeep',
+    seoTitle: 'Bagdogra to Gangtok: Taxi vs Helicopter vs Shared Jeep (2026)',
+    description: 'The three ways from Bagdogra Airport to Gangtok compared on price, time, luggage, weather and where each one drops you, with the 2026 fares.',
+    summary: 'A private taxi from Bagdogra Airport to Gangtok costs {gangtokSedan} for the car, takes {gangtokTime} and drops you at your hotel. The state helicopter is about ₹3,100 a seat for a 35-minute flight, one departure a day, 7 kg of luggage and no flights in cloud. A shared jeep from Siliguri is ₹400 to ₹600 a seat, leaves when ten seats are full and ends at the Deorali stand below town.',
+    facts: [
+      { label: 'Private taxi', value: '{gangtokSedan} per car · {gangtokTime} · door to door' },
+      { label: 'Helicopter', value: '~₹3,100 a seat · 35 min · 7 kg bags' },
+      { label: 'Shared jeep', value: '₹400–600 a seat · 5 to 6 h · Deorali drop' },
+      { label: 'Best for most', value: 'Taxi for 2 or more, helicopter for a clear-sky treat' },
+    ],
+    body: [
+      { type: 'heading', text: 'The three options side by side' },
+      {
+        type: 'table',
+        head: ['', 'Private taxi', 'Helicopter', 'Shared jeep'],
+        rowHeads: true,
+        rows: [
+          ['Price', '{gangtokSedan} sedan, {gangtokInnova} Innova, per car', 'About ₹3,100 a seat on the state service; private charters more', '₹400 to ₹600 a seat'],
+          ['Time', '{gangtokTime} for {gangtokKm} km', '35 minutes in the air, plus the transfer to the helipad', '5 to 6 hours including the wait to fill'],
+          ['Where it starts', 'Arrivals, with your name on a board', 'Bagdogra helipad beside the airport', 'Siliguri jeep stands, 14 km from the airport'],
+          ['Where it ends', 'Your Gangtok hotel', 'Burtuk helipad, 3 km from MG Marg; local taxi onward', 'Deorali stand; local taxi onward'],
+          ['Luggage', 'Boot of the car; roof carrier on request', '7 kg per person', 'On the roof, small bags inside'],
+          ['Weather', 'Runs in rain; reroutes if NH10 closes', 'Cancelled in cloud and rain, often in the monsoon', 'Runs in rain'],
+          ['Stops', 'Tea, photos and food where you like', 'None', 'One meal stop chosen by the driver'],
+          ['Booking', 'Online or WhatsApp, {freeWait} minutes free waiting after landing', 'Through Sikkim Tourism Development Corporation or an agent, days ahead', 'Walk up and wait'],
+        ],
+      },
+      { type: 'heading', text: 'Private taxi: the default for two or more' },
+      {
+        type: 'text',
+        text: 'For two people a private sedan at {gangtokSedan} works out around ₹1,750 a head, less than the helicopter and with no luggage limit, no transfer at either end and no weather risk. The driver is at arrivals when you land, the fare includes tolls, parking and GST, and you stop where you like: the Coronation Bridge, the Teesta at Melli, lunch at Rangpo. A [Bagdogra Airport to Gangtok taxi](/taxi/bagdogra-airport-to-gangtok-taxi/) is booked in a minute with a {advance}% advance.',
+      },
+      { type: 'heading', text: 'Helicopter: fast, scenic, and often grounded' },
+      {
+        type: 'text',
+        text: 'The Sikkim Tourism Development Corporation runs a shared helicopter between Bagdogra and Gangtok’s Burtuk helipad, one flight a day each way, about 35 minutes. The state fare was cut to around ₹3,100 a seat in late 2025; private operators resell seats at ₹3,500 to ₹5,500. The catch is the weather: flights are cancelled in cloud, which is most monsoon mornings and many winter afternoons, and you then need a taxi anyway. Luggage is limited to about 7 kg per person, so larger bags go by road.',
+      },
+      {
+        type: 'note',
+        text: 'Helicopter fares and timings are the operator’s, not ours, and change without notice. Confirm with STDC before you rely on a flight. Last checked {updated}.',
+      },
+      { type: 'heading', text: 'Shared jeep: the budget option from Siliguri' },
+      {
+        type: 'text',
+        text: 'Shared Sumos and Boleros run from the Siliguri jeep stands near Siliguri Junction and from NJP to Gangtok through the morning, at ₹400 to ₹600 a seat depending on season. They leave when all ten seats are sold, run until early afternoon, and end at the Deorali taxi stand below Gangtok, where a local cab takes you up to your hotel for ₹200 to ₹300. From Bagdogra Airport you first need a taxi or bus to the stand (14 km). Good value for one traveller with a small bag and no fixed timing; tiring with children or after a long flight.',
+      },
+      { type: 'heading', text: 'Which should you choose?' },
+      {
+        type: 'list',
+        items: [
+          '**Two or more people, or any luggage:** private taxi. It is the cheapest per head from a pair upwards and the only option that ends at your hotel.',
+          '**Solo on a budget with a small bag:** shared jeep, if you land before noon.',
+          '**Clear-sky season (October to December, March to May) and you want the view:** helicopter one way, taxi back, with a taxi held as the fallback.',
+          '**Landing after 2 pm:** taxi. The last jeeps and the helicopter have gone.',
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: 'How much is a taxi from Bagdogra Airport to Gangtok?',
+        a: '{gangtokSedan} in a sedan and {gangtokInnova} in an Innova Crysta, one way, including tolls, parking and GST. The fare is for the car, not per person.',
+      },
+      {
+        q: 'How much is the helicopter from Bagdogra to Gangtok?',
+        a: 'About ₹3,100 a seat on the Sikkim Tourism Development Corporation service after the late-2025 fare cut, one flight a day each way, 35 minutes. Private agents charge ₹3,500 to ₹5,500. Flights are cancelled in cloud.',
+      },
+      {
+        q: 'Is there a shared jeep from Bagdogra Airport to Gangtok?',
+        a: 'Not from the airport itself. Shared jeeps leave from the Siliguri stands near Siliguri Junction and from NJP, about ₹400 to ₹600 a seat, and end at the Deorali stand in Gangtok.',
+      },
+      {
+        q: 'Which is fastest from Bagdogra to Gangtok?',
+        a: 'The helicopter, at 35 minutes in the air, when it flies. Door to door, a private taxi at {gangtokTime} is often as quick once the helipad transfers and the wait for the one daily flight are counted.',
+      },
+    ],
+    packages: ['gangtok-tsomgo-nathula-tour-package', 'darjeeling-gangtok-tour-package', 'north-sikkim-lachung-yumthang-tour-package'],
+    askNote: 'Tell us your flight number and we will say which option fits your landing time, and hold a taxi as the fallback if you try the helicopter.',
+    waText: 'Hi, I am flying into Bagdogra and going to Gangtok. Which option do you suggest?',
+    bookHref: '/taxi/bagdogra-airport-to-gangtok-taxi/',
+    ctaHeading: 'Book the Bagdogra to Gangtok taxi',
+    published: '2026-10-24',
+    updated: '2026-10-24',
+    updatedLabel: '24 October 2026',
+  },
+  {
+    slug: 'nh10-road-status-gangtok-alternative-route',
+    title: 'NH10 road status: what happens when the Siliguri to Gangtok highway closes',
+    short: 'NH10 road status',
+    seoTitle: 'NH10 Closed? Siliguri to Gangtok Alternative Route via Lava and Pedong',
+    description: 'Why NH10 between Siliguri and Gangtok closes, how to check it, the alternative road via Gorubathan, Lava, Pedong and Rhenock, and what it means for your taxi.',
+    summary: 'NH10 along the Teesta is the main road from Siliguri and Bagdogra to Gangtok ({gangtokKm} km, {gangtokTime}). It closes a few times a year for landslides, mostly June to September, and for planned repair work. When it does, our drivers take the hill road through Gorubathan, Lava, Algarah, Pedong, Rhenock and Pakyong, which is about 50 km longer and adds 2 to 3 hours. The fare does not change.',
+    facts: [
+      { label: 'Usual road', value: 'NH10 via Sevoke, Melli and Rangpo · {gangtokKm} km · {gangtokTime}' },
+      { label: 'When it closes', value: 'Via Lava, Pedong and Rhenock · ~175 km · 7 to 8 h' },
+      { label: 'Closure season', value: 'June to September, after heavy rain' },
+      { label: 'Extra charge', value: 'None. The fixed fare stands' },
+    ],
+    body: [
+      { type: 'heading', text: 'Why NH10 closes' },
+      {
+        type: 'text',
+        text: 'NH10 runs along the Teesta gorge from Sevoke to Rangpo, cut into slopes that slip in heavy rain. The stretches that fail most often are around 27th Mile, 29th Mile and Lohapul on the Bengal side and the 20th Mile (Bardang) stretch between Rangpo and Ranipool in Sikkim. The October 2023 Teesta flood washed away parts of the road and kept it shut for weeks. Since then the National Highways and Infrastructure Development Corporation has run planned closures for slope work, such as the three-day shutdown between Rangpo and Ranipool from 17 to 19 July 2026.',
+      },
+      { type: 'heading', text: 'How closures are announced' },
+      {
+        type: 'list',
+        items: [
+          '**Planned work:** a notice from NHIDCL or the Kalimpong and Pakyong district administrations a few days ahead, usually with timings for one-way traffic or a full closure.',
+          '**Landslides:** the police close the road at Sevoke, Rangpo or Melli within the hour; local news sites and the Sikkim and Kalimpong police social accounts carry it first.',
+          '**Partial closures:** often only heavy vehicles are diverted, or traffic runs one way in timed slots, so a car can still get through with a wait.',
+        ],
+      },
+      { type: 'heading', text: 'The alternative road' },
+      {
+        type: 'table',
+        head: ['', 'NH10 (usual)', 'Via Lava and Pedong (NH717A)'],
+        rowHeads: true,
+        rows: [
+          ['Way', 'Sevoke, Coronation Bridge, Teesta Bazar turn-off, Melli, Rangpo, Singtam, Ranipool', 'Sevoke, Odlabari, Gorubathan, Lava, Algarah, Pedong, Rhenock, Rorathang, Pakyong, Ranipool'],
+          ['Distance', '{gangtokKm} km', 'About 175 km'],
+          ['Time by car', '{gangtokTime}', '7 to 8 hours'],
+          ['Road', 'Two lanes along the river', 'Single-lane hill road with hairpins above Lava; slow in fog'],
+          ['Sikkim entry', 'Rangpo check post', 'Rhenock and Rorathang; carry photo ID'],
+          ['Stops', 'Teesta viewpoints, Melli', 'Lava monastery, Pedong viewpoint, Rhenock'],
+        ],
+      },
+      {
+        type: 'text',
+        text: 'A shorter diversion through Kalimpong (Teesta Bazar, Kalimpong, Algarah, Pedong) works when only the Sikkim-side stretch is shut and the Bengal side to Teesta Bazar is open. Your driver chooses on the day according to which section is closed.',
+      },
+      { type: 'heading', text: 'What we do when the road is closed' },
+      {
+        type: 'list',
+        items: [
+          'We check the road status every morning and message you on WhatsApp before your flight if it affects your trip.',
+          'Your driver takes the open road. The fixed fare stands, whichever way we have to go.',
+          'If a closure means you will reach Gangtok after dark, we say so before you leave the airport so you can decide to stay a night in Kalimpong or Lava instead.',
+          'Shared jeeps and the helicopter stop when NH10 is shut or the weather is bad; a private car is the one option that keeps running.',
+        ],
+      },
+      {
+        type: 'note',
+        text: 'Closures change by the hour. Ask us on WhatsApp for the current status before you fly. Last checked {updated}.',
+      },
+    ],
+    faqs: [
+      {
+        q: 'Is NH10 open today?',
+        a: 'Most days, yes. Closures last a few hours to a few days after heavy rain, mostly from June to September, and planned repair closures are announced in advance. Message us on WhatsApp for the current status and the route your driver will take.',
+      },
+      {
+        q: 'What is the alternative route from Siliguri to Gangtok when NH10 is closed?',
+        a: 'The hill road through Odlabari, Gorubathan, Lava, Algarah, Pedong, Rhenock and Pakyong (NH717A), about 175 km and 7 to 8 hours. When only the Sikkim side is shut, a shorter diversion runs through Kalimpong and Pedong.',
+      },
+      {
+        q: 'Does the taxi fare go up when NH10 is closed?',
+        a: 'No. The fare you booked is fixed. The detour is our cost.',
+      },
+      {
+        q: 'Can I still reach Gangtok the same day if NH10 closes?',
+        a: 'Usually, if you land before early afternoon. The detour takes 7 to 8 hours, so a late flight means arriving after dark; we suggest a night in Kalimpong or Lava in that case.',
+      },
+    ],
+    packages: ['darjeeling-gangtok-tour-package', 'gangtok-tsomgo-nathula-tour-package', 'kalimpong-lava-tour-package'],
+    askNote: 'Send your flight date and we will tell you the road status on the day and the route your driver will take.',
+    waText: 'Hi, is NH10 to Gangtok open? I am travelling on',
+    bookHref: '/taxi/bagdogra-airport-to-gangtok-taxi/',
+    ctaHeading: 'Book a Gangtok taxi that runs whatever the road does',
+    published: '2026-10-24',
+    updated: '2026-10-24',
+    updatedLabel: '24 October 2026',
+  },
 ];
 
 export const GUIDES = overlayList('guide', GUIDES_START, (g) => g.slug, { fixed: true });
