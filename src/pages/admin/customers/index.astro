@@ -226,21 +226,31 @@ const closeIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" s
     ) : (
       <div class="a-card overflow-x-auto">
         <table class="a-table">
-          <thead><tr><th>Customer</th><th>Bookings</th><th>Next trip</th><th>Paid so far</th><th>Last booked</th>{sending && <th><span class="sr-only">Send</span></th>}</tr></thead>
+          <thead><tr><th>Customer</th><th>Stars</th><th>Tags</th><th>Bookings</th><th>Next trip</th><th>Paid so far</th><th>Last booked</th>{sending && <th><span class="sr-only">Send</span></th>}</tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr>
                 <td data-label="Customer">
                   <a href={`/admin/customers/${r.id}/`} class="font-semibold text-ink no-underline hover:underline">{r.name ?? 'No name'}</a>
                   {r.phone && <span class="block text-sm text-muted">{phoneLabel(r.phone)}</span>}
-                  {(r.rating || r.tags.length > 0 || r.noOffers) && (
-                    <span class="mt-1 flex flex-wrap items-center gap-1.5">
-                      {r.rating && <span class="a-stars text-sm" aria-label={`${r.rating} of 5 stars`} title={`${r.rating} of 5 stars`}>{starText(r.rating)}</span>}
+                  {r.notes && <span class="mt-0.5 block max-w-[34ch] truncate text-sm text-body">{r.notes}</span>}
+                </td>
+                <td class="whitespace-nowrap" data-label="Stars" data-empty={r.rating ? undefined : ''}>
+                  {r.rating ? (
+                    <span class="a-stars" aria-label={`${r.rating} of 5 stars`} title={`${r.rating} of 5 stars`}>{starText(r.rating)}</span>
+                  ) : (
+                    <a href={`/admin/customers/${r.id}/#rating`} class="text-sm text-muted no-underline hover:underline">Not rated</a>
+                  )}
+                </td>
+                <td data-label="Tags" data-empty={r.tags.length || r.noOffers ? undefined : ''}>
+                  {r.tags.length > 0 || r.noOffers ? (
+                    <span class="flex max-w-[16rem] flex-wrap gap-1.5">
                       {r.tags.map((t) => <span class:list={['a-badge', TAG_CLASS[t.tone]]}>{t.name}</span>)}
                       {r.noOffers && <span class="a-badge bg-[#fde8e7] text-[#b42318]">No offers</span>}
                     </span>
+                  ) : (
+                    <span class="text-sm text-muted">None</span>
                   )}
-                  {r.notes && <span class="mt-0.5 block max-w-[34ch] truncate text-sm text-body">{r.notes}</span>}
                 </td>
                 <td data-label="Bookings">
                   <strong>{r.bookings}</strong>

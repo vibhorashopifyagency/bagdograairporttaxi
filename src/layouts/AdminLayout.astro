@@ -435,6 +435,8 @@ const tabs: Item[] = [
         .a-table tr { display: block; padding: 0.875rem 1rem; border-bottom: 1px solid var(--color-line); }
         .a-table td { display: block; border: 0; padding: 0.2rem 0; }
         .a-table td[data-label]::before { content: attr(data-label); display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #5c6373; margin-top: 0.4rem; }
+        /* A cell with nothing in it (no stars yet, no tags) is left off a phone card. */
+        .a-table td[data-empty] { display: none; }
       }
       .a-pw { position: relative; display: flex; }
       .a-pw input { flex: 1 1 auto; min-width: 0; width: 100%; padding-right: 3.25rem; }
