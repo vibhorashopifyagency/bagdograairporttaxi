@@ -22,7 +22,7 @@ const user = Astro.locals.user!;
 const admin = isAdmin(user);
 const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
 let error = '';
-let form: DriverForm = { name: '', phone: '', vehicleNumber: '', vehicle: '', payType: 'percent', payValue: '', notes: '' };
+let form: DriverForm = { name: '', phone: '', vehicleNumber: '', vehicle: '', partner: '', payType: 'percent', payValue: '', notes: '' };
 
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
@@ -127,6 +127,7 @@ const callIcon =
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <span class:list={['a-badge', d.payValue === null ? 'bg-[#fff4d6] text-[#8a5300]' : 'bg-lime-50 text-[#3f6200]']}>{payLabel(d)}</span>
+                {d.partner && <span class="a-badge bg-[#e7f0ff] text-[#1d4ed8]">Outside car</span>}
                 {d.phone && <span class="text-sm text-muted">{phoneLabel(d.phone)}</span>}
               </div>
               <dl class="m-0 grid grid-cols-2 gap-x-2 gap-y-3 rounded-2xl bg-[#f7f8fa] p-3 text-sm">

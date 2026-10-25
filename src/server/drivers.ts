@@ -46,7 +46,8 @@ export function pickerList(list: Driver[]) {
     car: d.vehicleNumber ?? '',
     payType: d.payType,
     payValue: d.payValue,
-    label: [d.name, d.vehicleNumber, payLabel(d)].filter(Boolean).join(' · '),
+    partner: d.partner,
+    label: [d.name, d.vehicleNumber, d.partner && 'Outside car', payLabel(d)].filter(Boolean).join(' · '),
   }));
 }
 
@@ -67,7 +68,8 @@ export async function getDriver(id: string): Promise<Driver | null> {
 
 /* ---------------- Adding, changing, removing ---------------- */
 
-export type DriverForm = { name: string; phone: string; vehicleNumber: string; vehicle: string; payType: string; payValue: string; notes: string };
+/** `partner` is '1' for an outside car (see schema.drivers.partner). */
+export type DriverForm = { name: string; phone: string; vehicleNumber: string; vehicle: string; partner: string; payType: string; payValue: string; notes: string };
 
 /**
  * Checks a driver form. Pay is only taken from the admin; for staff it is
@@ -82,7 +84,7 @@ export function checkDriver(f: DriverForm, canSetPay: boolean): { error: string 
   if (vehicleNumber.length > 20) return { error: 'The car number is too long.' };
   if (f.vehicle && !vehicleByKey(f.vehicle)) return { error: 'Choose the kind of car.' };
   if (f.notes.length > 500) return { error: 'Notes are limited to 500 characters.' };
-  const row: Partial<Driver> & { name: string } = { name, phone: phone || null, vehicleNumber: vehicleNumber || null, vehicle: f.vehicle || null, notes: f.notes.trim() || null };
+  const row: Partial<Driver> & { name: string } = { name, phone: phone || null, vehicleNumber: vehicleNumber || null, vehicle: f.vehicle || null, partner: f.partner === '1', notes: f.notes.trim() || null };
   if (canSetPay) {
     if (f.payType !== 'percent' && f.payType !== 'fixed') return { error: 'Choose how the driver is paid.' };
     const raw = f.payValue.replace(/[^\d]/g, '');

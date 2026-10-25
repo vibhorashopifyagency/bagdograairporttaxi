@@ -16,12 +16,14 @@ import {
   bigint,
   bigserial,
   boolean,
+  check,
   date,
   index,
   integer,
   jsonb,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -148,6 +150,9 @@ export const rateLimit = pgTable('rate_limit', {
  * (919830122745), so a repeat customer is recognised however they type it.
  * After the retention period the name and number are removed and
  * `personalDataRemovedAt` is set; the row stays so totals still add up.
+ * The office rates and tags customers (`rating`, customer_tag_links) to
+ * pick who to send a new tour or offer to later; `noOffers` is set when a
+ * customer asked not to get them. All three go with the name and number.
  */
 export const customers = pgTable(
   'customers',
@@ -157,6 +162,9 @@ export const customers = pgTable(
     phone: text('phone').unique(),
     email: text('email'),
     notes: text('notes'),
+    /** 1 to 5 stars from the office, or null when not rated. */
+    rating: smallint('rating'),
+    noOffers: boolean('no_offers').notNull().default(false),
     lastBookingAt: timestamp('last_booking_at', { withTimezone: true }),
     personalDataRemovedAt: timestamp('personal_data_removed_at', { withTimezone: true }),
     createdAt: createdAt(),
@@ -170,6 +178,7 @@ export const customers = pgTable(
     // Search by any part of a name or number without reading every row.
     index('customers_name_trgm_idx').using('gin', t.name.op('gin_trgm_ops')),
     index('customers_phone_trgm_idx').using('gin', t.phone.op('gin_trgm_ops')),
+    check('customers_rating_range', sql`${t.rating} between 1 and 5`),
   ],
 );
 
@@ -193,6 +202,12 @@ export const drivers = pgTable('drivers', {
   payType: text('pay_type').$type<'percent' | 'fixed'>().notNull().default('percent'),
   payValue: integer('pay_value'),
   notes: text('notes'),
+  /**
+   * An outside car: a partner the office hands a trip to when its own cars
+   * are busy (owner, 25 Oct 2026). Partners never count as the office's own
+   * cars on the calendar or in the booking form's check (src/server/calendar.ts).
+   */
+  partner: boolean('partner').notNull().default(false),
   active: boolean('active').notNull().default(true),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -255,6 +270,12 @@ export const bookings = pgTable(
     driverPhone: text('driver_phone'),
     vehicleNumber: text('vehicle_number'),
     notes: text('notes'),
+    /**
+     * When the car and driver are free again, if the office set it. Null means
+     * worked out from the trip: there and back for a transfer, the last day
+     * of a tour (src/server/calendar.ts).
+     */
+    busyUntil: timestamp('busy_until', { withTimezone: true }),
 
     /** 'website' or 'staff' (entered by hand for a phone or walk-in booking). */
     source: text('source').$type<'website' | 'staff'>().notNull().default('website'),
@@ -503,6 +524,57 @@ export const driverPayouts = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('driver_payouts_driver_idx').on(t.driverId, t.paidOn)],
+);
+
+/**
+ * A driver who cannot drive for a while: leave, a car at the garage. It shows
+ * on the calendar and, for the office's own cars, takes the car out of the
+ * booking form's check like a trip does.
+ */
+export const driverTimeOff = pgTable(
+  'driver_time_off',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    driverId: uuid('driver_id')
+      .notNull()
+      .references(() => drivers.id, { onDelete: 'cascade' }),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    reason: text('reason').$type<'leave' | 'servicing' | 'other'>().notNull(),
+    note: text('note'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('driver_time_off_ends_idx').on(t.endsAt, t.startsAt)],
+);
+
+export const TAG_TONES = ['lime', 'amber', 'blue', 'green', 'rose', 'grey'] as const;
+export type TagTone = (typeof TAG_TONES)[number];
+
+/** The office's own groups of customers (Family, Honeymoon, Corporate ...), to filter by when sending a new tour. */
+export const customerTags = pgTable(
+  'customer_tags',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    tone: text('tone').$type<TagTone>().notNull().default('grey'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('customer_tags_name_idx').on(sql`lower(${t.name})`)],
+);
+
+/** Which customers carry which tags. Removed with the customer's name and number. */
+export const customerTagLinks = pgTable(
+  'customer_tag_links',
+  {
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => customerTags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.customerId, t.tagId] }), index('customer_tag_links_tag_idx').on(t.tagId, t.customerId)],
 );
 
 /**

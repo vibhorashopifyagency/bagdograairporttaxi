@@ -1,8 +1,9 @@
 ---
 /**
  * One customer: how to reach them, every booking they have made (10, 25 or
- * 50 to a page), what they have paid, and the office's notes about them (shared by
- * the team). Opening this page is logged.
+ * 50 to a page), what they have paid, the office's notes about them (shared by
+ * the team), and its stars and tags for picking who to send a new tour to
+ * (src/server/customer-tags.ts). Opening this page is logged.
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import Pager from '../../../components/admin/Pager.astro';
@@ -13,6 +14,7 @@ import { advanceOf } from '../../../server/fares';
 import { pageNumber, rowsFor } from '../../../server/paging';
 import { paymentsByBooking, summarise } from '../../../server/payments';
 import { RETENTION_MONTHS, eraseCustomer } from '../../../server/retention';
+import { TAG_CLASS, listTags, saveRating, starText, tagsFor } from '../../../server/customer-tags';
 import { ipHash } from '../../../server/security';
 import { firstName, phoneLabel } from '../../../lib/itinerary-text';
 import { desc, eq, sql } from 'drizzle-orm';
@@ -28,6 +30,7 @@ if (!customer || customer.personalDataRemovedAt) return Astro.redirect('/admin/c
 
 let error = '';
 let eraseError = '';
+let rateError = '';
 let notes = customer.notes ?? '';
 const admin = isAdmin(user);
 if (Astro.request.method === 'POST') {
@@ -42,6 +45,15 @@ if (Astro.request.method === 'POST') {
       eraseError = r.error;
       if (!admin) Astro.response.status = 403;
     }
+  }
+  if (f.get('intent') === 'rating') {
+    rateError =
+      (await saveRating(
+        customer.id,
+        { rating: String(f.get('rating') ?? ''), tagIds: f.getAll('tag').map(String), newTag: String(f.get('newTag') ?? ''), noOffers: f.get('noOffers') === '1' },
+        { actorId: user.id, ipHash: ipHash(Astro.request) },
+      )) ?? '';
+    if (!rateError) return Astro.redirect(`/admin/customers/${customer.id}/?saved=rating#rating`, 303);
   }
   if (f.get('intent') === 'notes') {
     notes = String(f.get('notes') ?? '').trim();
@@ -85,7 +97,8 @@ const [[totals], bookings] = await Promise.all([
     .limit(size)
     .offset((page - 1) * size),
 ]);
-const pays = await paymentsByBooking(bookings.map((x) => x.id));
+const [pays, allTags, tagsOf] = await Promise.all([paymentsByBooking(bookings.map((x) => x.id)), listTags(), tagsFor([customer.id])]);
+const mine = new Set((tagsOf.get(customer.id) ?? []).map((t) => t.id));
 await audit({ actorId: user.id, action: 'view_customer', entity: 'customer', entityId: customer.id, detail: { bookings: totals?.bookings ?? 0 }, ipHash: ipHash(Astro.request) });
 
 const sums = bookings.map((x) => ({ x, pay: summarise(x.fareTotal, advanceOf(x.fareTotal), pays.get(x.id) ?? [], x.kind) }));
@@ -123,6 +136,13 @@ const stats = [
       <div class="flex min-w-0 flex-1 flex-col">
         <h1 class="m-0 font-display text-[28px] leading-tight font-bold lg:text-[34px]">{name}</h1>
         <span class="text-body">{customer.phone ? phoneLabel(customer.phone) : ''} · customer since {since}</span>
+        {(customer.rating || mine.size > 0 || customer.noOffers) && (
+          <a href="#rating" class="mt-1 flex flex-wrap items-center gap-1.5 self-start no-underline">
+            {customer.rating && <span class="a-stars" aria-label={`${customer.rating} of 5 stars`}>{starText(customer.rating)}</span>}
+            {(tagsOf.get(customer.id) ?? []).map((t) => <span class:list={['a-badge', TAG_CLASS[t.tone]]}>{t.name}</span>)}
+            {customer.noOffers && <span class="a-badge bg-[#fde8e7] text-[#b42318]">No offers</span>}
+          </a>
+        )}
       </div>
       {customer.phone && (
         <div class="flex gap-2">
@@ -174,9 +194,50 @@ const stats = [
       </section>
 
       <div class="flex min-w-0 flex-col gap-5 self-start lg:gap-6">
+      <section id="rating" class="a-card flex scroll-mt-24 flex-col gap-4 p-5" aria-labelledby="rate-h">
+        <div class="flex items-baseline justify-between gap-3">
+          <h2 id="rate-h" class="m-0 font-display text-xl font-bold">Rating and tags</h2>
+          <a href="/admin/customers/?tags=1" class="text-sm font-semibold text-ink">Manage tags</a>
+        </div>
+        {Astro.url.searchParams.get('saved') === 'rating' && <p class="a-msg a-msg-ok m-0" role="status">Saved.</p>}
+        {rateError && <p class="a-msg a-msg-error m-0" role="alert">{rateError}</p>}
+        <form method="post" class="flex flex-col gap-4">
+          <input type="hidden" name="intent" value="rating" />
+          <fieldset class="m-0 flex flex-col gap-1.5 border-0 p-0">
+            <legend class="mb-1 text-[15px] font-semibold">How good a customer {first ? `was ${first}` : 'were they'}?</legend>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="a-rate">
+                {[5, 4, 3, 2, 1].map((n) => (
+                  <>
+                    <input type="radio" name="rating" id={`rate-${n}`} value={String(n)} checked={customer.rating === n} />
+                    <label for={`rate-${n}`} title={`${n} of 5`}><span class="sr-only">{n} of 5 stars</span><span aria-hidden="true">★</span></label>
+                  </>
+                ))}
+              </span>
+              <label class="flex min-h-11 items-center gap-2 text-sm text-body"><input type="radio" name="rating" value="" checked={!customer.rating} class="h-4 w-4 accent-[#111111]" /> Not rated</label>
+            </div>
+            <span class="text-[13px] text-muted">5 a delight to drive, 1 not again. Only the office sees it.</span>
+          </fieldset>
+          <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+            <legend class="mb-1 text-[15px] font-semibold">Tags</legend>
+            <div class="flex flex-wrap gap-2">
+              {allTags.map((t) => (
+                <label class="a-tag"><input type="checkbox" name="tag" value={t.id} checked={mine.has(t.id)} class="sr-only" /><span class={TAG_CLASS[t.tone]}>{t.name}</span></label>
+              ))}
+            </div>
+            <label class="a-field"><span class="text-sm font-normal text-muted">Or a new tag</span><input name="newTag" maxlength="30" placeholder="Trekkers" autocomplete="off" /></label>
+          </fieldset>
+          <label class="flex items-start gap-2.5 rounded-xl bg-mist p-3 text-sm">
+            <input type="checkbox" name="noOffers" value="1" checked={customer.noOffers} class="mt-0.5 h-5 w-5 shrink-0 accent-[#b42318]" />
+            <span><strong class="text-ink">No offers.</strong> They asked us not to send new tours or offers. They are left out of Send an offer and the number list.</span>
+          </label>
+          <button type="submit" class="btn-book self-start">Save rating and tags</button>
+        </form>
+      </section>
+
       <section class="a-card flex flex-col gap-3 p-5" aria-labelledby="notes-h">
         <h2 id="notes-h" class="m-0 font-display text-xl font-bold">Notes</h2>
-        {Astro.url.searchParams.get('saved') && <p class="a-msg a-msg-ok m-0" role="status">Saved.</p>}
+        {Astro.url.searchParams.get('saved') === '1' && <p class="a-msg a-msg-ok m-0" role="status">Saved.</p>}
         {error && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
         <form method="post" class="flex flex-col gap-3">
           <input type="hidden" name="intent" value="notes" />

@@ -28,6 +28,14 @@ const n = (k: string) => `${prefix}${k}`;
       {VEHICLES.map((v) => <option value={v.key} selected={f.vehicle === v.key}>{v.name}</option>)}
     </select>
   </label>
+  <fieldset class="m-0 flex flex-col gap-2 border-0 p-0 sm:col-span-2">
+    <legend class="mb-2 text-[15px] font-semibold">Whose car</legend>
+    <div class="flex flex-wrap gap-2">
+      <label class="a-pill"><input type="radio" name={n('partner')} value="" checked={f.partner !== '1'} class="sr-only" /><span>Our car</span></label>
+      <label class="a-pill"><input type="radio" name={n('partner')} value="1" checked={f.partner === '1'} class="sr-only" /><span>Outside car (partner)</span></label>
+    </div>
+    <span class="text-sm text-muted">Our cars with a usual car set count on the calendar, and the website stops taking bookings for a car type when all of them are busy. An outside car is one you bring in when yours are busy; it never counts.</span>
+  </fieldset>
   <fieldset class="m-0 flex flex-col gap-2 rounded-2xl border-0 bg-mist p-4 sm:col-span-2" disabled={!canSetPay}>
     <legend class="float-left mb-1 font-display text-lg font-bold">Pay for each completed trip</legend>
     <div class="clear-both flex flex-wrap items-end gap-3">

@@ -296,3 +296,12 @@
 
 /* Registered so the ring's start angle can be animated. Must sit outside @layer. */
 @property --ring-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+/* The booking form's calendar check (src/lib/car-availability.ts): a car booked at the chosen time. */
+label[data-full] { cursor: not-allowed; background: var(--color-mist); }
+label[data-full] > :not([data-full-tag]) { opacity: 0.55; }
+.car-full { display: block; margin-top: 0.4rem; font-size: 0.82rem; line-height: 1.35; color: var(--color-body); }
+.car-full strong { color: #b42318; }
+.car-full a, .car-note a { font-weight: 700; color: var(--color-wa); }
+.car-note { margin: 0.85rem 0 0; padding: 0.75rem 1rem; border-radius: 0.85rem; background: #fff4d6; color: #5c3b00; font-size: 0.92rem; line-height: 1.45; }
+.car-note[hidden] { display: none; }

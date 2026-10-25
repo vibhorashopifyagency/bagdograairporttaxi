@@ -404,6 +404,8 @@ const FIELD_LABEL: Record<string, string> = {
   fareTotal: 'agreed fare',
   notes: 'notes',
   handledBy: 'handled by',
+  driverPay: 'driver’s pay',
+  busyUntil: 'time the car is free again',
 };
 
 /** One line for a booking timeline entry, and the colour of its dot. */

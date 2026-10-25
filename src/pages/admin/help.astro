@@ -78,6 +78,33 @@ const everyone: Topic[] = [
     note: 'For taxi trips the driver collects the balance from the guest after the trip and hands it to the office. Tour packages keep the balance with the office.',
   },
   {
+    id: 'calendar',
+    title: 'See who is free: the calendar',
+    steps: [
+      'Open Calendar. Each driver has a row, grouped by their usual car; a week shows each trip’s times, and pressing a day (or Day) shows it hour by hour.',
+      'Month shows the whole month, each day listing its trips and who drives them. Choose a driver at the top to see only their month, for example to plan their leave.',
+      'To jump to another date, press the dates at the top (next to the arrows) and pick a day: you see its day, its week (Monday to Sunday) or its month. Today brings you back.',
+      'A trip keeps its car busy until it is back: the drive there and back plus an hour, or the whole tour. If a trip runs longer, set “Car and driver free again” in Edit trip and driver.',
+      'Confirmed trips hold a car. New requests show dashed and hold nothing until you confirm them.',
+      'Leave or a car at the garage: press Mark time off. That driver shows busy on bookings, and an own car stops counting on the website.',
+      'When all your own cars of a type are taken, the booking form greys that car out for that time and offers WhatsApp instead. Bring in an outside car: add it in Drivers as “Outside car (partner)” and pick it on the booking. Outside cars never count as yours.',
+      'A phone enquiry? “Is a car free?” under the calendar makes the same check the website makes.',
+    ],
+    note: 'Only drivers marked “Our car” with a usual car set count as your own cars. A car type with none listed is always open on the website.',
+  },
+  {
+    id: 'rate',
+    title: 'Rate customers and send a new tour',
+    steps: [
+      'After a trip, open the customer (from the booking’s Customer box) and give them 1 to 5 stars and tags, such as Family, Honeymoon or Corporate. Type a new tag to add one.',
+      'If they ask not to get offers, tick No offers. They are left out of every send.',
+      'To send a new tour: open Customers, press Send an offer, and narrow the list with Stars and Tag. Write the message once; {name} becomes each customer’s first name.',
+      'Press Send on each customer: WhatsApp opens with the message ready. The button turns to “Sent ✓” so you can work down the list.',
+      'Tags (top of Customers) renames, recolours or removes tags.',
+    ],
+    note: 'Only the office sees stars and tags. They are removed with the customer’s name and number after 24 months.',
+  },
+  {
     id: 'after-trip',
     title: 'After the trip',
     steps: [
@@ -150,6 +177,15 @@ const adminOnly: Topic[] = [
       'A refund under the cancellation policy: Refund on the booking.',
       'Downloads: Payments has “Download for accounts (CSV)”; Bookings has its own download, which follows the filters on screen.',
       'Drivers’ pay is set on each driver (a share of the fare or a fixed amount a trip). Only the admin sets it or changes a trip’s amount.',
+    ],
+  },
+  {
+    id: 'offers-admin',
+    title: 'Numbers for a WhatsApp broadcast, and the calendar on the website',
+    steps: [
+      'Customers, Send an offer: Copy all numbers or Download as CSV takes every customer in the list (all pages, not just the one on screen), leaving out those who asked for no offers. Only the admin can, and each download is logged.',
+      'Save the numbers in the office phone’s contacts, then send through a WhatsApp Broadcast list. Only people who saved the office number receive a broadcast.',
+      'Calendar, On the website: switches off the booking form’s check if you ever want every car open whatever the calendar says.',
     ],
   },
   {

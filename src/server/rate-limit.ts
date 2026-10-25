@@ -19,6 +19,8 @@ export type Limit = { name: string; max: number; windowSec: number };
 export const LIMITS = {
   /** POST /api/bookings/, every attempt from one IP, saved or not. */
   booking: { name: 'booking', max: 30, windowSec: 60 },
+  /** GET /api/availability/, the booking form's calendar check, per IP. A visitor trying dates and times asks a few times a minute. */
+  availability: { name: 'availability', max: 90, windowSec: 60 },
   /** The customer's trip page, per IP. */
   trip: { name: 'trip', max: 60, windowSec: 60 },
   /** Calls from the admin pages to /admin/api/, per signed-in user. The itinerary popup saves about once a second while typing. */

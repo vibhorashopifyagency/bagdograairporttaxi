@@ -35,6 +35,9 @@ import { ipHash } from '../../../../server/security';
 import { allTemplates, deleteItinerary, itineraryFromBooking, tripPath, tripPlace, LIBRARY } from '../../../../server/trip';
 import DriverFields from '../../../../components/admin/DriverFields.astro';
 import { addDriver, checkDriver, driverColumns, getDriver, listDrivers, payLabel, pickerList, type DriverForm } from '../../../../server/drivers';
+import { autoEnd, busyWindow, carsFree, driversBusy, istAt, istDay, istTime, loadSpan, spanLabel, whenLabel } from '../../../../server/calendar';
+import { TAG_CLASS, starText, tagsFor } from '../../../../server/customer-tags';
+import type { VehicleKey } from '../../../../data/vehicles';
 import { firstName, phoneLabel } from '../../../../lib/itinerary-text';
 import { asc, count, eq, sql } from 'drizzle-orm';
 import { lastSend, whatsappReady } from '../../../../server/whatsapp';
@@ -75,9 +78,12 @@ const edit = {
   fareTotal: String(booking.fareTotal),
   notes: booking.notes ?? '',
   handledBy: booking.handledBy ?? '',
+  /** When the car is free again, if the office set it; empty means worked out (src/server/calendar.ts). */
+  busyDate: booking.busyUntil ? istDay(booking.busyUntil) : '',
+  busyTime: booking.busyUntil ? istTime(booking.busyUntil) : '',
 };
 /** "Add a new driver" in the edit popup. */
-let newDriver: DriverForm = { name: '', phone: '', vehicleNumber: '', vehicle: booking.vehicle, payType: 'percent', payValue: '', notes: '' };
+let newDriver: DriverForm = { name: '', phone: '', vehicleNumber: '', vehicle: booking.vehicle, partner: '', payType: 'percent', payValue: '', notes: '' };
 
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
@@ -124,8 +130,14 @@ if (Astro.request.method === 'POST') {
     const payRaw = edit.driverPay.replace(/[^\d]/g, '');
     const checkedNew = edit.driverId === 'new' ? checkDriver(newDriver, admin) : null;
     const picked = edit.driverId && edit.driverId !== 'new' ? await getDriver(edit.driverId) : null;
+    const clock = /^([01]\d|2[0-3]):[0-5]\d$/;
+    // A day with no time means the end of that day.
+    const busyUntil = isDay(edit.busyDate) ? (clock.test(edit.busyTime) ? istAt(edit.busyDate, edit.busyTime) : istAt(addDays(edit.busyDate, 1), '00:00')) : null;
+    const pickupAt = clock.test(edit.pickupTime) && isDay(edit.pickupDate) ? istAt(edit.pickupDate, edit.pickupTime) : null;
     if (!isDay(edit.pickupDate) || edit.pickupDate < addDays(today, -400) || edit.pickupDate > addDays(today, 400)) error = 'Check the pickup date.';
-    else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(edit.pickupTime)) error = 'Check the pickup time.';
+    else if (!clock.test(edit.pickupTime)) error = 'Check the pickup time.';
+    else if (edit.busyTime && !edit.busyDate) error = 'Choose the day the car is free again, or clear its time.';
+    else if (busyUntil && pickupAt && (busyUntil <= pickupAt || busyUntil.getTime() - pickupAt.getTime() > 92 * 86400e3)) error = 'The car must be free again after the pickup, and within three months of it.';
     else if (!Number.isInteger(pax) || pax < 1 || pax > 50) error = 'Travellers must be 1 to 50.';
     else if (!edit.fareTotal || !Number.isInteger(fare) || fare > 10_000_000) error = 'Check the agreed fare.';
     else if (checkedNew && 'error' in checkedNew) error = `New driver: ${checkedNew.error}`;
@@ -150,11 +162,14 @@ if (Astro.request.method === 'POST') {
         fareTotal: fare,
         notes: edit.notes || null,
         handledBy: edit.handledBy || null,
+        busyUntil,
       };
       const changes: Record<string, [unknown, unknown]> = {};
       for (const [k, v] of Object.entries(next)) {
-        const was = booking[k as keyof typeof next];
-        if ((was ?? null) !== v && k !== 'driverId') changes[k] = [was ?? null, v];
+        // Times are compared, and kept on the timeline, as text.
+        const plain = (x: unknown) => (x instanceof Date ? x.toISOString() : (x ?? null));
+        const was = plain(booking[k as keyof typeof next]);
+        if (was !== plain(v) && k !== 'driverId') changes[k] = [was, plain(v)];
       }
       if (Object.keys(changes).length) {
         // Giving a confirmed trip a driver moves it along, as the board expects; taking the driver off moves it back.
@@ -200,12 +215,25 @@ const TICKS: Record<string, { label: string; tone: string }> = {
   read: { label: '✓✓ Read', tone: 'bg-[#e7f0ff] text-[#1d4ed8]' },
   failed: { label: 'Not delivered', tone: 'bg-[#fde8e7] text-[#b42318]' },
 };
-/** The pick list: active drivers, plus this booking's driver if they have been switched off since. */
-const pickable = pickerList(driverRows.filter((d) => d.active || d.id === booking.driverId));
+// When this trip keeps its car and driver busy, who else is busy then, and whether a car of its type is left (src/server/calendar.ts).
+const busyFor = busyWindow(booking);
+const auto = autoEnd(booking);
+const span = await loadSpan(busyFor.start, busyFor.end);
+const busy = driversBusy(span, busyFor.start, busyFor.end, booking.id);
+const carCount = carsFree(span, busyFor.start, busyFor.end, booking.id)[booking.vehicle as VehicleKey];
+const stillAhead = busyFor.end > new Date() && !['cancelled', 'no_show', 'completed'].includes(booking.status);
+const driverClash = stillAhead && booking.driverId ? busy.get(booking.driverId) : undefined;
+const noOwnCar = stillAhead && !booking.driverId && !booking.driverName && Boolean(carCount?.tracked) && carCount!.free < 1;
+const calendarHref = `/admin/calendar/?view=day&start=${booking.pickupDate}`;
+/** The pick list: active drivers, plus this booking's driver if they have been switched off since. Those busy then say so. */
+const pickable = pickerList(driverRows.filter((d) => d.active || d.id === booking.driverId)).map((d) => (busy.has(d.id) ? { ...d, label: `${d.label} · busy then` } : d));
 const currentDriver = driverRows.find((d) => d.id === booking.driverId) ?? null;
 const customerBookings = booking.customerId
   ? ((await db.select({ n: count() }).from(b).where(eq(b.customerId, booking.customerId)))[0]?.n ?? 0)
   : 0;
+// The office's stars and tags for this customer (src/server/customer-tags.ts).
+const [rated] = booking.customerId ? await db.select({ rating: schema.customers.rating, noOffers: schema.customers.noOffers }).from(schema.customers).where(eq(schema.customers.id, booking.customerId)) : [];
+const customerTags = booking.customerId ? ((await tagsFor([booking.customerId])).get(booking.customerId) ?? []) : [];
 await audit({ actorId: user.id, action: 'view_booking', entity: 'booking', entityId: booking.id, detail: { ref: booking.ref }, ipHash: ctx.ipHash });
 // Uploaded pictures (src/server/files.ts): each payment's screenshot, and the photos uploaded for the itinerary.
 const picturesReady = filesReady();
@@ -269,6 +297,7 @@ const facts: [string, string][] = [
   ['Address', booking.dropAddress ?? ''],
   ['Car', [car, booking.vehicleNumber].filter(Boolean).join(' · ')],
   ['Handled by', handler ?? ''],
+  ['Car and driver busy', `${spanLabel(busyFor.start, busyFor.end)}${busyFor.set ? ' (set by hand)' : ''}`],
 ];
 ---
 
@@ -371,6 +400,16 @@ const facts: [string, string][] = [
               No driver assigned yet. Assign one.
             </button>
           )}
+          {noOwnCar && (
+            <p class="a-msg m-0 bg-[#fff4d6] text-[#8a5300]">
+              All {carCount!.own === 1 ? 'your own' : `${carCount!.own} of your own`} {car} {carCount!.own === 1 ? 'car is' : 'cars are'} busy at this time. Give the trip to an outside car (Edit, then a driver marked Outside car), or offer {first || 'the customer'} another car. <a href={calendarHref} class="font-semibold text-inherit">See the calendar</a>
+            </p>
+          )}
+          {driverClash && (
+            <p class="a-msg a-msg-error m-0">
+              {booking.driverName} is also busy at this time: {driverClash.join('; ')}. Pick another driver or an outside car. <a href={calendarHref} class="font-semibold text-inherit">See the calendar</a>
+            </p>
+          )}
           <dl class="m-0 grid gap-x-6 gap-y-3 sm:grid-cols-2">
             {facts.map(([k, v]) => (
               <div class="flex flex-col gap-0.5">
@@ -450,7 +489,17 @@ const facts: [string, string][] = [
                 </span>
               </div>
               {customerBookings > 1 && <span class="a-badge self-start bg-lime-50 text-[#3f6200]">Returning customer · {customerBookings} bookings</span>}
-              {booking.customerId && <a href={`/admin/customers/${booking.customerId}/`} class="self-start text-sm font-semibold text-ink">Customer page and notes</a>}
+              {(rated?.rating || customerTags.length > 0 || rated?.noOffers) && (
+                <div class="flex flex-wrap items-center gap-1.5">
+                  {rated?.rating && <span class="a-stars" title={`${rated.rating} of 5 stars`} aria-label={`${rated.rating} of 5 stars`}>{starText(rated.rating)}</span>}
+                  {customerTags.map((t) => <span class:list={['a-badge', TAG_CLASS[t.tone]]}>{t.name}</span>)}
+                  {rated?.noOffers && <span class="a-badge bg-[#fde8e7] text-[#b42318]">No offers</span>}
+                </div>
+              )}
+              {booking.customerId && !rated?.rating && booking.status === 'completed' && (
+                <a href={`/admin/customers/${booking.customerId}/#rating`} class="self-start rounded-xl bg-lime-50 px-3 py-2 text-sm font-semibold text-[#3f6200] no-underline">How was {first || 'this customer'}? Give them stars and tags</a>
+              )}
+              {booking.customerId && <a href={`/admin/customers/${booking.customerId}/`} class="self-start text-sm font-semibold text-ink">Customer page, notes and rating</a>}
             </>
           )}
           {booking.fareMismatch && <p class="a-msg a-msg-error m-0 text-sm">The booking page showed {inr(booking.fareShown)}, but the fare table says {inr(booking.fareServer)}. Agree the price with the customer.</p>}
@@ -579,6 +628,11 @@ const facts: [string, string][] = [
             <label class="a-field">Car number for this trip<input name="vehicleNumber" maxlength="20" value={edit.vehicleNumber} placeholder="WB 73 F 5560" autocapitalize="characters" autocomplete="off" data-driver-car /></label>
             <label class="a-field"><span>Driver earns for this trip, ₹ <span class="font-normal text-muted" data-pay-hint></span></span><input name="driverPay" inputmode="numeric" value={edit.driverPay} autocomplete="off" data-driver-pay readonly={!admin} /></label>
             {!admin && <p class="m-0 text-sm text-muted sm:col-span-2">Worked out from the driver’s pay. Only the admin can change it.</p>}
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <DateField label="Car and driver free again" name="busyDate" value={edit.busyDate} min={addDays(today, -400)} max={addDays(today, 400)} quick={[]} clearable placeholder="Worked out" />
+            <TimeField label="At" name="busyTime" value={edit.busyTime} clearable placeholder="End of that day" />
+            <p class="m-0 text-sm text-muted sm:col-span-2">Left empty, the calendar counts them busy until {whenLabel(auto.end)}: {auto.why}. Set it when a trip runs longer or the car is back sooner.</p>
           </div>
         </div>
         <label class="a-field">Agreed fare, ₹<input name="fareTotal" inputmode="numeric" required value={edit.fareTotal} data-fare /></label>

@@ -27,9 +27,11 @@ interface Props {
   speakable?: string[];
   /** The welcome popup 15 seconds in; off on the booking form. */
   welcome?: boolean;
+  /** The phone bar with Call, WhatsApp and Book; off on the booking form, which has its own fare bar. */
+  actionBar?: boolean;
 }
 
-const { title, description, noindex = false, schema = [], crumbs, ogType = 'website', ogImage = '/og/default.png', speakable, welcome = true } = Astro.props;
+const { title, description, noindex = false, schema = [], crumbs, ogType = 'website', ogImage = '/og/default.png', speakable, welcome = true, actionBar = true } = Astro.props;
 const articleModified = (schema as { '@type'?: string; dateModified?: string }[]).find((n) => n?.['@type'] === 'Article')?.dateModified;
 const modified = Astro.props.modified ?? articleModified;
 // Append the brand only when it fits in ~65 characters; the keyword matters more.
@@ -116,7 +118,7 @@ const nodes = [
       <slot />
     </main>
     <Footer />
-    <MobileActionBar />
+    {actionBar && <MobileActionBar />}
     {welcome && <WelcomePopup />}
     <script>
       // Scroll reveal and count-up numbers. Both are decoration: without this

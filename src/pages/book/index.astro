@@ -17,7 +17,7 @@ import { wordsText } from '../../data/page-text';
 const SCRIPT_WORDS = [
   'fareLabel', 'fareLabelPackage', 'baseLabel', 'baseLabelPackage', 'nightLabel', 'nightLabelPackage', 'balanceLabel', 'balanceLabelPackage',
   'packageFrom', 'packageNote', 'payNote', 'payNotePackage', 'missing', 'missingDate', 'missingTime', 'missingName', 'missingPhone',
-  'payRest', 'payPays', 'payCopy', 'payCopied', 'payApp', 'paySend', 'payConfirm', 'waIntro', 'waPaid',
+  'badPhone', 'payRest', 'payPays', 'payCopy', 'payCopied', 'payApp', 'paySend', 'payConfirm', 'waIntro', 'waPaid',
 ] as const;
 const w = (field: string) => wordsText('book', field);
 
@@ -32,10 +32,18 @@ const data = {
 };
 /** An empty element the script fills in, standing where a fill-in is in the words. */
 const slot = (html: string) => ({ text: '', html });
+/** The calendar check: cars every one of the office's own is booked for at the chosen time (src/lib/car-availability.ts). */
+const carCheck = {
+  whatsapp: BUSINESS.whatsapp,
+  vehicles: data.vehicles,
+  seats: Object.fromEntries(VEHICLES.map((v) => [v.key, v.seats])),
+  words: Object.fromEntries((['carFull', 'carAsk', 'carFullNote', 'allFull', 'carFullWa'] as const).map((k) => [k, w(k)])),
+};
 ---
 
 <BaseLayout
   welcome={false}
+  actionBar={false}
   title={w('seoTitle')}
   description={w('seoDescription')}
   crumbs={[{ name: 'Book a taxi', path: '/book/' }]}
@@ -46,14 +54,18 @@ const slot = (html: string) => ({ text: '', html });
       <Words page="book" field="lead" as="p" class="mt-2 text-muted" />
       <GoogleRatingBadge variant="chip" class="mt-4" />
 
-      <form id="book" class="mt-8 space-y-8" novalidate>
-        <fieldset>
-          <Words page="book" field="step1" as="legend" class="text-lg font-bold text-ink" />
-          <div class="mt-3 flex gap-2" role="radiogroup">
+      {/*
+        Only what a booking needs is in view: trip, car, date and time, name
+        and mobile. Flight, hotel and passengers fold away under one line,
+        and on a phone the fare bar at the bottom keeps the button in reach.
+      */}
+      <form id="book" class="mt-6 space-y-6" novalidate>
+        <div class="space-y-4">
+          <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Trip type">
             <label class="chip"><input type="radio" name="kind" value="taxi" checked class="sr-only" /><Words page="book" field="kindTaxi" /></label>
             <label class="chip"><input type="radio" name="kind" value="package" class="sr-only" /><Words page="book" field="kindPackage" /></label>
           </div>
-          <label class="field mt-4" data-for="taxi">
+          <label class="field" data-for="taxi">
             <Words page="book" field="routeLabel" />
             <select name="route" required>
               {ROUTE_GROUPS.map((g) => (
@@ -63,48 +75,59 @@ const slot = (html: string) => ({ text: '', html });
               ))}
             </select>
           </label>
-          <label class="field mt-4" data-for="package" hidden>
+          <label class="field" data-for="package" hidden>
             <Words page="book" field="packageLabel" />
             <select name="package">
               {PACKAGES.map((p) => <option value={p.slug}>{p.name} ({p.nights}N/{p.days}D)</option>)}
             </select>
           </label>
-        </fieldset>
+        </div>
 
         <fieldset>
-          <Words page="book" field="step2" as="legend" class="text-lg font-bold text-ink" />
-          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+          <Words page="book" field="carLabel" as="legend" class="mb-2 text-[0.95rem] font-semibold text-ink" />
+          <div class="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
             {VEHICLES.map((v, i) => (
-              <label class="vehicle card flex cursor-pointer items-start gap-3 p-4">
-                <input type="radio" name="vehicle" value={v.key} checked={i === 0} class="mt-1 accent-[#111111]" />
-                <span class="flex-1">
-                  <strong class="block text-ink">{v.name} <span class="font-normal text-muted">· <Words page="book" field="seats" each={{ seats: { text: String(v.seats) } }} /></span></strong>
-                  <span class="block text-xs text-muted">{v.models}</span>
-                  <span class="mt-1 block text-lg font-bold text-ink" data-price={v.key}></span>
-                </span>
+              <label class="vehicle">
+                <input type="radio" name="vehicle" value={v.key} checked={i === 0} class="sr-only" />
+                <span class="v-dot" aria-hidden="true"><Icon name="check" class="h-3.5 w-3.5" /></span>
+                <strong class="pr-7 text-ink">{v.name}</strong>
+                <span class="text-xs leading-snug text-muted"><Words page="book" field="seats" each={{ seats: { text: String(v.seats) } }} /> · {v.models}</span>
+                <span class="mt-auto pt-1 text-lg font-bold text-ink" data-price={v.key}></span>
               </label>
             ))}
           </div>
         </fieldset>
 
-        <fieldset class="grid gap-4 sm:grid-cols-2">
-          <Words page="book" field="step3" as="legend" class="mb-3 text-lg font-bold text-ink sm:col-span-2" />
+        <div class="grid items-end gap-4 sm:grid-cols-2">
           <DatePicker name="date" label={w('dateLabel')} />
           <TimePicker name="time" label={w('timeLabel')} nightFrom={POLICY.nightChargeFrom} nightTo={POLICY.nightChargeTo} nightTag={w('nightTag')} />
-          <label class="field"><span><Words page="book" field="flightLabel" /> <Words page="book" field="optional" as="em" class="font-normal text-muted" /></span><input name="flight" placeholder={w('flightHint')} autocomplete="off" /></label>
-          <label class="field"><Words page="book" field="paxLabel" /><input type="number" name="pax" min="1" max="12" value="2" inputmode="numeric" /></label>
-          <label class="field sm:col-span-2"><Words page="book" field="dropLabel" /><input name="drop" placeholder={w('dropHint')} /></label>
-        </fieldset>
+        </div>
 
-        <fieldset class="grid gap-4 sm:grid-cols-2">
-          <Words page="book" field="step4" as="legend" class="mb-3 text-lg font-bold text-ink sm:col-span-2" />
-          <label class="field"><Words page="book" field="nameLabel" /><input name="name" required autocomplete="name" /></label>
-          <label class="field"><Words page="book" field="phoneLabel" /><input name="phone" type="tel" required autocomplete="tel" inputmode="tel" placeholder="+91" /></label>
-        </fieldset>
+        <div class="grid items-end gap-4 sm:grid-cols-2">
+          <label class="field"><Words page="book" field="nameLabel" /><input name="name" required autocomplete="name" autocapitalize="words" /></label>
+          <label class="field">
+            <Words page="book" field="phoneLabel" />
+            {/* +91 is shown, not sent: the server adds it to a 10-digit number. It hides once a number starts with + or 0. */}
+            <span class="tel"><span class="tel-cc" aria-hidden="true">+91</span><input name="phone" type="tel" required autocomplete="tel" inputmode="tel" placeholder={w('phoneHint')} /></span>
+          </label>
+        </div>
+
+        <details class="more" id="more">
+          <summary>
+            <span><Words page="book" field="moreToggle" /> <Words page="book" field="optional" as="em" class="font-normal text-muted" /></span>
+            <Icon name="down" class="more-chev h-5 w-5 shrink-0" />
+          </summary>
+          <div class="grid gap-4 pt-4 sm:grid-cols-2">
+            <label class="field"><Words page="book" field="flightLabel" /><input name="flight" placeholder={w('flightHint')} autocomplete="off" /></label>
+            <label class="field"><Words page="book" field="paxLabel" /><input type="number" name="pax" min="1" max="12" value="2" inputmode="numeric" /></label>
+            <label class="field sm:col-span-2"><Words page="book" field="dropLabel" /><input name="drop" placeholder={w('dropHint')} /></label>
+          </div>
+        </details>
         <div class="hp" aria-hidden="true">
           <label>Leave this empty<input name="website" tabindex="-1" autocomplete="off" /></label>
         </div>
-        <p id="err" class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert"></p>
+        {/* Each problem shows under its own field; this reads them out in one line. */}
+        <p id="err" class="sr-only" role="alert"></p>
       </form>
     </div>
 
@@ -138,6 +161,15 @@ const slot = (html: string) => ({ text: '', html });
       </div>
       <Words page="book" field="talk" as="p" class="mt-4 text-center text-sm" />
     </aside>
+  </div>
+
+  {/* On a phone the fare and the WhatsApp button stay at the bottom of the screen, until the fare box itself scrolls into view. */}
+  <div id="bar" class="book-bar">
+    <div class="min-w-0 flex-1">
+      <p class="text-xl leading-tight font-extrabold text-ink" id="bar-total">–</p>
+      <p class="truncate text-xs text-muted" id="bar-trip"></p>
+    </div>
+    <button type="button" id="bar-wa" class="btn-wa shrink-0 px-4"><Icon name="whatsapp" /> <Words page="book" field="waButton" /></button>
   </div>
 
   {/* Paying the advance first: the office UPI QR code, from /api/upi/ when the button is pressed. */}
@@ -282,6 +314,8 @@ const slot = (html: string) => ({ text: '', html });
         $('night').textContent = `${pax} × ${inr(p.fromPrice)} = ${inr(total)}`;
         $('adv').textContent = fill(W.packageFrom, { amount: inr(adv) });
         $('bal').textContent = fill(W.packageFrom, { amount: inr(total - adv) });
+        $('bar-total').textContent = $('total').textContent;
+        $('bar-trip').textContent = p.name;
         return { route: null, vehicle, total, adv, pax, pkg: p };
       }
       const base = route.fares[vehicle];
@@ -294,24 +328,76 @@ const slot = (html: string) => ({ text: '', html });
       $('night').textContent = inr(night);
       $('adv').textContent = inr(adv);
       $('bal').textContent = inr(total - adv);
+      $('bar-total').textContent = inr(total);
+      $('bar-trip').textContent = `${d.vehicles[vehicle]} · ${route.name}`;
       return { route, vehicle, total, adv, pax: 0, pkg: null };
     }
 
-    function check() {
-      const missing = ['date', 'time', 'name', 'phone'].filter((n) => !val(n));
-      const err = $('err');
-      if (missing.length) {
-        const names: Record<string, string> = { date: W.missingDate, time: W.missingTime, name: W.missingName, phone: W.missingPhone };
-        err.textContent = fill(W.missing, { missing: missing.map((m) => names[m]).join(', ') });
-        err.classList.remove('hidden');
-        // Date and time live in hidden inputs; their picker buttons take the focus instead.
-        const first = f.elements.namedItem(missing[0]) as HTMLElement;
-        (first.closest('[data-picker]')?.querySelector<HTMLElement>('.pk-trigger') ?? first).focus();
-        return false;
-      }
-      err.classList.add('hidden');
-      return true;
+    // What a booking cannot go without, in the order the form shows it.
+    const REQUIRED = ['date', 'time', 'name', 'phone'];
+    const NAMES: Record<string, string> = { date: W.missingDate, time: W.missingTime, name: W.missingName, phone: W.missingPhone };
+    /** A number the server can read (normalizePhone in src/server/bookings.ts): 10 digits, or up to 15 with the country code. */
+    const phoneOk = (raw: string) => {
+      const n = raw.replace(/\D/g, '').replace(/^00/, '');
+      return n.length >= 10 && n.length <= 15;
+    };
+    /** What is wrong with a field, in the words shown under it; '' when nothing is. */
+    function problem(n: string) {
+      if (!val(n)) return fill(W.missing, { missing: NAMES[n] });
+      return n === 'phone' && !phoneOk(val(n)) ? W.badPhone : '';
     }
+    /** What the customer fixes: date and time live in hidden inputs, so their picker buttons stand in. */
+    function control(n: string) {
+      const el = f.elements.namedItem(n) as HTMLElement;
+      return el.closest('[data-picker]')?.querySelector<HTMLElement>('.pk-trigger') ?? el;
+    }
+    /** Shows a problem under its field, or takes it away when `text` is ''. */
+    function mark(n: string, text: string) {
+      const el = control(n);
+      const box = el.closest<HTMLElement>('[data-picker], .field')!;
+      let note = box.querySelector<HTMLElement>('.field-err');
+      box.classList.toggle('is-bad', !!text);
+      if (!text) {
+        note?.remove();
+        el.removeAttribute('aria-invalid');
+        el.removeAttribute('aria-describedby');
+        return;
+      }
+      if (!note) {
+        // Inside the label but kept out of its name: the field reads it as its description instead.
+        note = Object.assign(document.createElement('span'), { className: 'field-err', id: `${n}-err` });
+        note.setAttribute('aria-hidden', 'true');
+        box.append(note);
+      }
+      note.textContent = text;
+      el.setAttribute('aria-invalid', 'true');
+      el.setAttribute('aria-describedby', note.id);
+    }
+
+    /** The problems still showing, in one line for screen readers. */
+    function summarize() {
+      const bad = REQUIRED.filter((n) => control(n).hasAttribute('aria-invalid'));
+      const missing = bad.filter((n) => !val(n));
+      $('err').textContent = [missing.length && fill(W.missing, { missing: missing.map((n) => NAMES[n]).join(', ') }), bad.includes('phone') && val('phone') && W.badPhone].filter(Boolean).join(' ');
+    }
+
+    function check() {
+      const bad = REQUIRED.filter((n) => problem(n));
+      REQUIRED.forEach((n) => mark(n, problem(n)));
+      summarize();
+      if (!bad.length) return true;
+      const first = control(bad[0]);
+      first.scrollIntoView({ block: 'center' });
+      first.focus({ preventScroll: true });
+      return false;
+    }
+    // A problem goes as soon as it is fixed; new ones show only on the next press of a button.
+    f.addEventListener('input', (e) => {
+      const n = (e.target as HTMLInputElement).name;
+      if (!REQUIRED.includes(n) || !control(n).hasAttribute('aria-invalid') || problem(n)) return;
+      mark(n, '');
+      summarize();
+    });
 
     function message() {
       const c = calc();
@@ -333,13 +419,34 @@ const slot = (html: string) => ({ text: '', html });
 
     f.addEventListener('input', calc);
     f.addEventListener('change', calc);
-    $('wa').addEventListener('click', () => {
+    function sendWhatsApp() {
       if (!check()) return;
       const p = payload('whatsapp');
       // Opened first and in the same click, or the browser blocks the window.
       window.open(`https://wa.me/${d.whatsapp}?text=${encodeURIComponent(message())}`, '_blank', 'noopener');
       save(p);
-    });
+    }
+    $('wa').addEventListener('click', sendWhatsApp);
+    $('bar-wa').addEventListener('click', sendWhatsApp);
+
+    // A tour package is priced by the number of travellers, so choosing one unfolds the passengers box.
+    const more = $('more') as HTMLDetailsElement;
+    const unfoldForPackage = () => { if (kind() === 'package') more.open = true; };
+    f.querySelectorAll('input[name=kind]').forEach((r) => r.addEventListener('change', unfoldForPackage));
+    unfoldForPackage();
+
+    // "+91" stands in the mobile box until the number brings its own country code or a leading 0.
+    const phone = f.elements.namedItem('phone') as HTMLInputElement;
+    const ownCode = () => phone.parentElement!.classList.toggle('is-intl', /^\s*[+0]/.test(phone.value));
+    phone.addEventListener('input', ownCode);
+    window.addEventListener('pageshow', ownCode);
+
+    // The phone fare bar steps aside while the fare box's own buttons are on screen, and while the keyboard is up.
+    const bar = $('bar');
+    new IntersectionObserver(([e]) => bar.classList.toggle('is-away', e.isIntersecting), { rootMargin: '0px 0px -80px 0px' }).observe($('wa'));
+    const typing = (t: EventTarget | null) => t instanceof HTMLElement && t.matches('input:not([type=radio]), select');
+    f.addEventListener('focusin', (e) => bar.classList.toggle('is-typing', typing(e.target)));
+    f.addEventListener('focusout', () => bar.classList.remove('is-typing'));
     // Paying the advance first. The booking is saved the moment the button is
     // pressed, then the office QR code shows with the amount. Tour packages are
     // priced "from", so their advance is asked for on WhatsApp once the office
@@ -437,6 +544,20 @@ const slot = (html: string) => ({ text: '', html });
     });
     calc();
   </script>
+
+  <script type="application/json" id="car-check" set:html={JSON.stringify(carCheck)} />
+  <script>
+    import { watchAvailability, type AvailabilityWords } from '../../lib/car-availability';
+    const c: { whatsapp: string; vehicles: Record<string, string>; seats: Record<string, number>; words: AvailabilityWords } = JSON.parse(document.getElementById('car-check')!.textContent!);
+    const form = document.getElementById('book') as HTMLFormElement;
+    watchAvailability(form, {
+      ...c,
+      tripName: () => {
+        const pkg = form.querySelector<HTMLInputElement>('input[name=kind]:checked')?.value === 'package';
+        return (form.elements.namedItem(pkg ? 'package' : 'route') as HTMLSelectElement).selectedOptions[0]?.textContent ?? '';
+      },
+    });
+  </script>
 </BaseLayout>
 
 <style>
@@ -453,7 +574,48 @@ const slot = (html: string) => ({ text: '', html });
   .chip span { display: inline-flex; min-height: 2.75rem; align-items: center; border-radius: 999px; border: 1px solid var(--color-line); padding: 0 1.1rem; font-weight: 600; cursor: pointer; }
   .chip input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: #fff; }
   .chip input:focus-visible + span { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  /* The cars: two to a row on a phone, four on a wide screen, with a tick in the corner of the one chosen. */
+  .vehicle {
+    position: relative; display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 0.875rem; cursor: pointer;
+    border: 1px solid var(--color-line); border-radius: 0.875rem; background: #fff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .vehicle:hover { border-color: color-mix(in srgb, var(--color-ink) 30%, var(--color-line)); }
   .vehicle:has(input:checked) { border-color: var(--color-ink); box-shadow: 0 0 0 2px var(--color-lime-100); }
+  .vehicle:has(input:focus-visible) { outline: 3px solid var(--color-lime); outline-offset: 2px; }
+  .v-dot {
+    position: absolute; top: 0.75rem; right: 0.75rem; display: grid; place-items: center; width: 1.25rem; height: 1.25rem;
+    border: 1.5px solid var(--color-line); border-radius: 999px; color: transparent;
+  }
+  .vehicle:has(input:checked) .v-dot { border-color: var(--color-ink); background: var(--color-ink); color: #fff; }
+  /* The mobile box with +91 in front, unless the number brings its own code. */
+  .tel { position: relative; display: block; }
+  .tel-cc { position: absolute; top: 50%; left: 0.875rem; transform: translateY(-50%); font-weight: 400; color: var(--color-muted); pointer-events: none; }
+  .field .tel input { width: 100%; padding-left: 3.1rem; }
+  .tel.is-intl .tel-cc { display: none; }
+  .field .tel.is-intl input { padding-left: 0.875rem; }
+  .more summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; min-height: 3rem; padding: 0.625rem 0.875rem;
+    border: 1px dashed color-mix(in srgb, var(--color-ink) 22%, var(--color-line)); border-radius: 0.75rem;
+    font-weight: 600; color: var(--color-ink); cursor: pointer; list-style: none;
+  }
+  .more summary::-webkit-details-marker { display: none; }
+  .more summary:hover { border-color: var(--color-ink); }
+  /* The chevron is drawn by Icon.astro, which does not carry this page's scope. */
+  .more :global(.more-chev) { color: var(--color-muted); transition: transform 0.2s ease; }
+  .more[open] :global(.more-chev) { transform: rotate(180deg); }
+  /* A field left out or mistyped, once a button has been pressed. */
+  .field.is-bad input, :global(.pk.is-bad .pk-trigger) { border-color: #c81e1e; }
+  :global(.field-err) { font-size: 0.85rem; font-weight: 500; color: #b42318; }
+  /* The phone fare bar. Wider screens show the fare box beside or right under the form instead. */
+  .book-bar {
+    position: fixed; inset: auto 0 0; z-index: 40; display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.625rem 1rem calc(0.625rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--color-line); background: #fff; box-shadow: 0 -10px 30px -16px rgb(17 17 17 / 30%);
+    transition: transform 0.2s ease;
+  }
+  .book-bar.is-away, .book-bar.is-typing { transform: translateY(calc(100% + 1rem)); }
+  @media (min-width: 640px) { .book-bar { display: none; } }
 </style>
 
 <style is:global>

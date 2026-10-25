@@ -34,9 +34,11 @@ interface Props {
   /** The data-k or name of the start date this one cannot come before (an itinerary's end date). */
   after?: string;
   placeholder?: string;
+  /** Shown on the box instead of the date while the value is unchanged, such as the week a calendar shows ("19 – 25 Oct 2026"). */
+  display?: string;
   class?: string;
 }
-const { label, name, k, value = '', min, max, quick = [0, 1], required = false, clearable = false, after, placeholder = 'Choose a date', class: cls } = Astro.props;
+const { label, name, k, value = '', min, max, quick = [0, 1], required = false, clearable = false, after, placeholder = 'Choose a date', display, class: cls } = Astro.props;
 const today = istToday();
 const id = `af-${Math.random().toString(36).slice(2, 8)}`;
 const QUICK_LABEL = { 0: 'Today', 1: 'Tomorrow', '-1': 'Yesterday' } as const;
@@ -54,12 +56,14 @@ const svg = (d: string, size = 18) =>
   data-max={max}
   data-after={after}
   data-required={required ? '' : undefined}
+  data-display={display}
+  data-display-for={display ? value : undefined}
 >
   <span id={`${id}-label`}>{label}</span>
   <input type="hidden" name={name} data-k={k} value={value} />
   <button type="button" class="af-trigger" id={`${id}-btn`} popovertarget={`${id}-pop`} aria-haspopup="dialog" aria-labelledby={`${id}-label ${id}-btn`} data-af-trigger>
     <span class="af-icon" set:html={svg(calendar)} />
-    <span class:list={['af-value', !value && 'is-empty']} data-af-value>{value ? fieldDay(value, today) : placeholder}</span>
+    <span class:list={['af-value', !value && 'is-empty']} data-af-value>{display ?? (value ? fieldDay(value, today) : placeholder)}</span>
     <span class="af-caret" set:html={svg('<path d="m6 9 6 6 6-6"/>', 16)} />
   </button>
   <span class="af-error" data-af-error hidden>Choose the {label.toLowerCase()}.</span>
@@ -112,7 +116,7 @@ const svg = (d: string, size = 18) =>
     };
 
     const f = pickerField(root, {
-      label: (v) => fieldDay(v, istToday()),
+      label: (v) => (root.dataset.display && v === root.dataset.displayFor ? root.dataset.display : fieldDay(v, istToday())),
       prepare() {
         today = istToday();
         for (const q of quick) {

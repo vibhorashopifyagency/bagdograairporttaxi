@@ -11,6 +11,7 @@ import DateField from '../../../components/admin/DateField.astro';
 import DriverFields from '../../../components/admin/DriverFields.astro';
 import Pager from '../../../components/admin/Pager.astro';
 import { isAdmin } from '../../../server/admin';
+import { OFF_REASON, ownCar, spanLabel, upcomingTimeOff } from '../../../server/calendar';
 import { STATUS_LABEL, TONE, addDays, inr, todayIST, waText } from '../../../server/dashboard';
 import { getDb, schema } from '../../../server/db';
 import { driverCollectsBalance } from '../../../server/fares';
@@ -55,6 +56,7 @@ let form: DriverForm = {
   phone: driver.phone ? phoneLabel(driver.phone) : '',
   vehicleNumber: driver.vehicleNumber ?? '',
   vehicle: driver.vehicle ?? '',
+  partner: driver.partner ? '1' : '',
   payType: driver.payType,
   payValue: driver.payValue === null ? '' : String(driver.payValue),
   notes: driver.notes ?? '',
@@ -101,7 +103,7 @@ if (Astro.request.method === 'POST') {
 
 const page = pageNumber(Astro.url);
 const size = rowsFor(Astro.url, Astro.cookies);
-const [acc, st, upcoming] = await Promise.all([accountOf(driver.id), statement(driver.id, page, size), upcomingTrips(driver.id)]);
+const [acc, st, upcoming, timeOff] = await Promise.all([accountOf(driver.id), statement(driver.id, page, size), upcomingTrips(driver.id), upcomingTimeOff(driver.id)]);
 const lines = st.lines;
 const pages = Math.max(1, Math.ceil(st.total / size));
 const pageHref = (n: number) => `${here}${n > 1 ? `?page=${n}` : ''}`;
@@ -148,6 +150,7 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
         <h1 class="m-0 flex flex-wrap items-center gap-2 font-display text-[28px] leading-tight font-bold lg:text-[34px]">
           {driver.name}
           {!driver.active && <span class="a-badge bg-[#eef0f3] font-sans text-body">Switched off</span>}
+          {driver.partner && <span class="a-badge bg-[#e7f0ff] font-sans text-[#1d4ed8]">Outside car</span>}
         </h1>
         <span class="text-body">{[driver.phone && phoneLabel(driver.phone), driver.vehicleNumber, driver.vehicle && vehicleByKey(driver.vehicle)?.name].filter(Boolean).join(' · ')}</span>
         <span class:list={['a-badge self-start', driver.payValue === null ? 'bg-[#fff4d6] text-[#8a5300]' : 'bg-lime-50 text-[#3f6200]']}>{payLabel(driver)}</span>
@@ -242,6 +245,24 @@ const close = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" strok
               </a>
             ))
           )}
+        </section>
+
+        <section class="a-card flex flex-col p-5" aria-labelledby="off-h">
+          <div class="flex items-center justify-between gap-3 pb-2">
+            <h2 id="off-h" class="m-0 font-display text-xl font-bold">Time off</h2>
+            <a href="/admin/calendar/" class="text-sm font-semibold text-ink">Calendar</a>
+          </div>
+          {timeOff.length === 0 ? (
+            <p class="m-0 text-sm text-body">{driver.active ? `None coming up. Mark leave or a car at the garage on the calendar, so ${first} is not given trips then${ownCar(driver) ? ' and the website counts the car as busy' : ''}.` : 'None coming up.'}</p>
+          ) : (
+            timeOff.map((o) => (
+              <div class="flex flex-col border-t border-[#f0f1f3] py-2.5">
+                <span class="font-semibold">{OFF_REASON[o.reason]}</span>
+                <span class="text-[13px] text-muted">{spanLabel(o.startsAt, o.endsAt)}{o.note ? ` · ${o.note}` : ''}</span>
+              </div>
+            ))
+          )}
+          {driver.active && <a href={`/admin/calendar/?do=off&driver=${driver.id}`} class="btn-ghost mt-3 min-h-11 self-start px-4 py-2 text-sm">Mark time off</a>}
         </section>
 
         {driver.notes && (

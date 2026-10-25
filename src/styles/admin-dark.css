@@ -104,6 +104,14 @@
 [data-theme='dark'] [class~='text-[#b42318]'] { color: #ff8f86; }
 [data-theme='dark'] [class~='bg-[#e7f5ee]'] { background-color: #0d2a1f; }
 [data-theme='dark'] [class~='text-[#0f7a4e]'] { color: #5fd3a0; }
+[data-theme='dark'] [class~='bg-[#e7f0ff]'] { background-color: #14223d; }
+[data-theme='dark'] [class~='text-[#1d4ed8]'] { color: #8fb4ff; }
+[data-theme='dark'] [class~='bg-[#fde8ef]'] { background-color: #3a1424; }
+[data-theme='dark'] [class~='text-[#b4235a]'] { color: #ff8fbd; }
+[data-theme='dark'] .a-stars, [data-theme='dark'] .a-rate input:checked ~ label { color: #ffc247; }
+[data-theme='dark'] .a-rate label, [data-theme='dark'] .a-rate:hover label { color: #3a4049; }
+[data-theme='dark'] .a-rate label:hover, [data-theme='dark'] .a-rate label:hover ~ label { color: #ffc247; }
+[data-theme='dark'] .a-tag input:not(:checked) + span { background: var(--a-surface) !important; border-color: var(--a-edge); }
 [data-theme='dark'] .a-msg-ok { background: #1f2a0b; color: #c4f25a; }
 [data-theme='dark'] .a-msg-error { background: #3a1715; color: #ffb4ad; }
 

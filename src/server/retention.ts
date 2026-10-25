@@ -18,7 +18,8 @@
  *    reference, and lose the free-text note;
  *  - uploaded pictures (payment screenshots, itinerary photos) are deleted
  *    from the photo store (src/server/files.ts).
- * The customer's own row loses name, number, email and notes.
+ * The customer's own row loses name, number, email, notes, and the office's
+ * stars, tags and no-offers mark (src/server/customer-tags.ts).
  */
 import { and, count, eq, inArray, isNull, lt, lte, notExists, sql } from 'drizzle-orm';
 import { BUSINESS, SITE } from '../data/site';
@@ -79,7 +80,8 @@ async function scrubBookings(tx: Tx, ids: string[], now: Date): Promise<{ itiner
 
 async function scrubCustomers(tx: Tx, ids: string[], now: Date): Promise<void> {
   if (!ids.length) return;
-  await tx.update(schema.customers).set({ name: null, phone: null, email: null, notes: null, personalDataRemovedAt: now }).where(inArray(schema.customers.id, ids));
+  await tx.update(schema.customers).set({ name: null, phone: null, email: null, notes: null, rating: null, noOffers: false, personalDataRemovedAt: now }).where(inArray(schema.customers.id, ids));
+  await tx.delete(schema.customerTagLinks).where(inArray(schema.customerTagLinks.customerId, ids));
 }
 
 /** `files`: pictures deleted, with the bookings or because nothing used them. */
@@ -212,6 +214,11 @@ export async function customerReport(customerId: string, ctx: Ctx): Promise<{ na
   if (!c || c.personalDataRemovedAt) return null;
   const bookings = await db.select().from(schema.bookings).where(eq(schema.bookings.customerId, customerId)).orderBy(schema.bookings.pickupDate);
   const ids = bookings.map((x) => x.id);
+  const tags = await db
+    .select({ name: schema.customerTags.name })
+    .from(schema.customerTagLinks)
+    .innerJoin(schema.customerTags, eq(schema.customerTags.id, schema.customerTagLinks.tagId))
+    .where(eq(schema.customerTagLinks.customerId, customerId));
   const [pays, its, pics] = ids.length
     ? await Promise.all([
         db.select().from(schema.payments).where(inArray(schema.payments.bookingId, ids)).orderBy(schema.payments.createdAt),
@@ -236,6 +243,9 @@ export async function customerReport(customerId: string, ctx: Ctx): Promise<{ na
     line('Email', c.email),
     line('First booked with us', ist.format(c.createdAt)),
     line('Office notes', c.notes),
+    line('Office rating', c.rating ? `${c.rating} of 5` : null),
+    line('Office tags', tags.map((t) => t.name).join(', ')),
+    line('New tours and offers', c.noOffers ? 'You asked us not to send them' : null),
     '',
     `BOOKINGS (${bookings.length})`,
   ];
@@ -274,7 +284,7 @@ export async function customerReport(customerId: string, ctx: Ctx): Promise<{ na
     '',
     'HOW LONG WE KEEP IT',
     `  Your name and mobile number are removed ${RETENTION_MONTHS} months after your last trip. Trip, fare and payment amounts are kept without them, for our accounts.`,
-    `  We use these details only to arrange your trips and to contact you about them. Full policy: https://bagdograairporttaxi.com/privacy/`,
+    `  We use these details to arrange your trips and contact you about them and, now and then, to tell you about a new tour unless you ask us not to. Full policy: https://bagdograairporttaxi.com/privacy/`,
     '',
   );
   return { name: c.name ?? 'customer', text: out.filter((l) => l !== null).join('\r\n') };

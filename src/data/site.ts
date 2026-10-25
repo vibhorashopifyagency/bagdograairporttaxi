@@ -41,7 +41,7 @@ export const UPDATED_START = {
   faresUpdated: '2026-10',
   // The homepage's dateModified (JSON-LD and the key-facts footnote). Bump it
   // whenever a fare, a policy or a key fact changes.
-  contentUpdated: '2026-10-22',
+  contentUpdated: '2026-10-25',
   // The destination guides' dateModified and sitemap lastmod. Bump it when a
   // destination's facts change.
   destinationsUpdated: '2026-10-19',

@@ -57,6 +57,13 @@
       "when": 1792747424471,
       "tag": "0007_whatsapp",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792909920571,
+      "tag": "0008_calendar_and_ratings",
+      "breakpoints": true
     }
   ]
 }

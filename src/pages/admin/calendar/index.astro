@@ -1,0 +1,770 @@
+---
+/**
+ * The calendar (client, 25 Oct 2026): which driver and car is out when, a
+ * week or a day at a time. One row per driver, grouped by their usual car;
+ * under each group, the bookings of that car type with nobody to drive them
+ * yet; outside (partner) cars at the bottom. Each bar runs from pickup to
+ * when the car is free again (src/server/calendar.ts). The month view is a
+ * plain month grid instead, each day listing its trips and who drives them,
+ * for every driver or one. Time off (leave, a car at the garage) is marked
+ * here too.
+ *
+ * Confirmed bookings hold a car, and when every own car of a type is held the
+ * booking form greys that type out for that time. The admin can switch that
+ * check off here.
+ *
+ *   ?view=week|day|month  ?start=YYYY-MM-DD (default today): the day, week
+ *   (Monday to Sunday) or month that holds it
+ *   ?driver=<id>  the month view shows only that driver
+ *   ?do=off&driver=<id>  opens "Mark time off", for that driver
+ *   ?trip= ?date= ?time=  "Is a car free?"
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import DateField from '../../../components/admin/DateField.astro';
+import TimeField from '../../../components/admin/TimeField.astro';
+import { PACKAGES, packageBySlug } from '../../../data/packages';
+import { ROUTES, ROUTE_GROUPS, routeBySlug } from '../../../data/routes';
+import { VEHICLES, vehicleByKey } from '../../../data/vehicles';
+import { isAdmin } from '../../../server/admin';
+import {
+  HOLDS,
+  OFF_REASON,
+  PENDING,
+  addTimeOff,
+  busyWindow,
+  carsFree,
+  checkTimeOff,
+  driversBusy,
+  istTime,
+  loadSpan,
+  ownCar,
+  removeTimeOff,
+  setSiteCheck,
+  siteCheckOn,
+  spanLabel,
+  type SpanBooking,
+  type TimeOffForm,
+} from '../../../server/calendar';
+import { STATUS_LABEL, addDays, isDay, istMidnight, todayIST } from '../../../server/dashboard';
+import { ipHash } from '../../../server/security';
+import { firstName } from '../../../lib/itinerary-text';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const admin = isAdmin(user);
+const ctx = { actorId: user.id, ipHash: ipHash(Astro.request) };
+const today = todayIST();
+const url = Astro.url;
+const viewParam = url.searchParams.get('view');
+const view = viewParam === 'day' || viewParam === 'month' ? viewParam : 'week';
+const startParam = url.searchParams.get('start') ?? '';
+const picked = isDay(startParam) && startParam >= addDays(today, -400) && startParam <= addDays(today, 400) ? startParam : today;
+/** The 1st of the month n months from the one this day is in. */
+const monthOf = (day: string, n = 0) => {
+  const t = Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 1 + n;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}-01`;
+};
+/** The first day of the day, the week (Monday to Sunday) or the month that holds this day. */
+const viewStartOf = (day: string, v: string) => (v === 'month' ? monthOf(day) : v === 'week' ? addDays(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7)) : day);
+const start = viewStartOf(picked, view);
+/** The first day after the stretch this view is about. */
+const viewEnd = view === 'month' ? monthOf(start, 1) : addDays(start, view === 'day' ? 1 : 7);
+// The days drawn: a day, a week, or the Monday-to-Sunday weeks that hold the month.
+const lead = view === 'month' ? (new Date(`${start}T00:00:00Z`).getUTCDay() + 6) % 7 : 0;
+const from = addDays(start, -lead);
+const days = view === 'day' ? 1 : view === 'week' ? 7 : Math.ceil((lead + Math.round((Date.parse(viewEnd) - Date.parse(start)) / 86400e3)) / 7) * 7;
+const prevStart = view === 'month' ? monthOf(start, -1) : addDays(start, -days);
+const nextStart = view === 'month' ? monthOf(start, 1) : viewEnd;
+/** The month view's "only this driver". */
+const driverParam = url.searchParams.get('driver') ?? '';
+/**
+ * This page with the view, the day or the driver changed, and a message after
+ * a change (`done`). The day is kept as picked, so going from a week to Day
+ * opens that day; arrows back to the stretch that holds today open on today.
+ */
+const here = (change: Record<string, string | null> = {}, done?: string) => {
+  const p = new URLSearchParams();
+  const v = 'view' in change ? change.view! : view;
+  let s = ('start' in change ? change.start : picked) ?? today;
+  const d = 'driver' in change ? change.driver : driverParam;
+  if (s === viewStartOf(s, v) && viewStartOf(s, v) === viewStartOf(today, v)) s = today;
+  if (v === 'day' || v === 'month') p.set('view', v);
+  if (s !== today) p.set('start', s);
+  if (v === 'month' && d) p.set('driver', d);
+  if (done) p.set('done', done);
+  const qs = p.toString();
+  return `/admin/calendar/${qs ? `?${qs}` : ''}`;
+};
+const showsToday = today >= start && today < viewEnd;
+
+let open = url.searchParams.get('do') === 'off' ? 'off' : '';
+let error = '';
+let off: TimeOffForm = { driverId: url.searchParams.get('driver') ?? '', fromDate: picked, fromTime: '', toDate: picked, toTime: '', reason: 'leave', note: '' };
+
+const rangeStart = istMidnight(from);
+const rangeEnd = istMidnight(addDays(from, days));
+const now = new Date();
+const [span, siteOn] = await Promise.all([loadSpan(rangeStart, rangeEnd), siteCheckOn()]);
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const intent = String(f.get('intent') ?? '');
+  const str = (k: string) => String(f.get(k) ?? '').trim();
+  if (intent === 'off-add') {
+    off = { driverId: str('driverId'), fromDate: str('fromDate'), fromTime: str('fromTime'), toDate: str('toDate'), toTime: str('toTime'), reason: str('reason'), note: str('note') };
+    const checked = checkTimeOff(off, span.drivers);
+    if ('error' in checked) {
+      error = checked.error;
+      open = 'off';
+    } else {
+      await addTimeOff(checked.row, ctx);
+      // Back to this stretch if the time off starts in it, otherwise to where it starts.
+      return Astro.redirect(here({ start: off.fromDate >= start && off.fromDate < viewEnd ? picked : off.fromDate }, 'off'), 303);
+    }
+  } else if (intent === 'off-remove') {
+    await removeTimeOff(str('id'), ctx);
+    return Astro.redirect(here({}, 'off-removed'), 303);
+  } else if (intent === 'site-check' && admin) {
+    await setSiteCheck(str('on') === '1', ctx);
+    return Astro.redirect(here({}, 'site'), 303);
+  }
+}
+
+/* ---------------- Rows ---------------- */
+
+type Bar = {
+  key: string;
+  start: Date;
+  end: Date;
+  label: string;
+  /** Shorter, for a month cell: who and where to. */
+  brief?: string;
+  title: string;
+  href?: string;
+  /** solid: holds a car; done: completed; pending: a request not answered; waiting: confirmed with no driver; off: time off. */
+  look: 'solid' | 'done' | 'pending' | 'waiting' | 'off';
+  offId?: string;
+  clash?: boolean;
+};
+type Placed = Bar & { lane: number };
+type Row = { id: string; name: string; sub: string; href?: string; bars: Placed[]; lanes: number; muted?: boolean };
+
+const tripShort = (x: SpanBooking) => {
+  const r = x.routeSlug ? routeBySlug(x.routeSlug) : undefined;
+  if (r) return `${r.fromShort} → ${r.toShort}`;
+  const p = x.packageSlug ? packageBySlug(x.packageSlug) : undefined;
+  return p ? p.short : x.tripName.split(' · ')[0]!.replace(' (IXB)', '');
+};
+const bookingBar = (x: SpanBooking, waiting = false): Bar => {
+  const who = x.customerName ? firstName(x.customerName) : x.ref;
+  const status = STATUS_LABEL[x.status][0];
+  const to = (x.routeSlug && routeBySlug(x.routeSlug)?.toShort) || (x.packageSlug && packageBySlug(x.packageSlug)?.short) || tripShort(x);
+  return {
+    key: x.id,
+    start: x.start,
+    end: x.end,
+    label: `${who} · ${tripShort(x)}`,
+    brief: `${who} · ${to}`,
+    title: `${x.ref} · ${x.tripName} · ${spanLabel(x.start, x.end)} · ${status}${waiting && HOLDS.includes(x.status) ? ' · needs a driver' : ''}`,
+    href: `/admin/bookings/${x.ref}/`,
+    look: x.status === 'completed' ? 'done' : PENDING.includes(x.status) ? 'pending' : waiting ? 'waiting' : 'solid',
+  };
+};
+/** Puts overlapping bars on separate lines, and marks two that both hold the same driver at once. */
+function pack(bars: Bar[]): { bars: Placed[]; lanes: number } {
+  const ends: number[] = [];
+  const out = bars
+    .slice()
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+    .map((bar) => {
+      let lane = ends.findIndex((e) => e <= bar.start.getTime());
+      if (lane === -1) lane = ends.push(0) - 1;
+      ends[lane] = bar.end.getTime();
+      return { ...bar, lane };
+    });
+  const holds = (b: Bar) => b.look === 'solid' || b.look === 'off';
+  for (const a of out) for (const b of out) if (a !== b && holds(a) && holds(b) && a.start < b.end && b.start < a.end) a.clash = true;
+  return { bars: out, lanes: Math.max(1, ends.length) };
+}
+const row = (r: Omit<Row, 'lanes' | 'bars'>, bars: Bar[]): Row => {
+  const packed = pack(bars);
+  return { ...r, bars: packed.bars, lanes: packed.lanes };
+};
+
+const offOf = (driverId: string): Bar[] =>
+  span.off
+    .filter((o) => o.driverId === driverId)
+    .map((o) => ({ key: o.id, start: o.startsAt, end: o.endsAt, label: OFF_REASON[o.reason], title: `${OFF_REASON[o.reason]} · ${spanLabel(o.startsAt, o.endsAt)}${o.note ? ` · ${o.note}` : ''}`, look: 'off' as const, offId: o.id }));
+const driverRow = (d: (typeof span.drivers)[number]) =>
+  row(
+    { id: d.id, name: d.name, sub: [d.vehicleNumber, !d.active && 'switched off'].filter(Boolean).join(' · ') || 'No car number', href: `/admin/drivers/${d.id}/`, muted: !d.active },
+    [...span.bookings.filter((x) => x.driverId === d.id).map((x) => bookingBar(x)), ...offOf(d.id)],
+  );
+/** Drivers shown: everyone active, and anyone switched off who still has something in the range. */
+const shown = span.drivers.filter((d) => d.active || span.bookings.some((x) => x.driverId === d.id)).sort((a, b) => a.name.localeCompare(b.name));
+const unassigned = (x: SpanBooking) => !x.driverId && !x.driverName;
+
+const groups: { key: string; name: string; own: number; rows: Row[] }[] = VEHICLES.map((v) => {
+  const own = shown.filter((d) => !d.partner && d.vehicle === v.key);
+  const waiting = span.bookings.filter((x) => unassigned(x) && x.vehicle === v.key);
+  const rows = own.map(driverRow);
+  if (waiting.length) rows.push(row({ id: `waiting-${v.key}`, name: 'No driver yet', sub: `${waiting.length} ${waiting.length === 1 ? 'booking' : 'bookings'}` }, waiting.map((x) => bookingBar(x, true))));
+  return { key: v.key, name: v.name, own: own.filter((d) => d.active).length, rows };
+});
+const loose = shown.filter((d) => !d.partner && !d.vehicle);
+if (loose.length) groups.push({ key: 'any', name: 'Car type not set', own: 0, rows: loose.map(driverRow) });
+const partners = shown.filter((d) => d.partner).map(driverRow);
+// A driver typed by hand on an old booking, not from the list, drove an outside car.
+const typed = [...new Set(span.bookings.filter((x) => !x.driverId && x.driverName).map((x) => x.driverName!))].map((n) =>
+  row({ id: `typed-${n}`, name: n, sub: 'named on the booking' }, span.bookings.filter((x) => !x.driverId && x.driverName === n).map((x) => bookingBar(x))),
+);
+if (partners.length || typed.length) groups.push({ key: 'partner', name: 'Outside cars', own: 0, rows: [...partners, ...typed] });
+
+/** The month view: every row's trips and time off, or one driver's, with who drives each. */
+const monthEntries =
+  view === 'month'
+    ? groups.flatMap((g) =>
+        g.rows
+          .filter((r) => !driverParam || r.id === driverParam)
+          .flatMap((r) => r.bars.map((b) => ({ ...b, who: driverParam ? (b.brief ?? b.label) : r.id.startsWith('waiting-') ? 'No driver' : r.name.split(' ')[0]!, rowName: r.name }))),
+      )
+    : [];
+const filteredDriver = driverParam ? shown.find((d) => d.id === driverParam) : undefined;
+/** One day of the month view, in time order: the pickup time, or "All day" and "to 18:30" for a trip that began earlier. */
+const entriesOn = (day: string) => {
+  const dayFrom = istMidnight(day);
+  const dayTo = istMidnight(addDays(day, 1));
+  return monthEntries
+    .filter((e) => e.start < dayTo && e.end > dayFrom)
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+    .map((e) => ({ ...e, when: e.start <= dayFrom && e.end >= dayTo ? 'All day' : e.start >= dayFrom ? istTime(e.start) : `to ${istTime(e.end)}` }));
+};
+/** Trips a month cell shows before "+2 more". */
+const MONTH_MAX = 4;
+
+/* ---------------- Right now, and "Is a car free?" ---------------- */
+
+const nowInRange = now >= rangeStart && now < rangeEnd;
+const nowSpan = nowInRange ? span : await loadSpan(now, new Date(now.getTime() + 60e3));
+const nowCars = carsFree(nowSpan, now, new Date(now.getTime() + 60e3));
+const onTheRoad = nowSpan.bookings.filter((x) => HOLDS.includes(x.status) && x.start <= now && x.end > now).length;
+const offToday = nowSpan.off.filter((o) => o.startsAt <= now && o.endsAt > now).length;
+
+const ask = { trip: url.searchParams.get('trip') ?? '', date: url.searchParams.get('date') ?? '', time: url.searchParams.get('time') ?? '' };
+let answer: { window: ReturnType<typeof busyWindow>; cars: ReturnType<typeof carsFree>; free: Map<string, string[]> } | null = null;
+let askError = '';
+if (ask.trip || ask.date || ask.time) {
+  const [k, slug = ''] = ask.trip.split(':');
+  const known = k === 'route' ? routeBySlug(slug) : k === 'package' ? packageBySlug(slug) : undefined;
+  if (!known) askError = 'Choose a route or tour.';
+  else if (!isDay(ask.date)) askError = 'Choose the date.';
+  else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(ask.time)) askError = 'Choose the pickup time.';
+  else {
+    const window = busyWindow({ kind: k === 'route' ? 'taxi' : 'package', routeSlug: k === 'route' ? slug : null, packageSlug: k === 'package' ? slug : null, tripName: '', pickupDate: ask.date, pickupTime: ask.time, busyUntil: null });
+    const s = await loadSpan(window.start, window.end);
+    const busy = driversBusy(s, window.start, window.end);
+    const free = new Map<string, string[]>();
+    for (const d of s.drivers) if (ownCar(d) && !busy.has(d.id)) free.set(d.vehicle!, [...(free.get(d.vehicle!) ?? []), d.name]);
+    answer = { window, cars: carsFree(s, window.start, window.end), free };
+  }
+}
+const tripChoices = [
+  ...ROUTE_GROUPS.map((g) => ({ label: `Taxi: ${g}`, options: ROUTES.filter((r) => r.group === g).map((r): [string, string] => [`route:${r.slug}`, `${r.fromShort} to ${r.toShort}`]) })),
+  { label: 'Tour packages', options: PACKAGES.map((p): [string, string] => [`package:${p.slug}`, `${p.short} (${p.nights}N/${p.days}D)`]) },
+];
+
+/* ---------------- Drawing ---------------- */
+
+const rangeMs = rangeEnd.getTime() - rangeStart.getTime();
+const pct = (t: Date) => Math.min(100, Math.max(0, ((t.getTime() - rangeStart.getTime()) / rangeMs) * 100));
+const place = (b: Placed) => {
+  const left = pct(b.start);
+  const width = Math.max(pct(b.end) - left, view === 'day' ? 1.2 : 0.9);
+  return `left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;top:calc(${b.lane} * var(--lane) + 6px)`;
+};
+const dayList = Array.from({ length: days }, (_, i) => addDays(from, i));
+/** The week view: what each row has on one day, with its times written out ("10:00–20:30", "From 09:30", "All day"). */
+const chipsOn = (r: Row, day: string) => {
+  const from = istMidnight(day);
+  const to = istMidnight(addDays(day, 1));
+  return r.bars
+    .filter((b) => b.start < to && b.end > from)
+    .map((b) => {
+      const starts = b.start >= from;
+      const ends = b.end <= to;
+      const when =
+        b.start <= from && b.end >= to ? 'All day' : starts && ends ? `${istTime(b.start)}–${b.end.getTime() === to.getTime() ? '24:00' : istTime(b.end)}` : starts ? `From ${istTime(b.start)}` : `Until ${istTime(b.end)}`;
+      return { ...b, when };
+    });
+};
+const colHead = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric' });
+const monthFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+const longFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const asDate = (d: string) => new Date(`${d}T00:00:00Z`);
+const monthYear = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+const weekdayFmt = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short' });
+/** What the date button says: "Sun 25 Oct 2026", "19 – 25 Oct 2026", "27 Oct – 2 Nov 2026" or "October 2026". */
+const weekTitle = (a: string, b: string) => {
+  const [ya, yb, ma, mb] = [a.slice(0, 4), b.slice(0, 4), a.slice(5, 7), b.slice(5, 7)];
+  const full = monthFmt.format(asDate(b));
+  if (ya !== yb) return `${monthFmt.format(asDate(a))} – ${full}`;
+  if (ma !== mb) return `${monthFmt.format(asDate(a)).replace(/ \d{4}$/, '')} – ${full}`;
+  return `${Number(a.slice(8))} – ${full}`;
+};
+const title = view === 'day' ? `${weekdayFmt.format(asDate(start))} ${monthFmt.format(asDate(start))}` : view === 'month' ? monthYear.format(asDate(start)) : weekTitle(start, addDays(start, 6));
+const STEP = { day: ['The day before', 'The next day'], week: ['The week before', 'The next week'], month: ['The month before', 'The next month'] } as const;
+const hours = view === 'day' ? Array.from({ length: 12 }, (_, i) => i * 2) : [];
+const nowPct = nowInRange ? pct(now) : null;
+const activeDrivers = span.drivers.filter((d) => d.active).sort((a, b) => Number(a.partner) - Number(b.partner) || a.name.localeCompare(b.name));
+const done = url.searchParams.get('done') ?? '';
+const doneText: Record<string, string> = {
+  off: 'Time off marked. That driver is not offered for those times.',
+  'off-removed': 'Time off removed.',
+  site: siteOn ? 'The booking form checks the calendar again.' : 'The booking form no longer checks the calendar: every car can be booked at any time.',
+};
+const svg = (d: string, size = 18) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const closeIcon = svg('<path d="M18 6 6 18M6 6l12 12"/>', 20);
+const hasAny = groups.some((g) => g.rows.length);
+---
+
+<AdminLayout title="Calendar">
+  <div class="flex flex-col gap-5 lg:gap-6">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Calendar</h1>
+        <p class="m-0 mt-1 text-sm text-muted">Who is driving when. A trip keeps its car busy until it is back: the drive there and back plus an hour, or the whole tour.</p>
+      </div>
+      <button type="button" class="btn-book min-h-12 px-5" data-open="dlg-off">Mark time off</button>
+    </div>
+
+    {doneText[done] && <p class="a-msg a-msg-ok m-0" role="status">{doneText[done]}</p>}
+    {error && open !== 'off' && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
+
+    {/* Right now */}
+    <dl class="m-0 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div class="flex flex-col-reverse gap-0.5 rounded-[20px] bg-ink p-4 text-white lg:p-5">
+        <dt class="text-sm text-[#c9ced8]">{offToday ? `on the road now · ${offToday} on time off` : 'on the road now'}</dt>
+        <dd class="m-0 font-display text-[26px] leading-tight font-bold text-lime">{onTheRoad}</dd>
+      </div>
+      {VEHICLES.map((v) => {
+        const n = nowCars[v.key];
+        return (
+          <div class="a-card flex flex-col-reverse gap-0.5 p-4 lg:p-5">
+            <dt class="text-sm text-muted">{v.name} {n.tracked ? 'free now' : ''}</dt>
+            <dd class:list={['m-0 font-display leading-tight font-bold', n.tracked ? 'text-[26px]' : 'text-base text-muted']}>
+              {n.tracked ? <>{n.free} <span class="text-base font-semibold text-muted">of {n.own}</span></> : 'No own car listed'}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+
+    {/* The timeline */}
+    <section class="a-card flex min-w-0 flex-col" aria-labelledby="cal-h">
+      <div class="flex flex-wrap items-center gap-3 border-b border-[#f0f1f3] px-4 py-3 lg:px-5">
+        <h2 id="cal-h" class="sr-only">{title}</h2>
+        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <a href={here({ start: null })} aria-current={showsToday ? 'date' : undefined} class:list={['btn-ghost min-h-11 px-4 py-2 text-sm', showsToday && 'cal-today-on']}>Today</a>
+          <a href={here({ start: prevStart })} class="a-icon-btn" aria-label={STEP[view][0]} set:html={svg('<path d="m15 18-6-6 6-6"/>')} />
+          <a href={here({ start: nextStart })} class="a-icon-btn" aria-label={STEP[view][1]} set:html={svg('<path d="m9 18 6-6-6-6"/>')} />
+          {/* The title is the date picker: pick any day to show its day, week or month. */}
+          <form method="get" class="cal-date" aria-label="Show another date" data-goto>
+            {view !== 'week' && <input type="hidden" name="view" value={view} />}
+            {view === 'month' && driverParam && <input type="hidden" name="driver" value={driverParam} />}
+            <DateField label={view === 'day' ? 'Show another day' : view === 'week' ? 'Show the week of' : 'Show the month of'} name="start" value={picked} quick={[0, 1]} display={title} />
+          </form>
+        </div>
+        {view === 'month' && (
+          <form method="get" class="cal-who" aria-label="Whose month" data-goto>
+            <input type="hidden" name="view" value="month" />
+            {monthOf(start) !== monthOf(today) && <input type="hidden" name="start" value={start} />}
+            <label class="a-field"><span class="sr-only">Driver</span>
+              <select name="driver">
+                <option value="">All drivers</option>
+                {shown.map((d) => <option value={d.id} selected={d.id === driverParam}>{d.name}{d.partner ? ' (outside car)' : ''}</option>)}
+              </select>
+            </label>
+          </form>
+        )}
+        <nav class="flex rounded-xl bg-mist p-1" aria-label="Show">
+          {(['day', 'week', 'month'] as const).map((v) => (
+            <a href={here({ view: v })} aria-current={view === v ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', view === v ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>{v === 'day' ? 'Day' : v === 'week' ? 'Week' : 'Month'}</a>
+          ))}
+        </nav>
+      </div>
+
+      {!hasAny ? (
+        <div class="flex flex-col items-start gap-3 p-5 lg:p-6">
+          <p class="m-0 text-body">No drivers on the list yet, so there is nothing to show. Add your drivers with their usual car, and each trip you give them shows here.</p>
+          <a href="/admin/drivers/" class="btn-book">Add drivers</a>
+        </div>
+      ) : view === 'month' ? (
+        <div class="cal-month">
+          {filteredDriver && (
+            <p class="m-0 border-b border-[#f0f1f3] px-4 py-2.5 text-sm text-body lg:px-5">
+              Only <strong class="text-ink">{filteredDriver.name}</strong>’s trips and time off. <a href={here({ driver: null })} class="font-semibold text-ink">Show every driver</a>
+            </p>
+          )}
+          <div class="cal-mhead" aria-hidden="true">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <span>{d}</span>)}</div>
+          <div class="cal-mgrid">
+            {dayList.map((d) => {
+              const list = entriesOn(d);
+              return (
+                <div class:list={['cal-mcell', (d < start || d >= viewEnd) && 'is-outside', d === today && 'is-today']}>
+                  <a href={here({ view: 'day', start: d })} class="cal-mday" aria-label={`${longFmt.format(asDate(d))}: ${list.length ? `${list.length} on the calendar` : 'nothing on'}. Show the day`}>{Number(d.slice(8))}</a>
+                  {list.slice(0, MONTH_MAX).map((c) =>
+                    c.look === 'off' ? (
+                      <button type="button" class:list={['cal-chip', 'cal-chip-1', 'is-off', c.clash && 'is-clash']} title={`${c.rowName}: ${c.title}`} data-open="dlg-off-view" data-off-id={c.offId} data-off-text={`${c.rowName}: ${c.title}`}>
+                        <b>{c.when}</b> {driverParam ? c.label : `${c.who} · ${c.label}`}
+                      </button>
+                    ) : (
+                      <a href={c.href} class:list={['cal-chip', 'cal-chip-1', `is-${c.look}`, c.clash && 'is-clash']} title={`${c.rowName}: ${c.title}`}>
+                        <b>{c.when}</b> {c.who}
+                      </a>
+                    ),
+                  )}
+                  {list.length > MONTH_MAX && <a href={here({ view: 'day', start: d })} class="cal-more">+{list.length - MONTH_MAX} more</a>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div class="cal-scroll">
+          <div class:list={['cal', `cal-v-${view}`]} style={`--cols:${view === 'day' ? 12 : 7}`}>
+            <div class="cal-head">
+              <div class="cal-label cal-corner">Driver</div>
+              <div class="cal-track cal-cols">
+                {view === 'day'
+                  ? hours.map((h) => <span class="cal-col">{h === 0 ? 'Midnight' : h === 12 ? 'Noon' : `${h % 12}${h < 12 ? ' am' : ' pm'}`}</span>)
+                  : dayList.map((d) => (
+                      <a href={here({ view: 'day', start: d })} class:list={['cal-col cal-day', d === today && 'is-today']} aria-label={`${longFmt.format(asDate(d))}, show the day`}>
+                        {colHead.format(asDate(d))}
+                      </a>
+                    ))}
+              </div>
+            </div>
+            {groups.filter((g) => g.rows.length).map((g) => (
+              <>
+                <div class="cal-group">
+                  <span class="cal-group-name">
+                    {g.name}
+                    <span class="font-normal text-muted">
+                      {g.key === 'partner' ? ' · never counted as your own' : g.key === 'any' ? ' · set their usual car so they count' : ` · ${g.own} own ${g.own === 1 ? 'car' : 'cars'}`}
+                    </span>
+                  </span>
+                </div>
+                {g.rows.map((r) => (
+                  <div class:list={['cal-row', r.muted && 'is-muted', r.id.startsWith('waiting-') && 'cal-row-waiting']} style={`--lanes:${r.lanes}`}>
+                    <div class="cal-label">
+                      {r.href ? <a href={r.href} class="truncate font-semibold text-ink no-underline hover:underline">{r.name}</a> : <span class="truncate font-semibold">{r.name}</span>}
+                      <span class="truncate text-[12px] text-muted">{r.sub}</span>
+                    </div>
+                    {view === 'week' ? (
+                      <div class="cal-cells">
+                        {dayList.map((d) => (
+                          <div class:list={['cal-cell', d === today && 'is-today']}>
+                            {chipsOn(r, d).map((c) =>
+                              c.look === 'off' ? (
+                                <button type="button" class:list={['cal-chip', 'is-off', c.clash && 'is-clash']} title={c.title} data-open="dlg-off-view" data-off-id={c.offId} data-off-text={`${r.name}: ${c.title}`}>
+                                  <b>{c.when}</b><span>{c.label}</span>
+                                </button>
+                              ) : (
+                                <a href={c.href} class:list={['cal-chip', `is-${c.look}`, c.clash && 'is-clash']} title={c.title}>
+                                  <b>{c.when}</b><span>{c.label}</span>
+                                </a>
+                              ),
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                    <div class="cal-track">
+                      {nowPct !== null && <span class="cal-now" style={`left:${nowPct.toFixed(3)}%`} aria-hidden="true"></span>}
+                      {r.bars.map((b) =>
+                        b.look === 'off' ? (
+                          <button type="button" class:list={['cal-bar', 'is-off', b.clash && 'is-clash', b.start < rangeStart && 'cut-start', b.end > rangeEnd && 'cut-end']} style={place(b)} title={b.title} aria-label={b.title} data-open="dlg-off-view" data-off-id={b.offId} data-off-text={`${r.name}: ${b.title}`}>
+                            <span>{b.label}</span>
+                          </button>
+                        ) : (
+                          <a href={b.href} class:list={['cal-bar', `is-${b.look}`, b.clash && 'is-clash', b.start < rangeStart && 'cut-start', b.end > rangeEnd && 'cut-end']} style={place(b)} title={b.title} aria-label={b.title}>
+                            <span>{b.label}</span>
+                          </a>
+                        ),
+                      )}
+                    </div>
+                    )}
+                  </div>
+                ))}
+              </>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#f0f1f3] px-4 py-3 text-[13px] text-body lg:px-5" aria-label="What the bars mean">
+        <span class="cal-key"><i class="is-solid"></i>Confirmed, holds the car</span>
+        <span class="cal-key"><i class="is-waiting"></i>Confirmed, no driver yet</span>
+        <span class="cal-key"><i class="is-pending"></i>New request, holds nothing yet</span>
+        <span class="cal-key"><i class="is-done"></i>Completed</span>
+        <span class="cal-key"><i class="is-off"></i>Time off</span>
+        <span class="cal-key"><i class="is-solid is-clash"></i>Two at once</span>
+      </div>
+    </section>
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] lg:gap-6">
+      {/* Is a car free? */}
+      <section class="a-card flex min-w-0 flex-col gap-4 p-5 lg:p-6" aria-labelledby="ask-h">
+        <div>
+          <h2 id="ask-h" class="m-0 font-display text-xl font-bold">Is a car free?</h2>
+          <p class="m-0 mt-1 text-sm text-muted">For a phone enquiry: the same check the booking form makes.</p>
+        </div>
+        <form method="get" class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+          {view !== 'week' && <input type="hidden" name="view" value={view} />}
+          {picked !== today && <input type="hidden" name="start" value={picked} />}
+          {view === 'month' && driverParam && <input type="hidden" name="driver" value={driverParam} />}
+          <label class="a-field min-w-0 sm:col-span-3">Route or tour
+            <select name="trip" required>
+              <option value="">Choose…</option>
+              {tripChoices.map((g) => (
+                <optgroup label={g.label}>{g.options.map(([v, l]) => <option value={v} selected={ask.trip === v}>{l}</option>)}</optgroup>
+              ))}
+            </select>
+          </label>
+          <DateField label="Date" name="date" value={ask.date || picked} required />
+          <TimeField label="Pickup time" name="time" value={ask.time} required />
+          <button type="submit" class="btn-book min-h-12 px-5">Check</button>
+        </form>
+        {askError && <p class="a-msg a-msg-error m-0" role="alert">{askError}</p>}
+        {answer && (
+          <div class="flex flex-col gap-3" role="status">
+            <p class="m-0 text-sm text-body">Busy {spanLabel(answer.window.start, answer.window.end)}: {answer.window.why}.</p>
+            <ul class="m-0 grid list-none gap-2 p-0 sm:grid-cols-2">
+              {VEHICLES.map((v) => {
+                const n = answer!.cars[v.key];
+                const names = answer!.free.get(v.key) ?? [];
+                return (
+                  <li class:list={['flex flex-col gap-0.5 rounded-2xl p-3.5', !n.tracked ? 'bg-mist' : n.free > 0 ? 'bg-lime-50' : 'bg-[#fde8e7]']}>
+                    <span class="font-semibold">{v.name}</span>
+                    <span class:list={['text-sm', !n.tracked ? 'text-muted' : n.free > 0 ? 'text-[#3f6200]' : 'text-[#b42318]']}>
+                      {!n.tracked ? 'No own car listed: always open on the website' : n.free > 0 ? `${n.free} of ${n.own} free${names.length ? `: ${names.join(', ')}` : ''}` : `All ${n.own} busy: an outside car is needed`}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      {/* The website's check */}
+      <section class="a-card flex flex-col gap-3 p-5 lg:p-6" aria-labelledby="site-h">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="site-h" class="m-0 font-display text-xl font-bold">On the website</h2>
+          <span class:list={['a-badge', siteOn ? 'bg-lime-50 text-[#3f6200]' : 'bg-[#eef0f3] text-body']}>{siteOn ? 'On' : 'Off'}</span>
+        </div>
+        <p class="m-0 text-sm text-body">
+          {siteOn
+            ? 'When every one of your own cars of a type is busy for a trip, the booking form greys that car out for that time and offers WhatsApp instead, so you can bring in an outside car. New requests do not count until you confirm them.'
+            : 'Switched off: the booking form takes every car at any time, whatever the calendar says.'}
+        </p>
+        {admin ? (
+          <form method="post">
+            <input type="hidden" name="intent" value="site-check" />
+            <input type="hidden" name="on" value={siteOn ? '0' : '1'} />
+            <button type="submit" class="btn-ghost min-h-11 px-4 py-2 text-sm">{siteOn ? 'Switch it off' : 'Switch it on'}</button>
+          </form>
+        ) : (
+          <p class="m-0 text-[13px] text-muted">Only the admin can switch it off or on.</p>
+        )}
+        <p class="m-0 text-[13px] text-muted">Your own cars are the drivers marked “Our car” with a usual car set. <a href="/admin/drivers/" class="text-muted">Drivers</a></p>
+      </section>
+    </div>
+  </div>
+
+  {/* Mark time off */}
+  <dialog id="dlg-off" class="a-dialog" aria-labelledby="dlg-off-h" data-autoopen={open === 'off' ? '' : undefined}>
+    <form method="post" class="a-dialog-body">
+      <input type="hidden" name="intent" value="off-add" />
+      <header class="a-dialog-head">
+        <h2 id="dlg-off-h" class="m-0 font-display text-xl font-bold">Mark time off</h2>
+        <button type="button" data-close class="a-icon-btn" aria-label="Close" set:html={closeIcon} />
+      </header>
+      <div class="a-dialog-main grid gap-4 sm:grid-cols-2">
+        {error && open === 'off' && <p class="a-msg a-msg-error m-0 sm:col-span-2" role="alert">{error}</p>}
+        <label class="a-field sm:col-span-2">Driver
+          <select name="driverId" required>
+            <option value="">Choose…</option>
+            {activeDrivers.map((d) => <option value={d.id} selected={off.driverId === d.id}>{[d.name, d.vehicleNumber, d.partner ? 'Outside car' : d.vehicle && vehicleByKey(d.vehicle)?.name].filter(Boolean).join(' · ')}</option>)}
+          </select>
+        </label>
+        <DateField label="From" name="fromDate" value={off.fromDate} min={addDays(today, -60)} max={addDays(today, 400)} required />
+        <TimeField label="From time" name="fromTime" value={off.fromTime} clearable placeholder="Start of the day" />
+        <DateField label="To" name="toDate" value={off.toDate} min={addDays(today, -60)} max={addDays(today, 400)} after="fromDate" required />
+        <TimeField label="To time" name="toTime" value={off.toTime} clearable placeholder="End of the day" />
+        <fieldset class="m-0 flex flex-col gap-2 border-0 p-0 sm:col-span-2">
+          <legend class="mb-2 text-[15px] font-semibold">Why</legend>
+          <div class="flex flex-wrap gap-2">
+            {Object.entries(OFF_REASON).map(([k, label]) => (
+              <label class="a-pill"><input type="radio" name="reason" value={k} checked={off.reason === k} class="sr-only" /><span>{label}</span></label>
+            ))}
+          </div>
+        </fieldset>
+        <label class="a-field sm:col-span-2"><span>Note <span class="font-normal text-muted">(optional)</span></span><input name="note" maxlength="200" value={off.note} placeholder="Family wedding in Kalimpong" /></label>
+        <p class="m-0 text-sm text-muted sm:col-span-2">Leave the times empty for whole days. The driver shows as busy on bookings then, and an own car stops counting on the website.</p>
+      </div>
+      <footer class="a-dialog-foot">
+        <button type="button" data-close class="btn-ghost">Cancel</button>
+        <button type="submit" class="btn-book">Mark time off</button>
+      </footer>
+    </form>
+  </dialog>
+
+  {/* One time off, from its bar */}
+  <dialog id="dlg-off-view" class="a-dialog a-dialog-sm" aria-labelledby="dlg-off-view-h">
+    <form method="post" class="a-dialog-body">
+      <input type="hidden" name="intent" value="off-remove" />
+      <input type="hidden" name="id" value="" data-off-field />
+      <header class="a-dialog-head">
+        <h2 id="dlg-off-view-h" class="m-0 font-display text-xl font-bold">Time off</h2>
+        <button type="button" data-close class="a-icon-btn" aria-label="Close" set:html={closeIcon} />
+      </header>
+      <div class="a-dialog-main">
+        <p class="m-0 text-body" data-off-show></p>
+      </div>
+      <footer class="a-dialog-foot">
+        <button type="button" data-close class="btn-ghost">Keep it</button>
+        <button type="submit" class="btn-book bg-[#b42318] hover:bg-[#8f1d14]">Remove it</button>
+      </footer>
+    </form>
+  </dialog>
+</AdminLayout>
+
+<script>
+  import { openDialogs } from '../../../lib/admin-client';
+  openDialogs();
+  // A time-off bar fills the small popup with what it is, before the popup opens.
+  document.addEventListener(
+    'click',
+    (e) => {
+      const bar = (e.target as Element).closest<HTMLElement>('[data-off-id]');
+      if (!bar) return;
+      document.querySelector<HTMLInputElement>('[data-off-field]')!.value = bar.dataset.offId!;
+      document.querySelector<HTMLElement>('[data-off-show]')!.textContent = bar.dataset.offText!;
+    },
+    true,
+  );
+  // Picking a date in "Go to" goes there.
+  document.querySelector<HTMLFormElement>('[data-goto]')?.addEventListener('change', (e) => (e.currentTarget as HTMLFormElement).submit());
+  // Start the week view scrolled to now on a phone, where it is wider than the screen.
+  const now = document.querySelector<HTMLElement>('.cal-now, .cal-day.is-today');
+  const scroller = document.querySelector<HTMLElement>('.cal-scroll');
+  if (now && scroller && scroller.scrollWidth > scroller.clientWidth) {
+    const label = document.querySelector<HTMLElement>('.cal-row .cal-label')?.offsetWidth ?? 0;
+    scroller.scrollLeft = Math.max(0, now.getBoundingClientRect().left - scroller.getBoundingClientRect().left - label - 24);
+  }
+</script>
+
+<style is:global>
+  .cal-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+  .cal { --label: 168px; --lane: 34px; --col: 104px; min-width: calc(var(--label) + var(--cols) * var(--col)); }
+  .cal.cal-v-day { --col: 74px; }
+  .cal-head, .cal-row { display: grid; grid-template-columns: var(--label) minmax(0, 1fr); }
+  .cal-head { position: sticky; top: 0; z-index: 3; border-bottom: 1px solid var(--color-line); background: #fff; }
+  .cal-label { position: sticky; left: 0; z-index: 2; display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 1px; padding: 0.5rem 0.75rem 0.5rem 1rem; border-right: 1px solid var(--color-line); background: #fff; font-size: 0.875rem; }
+  .cal-corner { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-muted); }
+  .cal-cols { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+  .cal-col { padding: 0.65rem 0.5rem; border-left: 1px solid #f0f1f3; font-size: 0.8rem; font-weight: 600; color: var(--color-body); white-space: nowrap; }
+  .cal-col:first-child { border-left: 0; }
+  a.cal-day { text-decoration: none; }
+  a.cal-day:hover { background: var(--color-mist); color: var(--color-ink); }
+  .cal-day.is-today { color: var(--color-ink); box-shadow: inset 0 -3px 0 var(--color-lime); }
+  .cal-group { display: block; padding: 0.55rem 1rem; border-top: 1px solid var(--color-line); background: #f7f8fa; font-size: 0.85rem; font-weight: 700; }
+  .cal-group-name { position: sticky; left: 1rem; }
+  .cal-row { border-top: 1px solid #f0f1f3; }
+  .cal-row.is-muted .cal-label { opacity: 0.6; }
+  .cal-row-waiting .cal-label { color: #8a5300; }
+  .cal-track { position: relative; min-height: calc(var(--lanes, 1) * var(--lane) + 12px); background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(100% / var(--cols) - 1px), #f0f1f3 calc(100% / var(--cols) - 1px), #f0f1f3 calc(100% / var(--cols))); }
+  .cal-head .cal-track { min-height: 0; background: none; }
+  .cal-now { position: absolute; top: 0; bottom: 0; z-index: 1; width: 2px; margin-left: -1px; background: var(--color-lime); }
+  .cal-bar {
+    position: absolute; z-index: 1; display: flex; align-items: center; height: calc(var(--lane) - 6px); min-width: 6px; padding: 0 0.5rem; overflow: hidden;
+    border: 1px solid transparent; border-radius: 8px; font: inherit; font-size: 0.78rem; font-weight: 600; line-height: 1.1; text-align: left; text-decoration: none; cursor: pointer;
+  }
+  .cal-bar span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .cal-bar:hover, .cal-bar:focus-visible { z-index: 2; box-shadow: 0 4px 14px rgb(17 17 17 / 22%); }
+  .cal-bar.cut-start { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+  .cal-bar.cut-end { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .cal-chip { display: block; width: 100%; padding: 4px 7px; overflow: hidden; border: 1px solid transparent; border-radius: 7px; font: inherit; font-size: 0.75rem; font-weight: 500; line-height: 1.3; text-align: left; text-decoration: none; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
+  .cal-chip b { display: block; font-weight: 700; }
+  .cal-chip span { display: block; overflow: hidden; text-overflow: ellipsis; }
+  .cal-chip:hover, .cal-chip:focus-visible { box-shadow: 0 3px 10px rgb(17 17 17 / 18%); }
+  .is-solid { background: var(--color-ink); color: #fff; box-shadow: inset 3px 0 0 var(--color-lime); }
+  .is-waiting { background: #fff4d6; border-color: #f0c35a; color: #8a5300; }
+  .is-pending { background: #fff; border: 1.5px dashed #d29b1a; color: #8a5300; }
+  .is-done { background: #e3e6ea; color: var(--color-body); }
+  .is-off { background: repeating-linear-gradient(135deg, #eef0f3 0, #eef0f3 6px, #e1e4e9 6px, #e1e4e9 12px); border-color: #d5d9e0; color: var(--color-body); }
+  .is-clash { outline: 2px solid #e5484d; outline-offset: 1px; }
+  .cal-key { display: inline-flex; align-items: center; gap: 0.45rem; }
+  .cal-key i { display: inline-block; width: 1.6rem; height: 0.85rem; border-radius: 4px; }
+  .cal-key i.is-pending { border-width: 1.5px; }
+  .cal-cells { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+  .cal-cell { display: flex; min-width: 0; min-height: 52px; flex-direction: column; gap: 4px; padding: 6px 5px; border-left: 1px solid #f0f1f3; }
+  .cal-cell:first-child { border-left: 0; }
+  .cal-cell.is-today { background: color-mix(in srgb, var(--color-lime) 9%, transparent); }
+  .cal-mhead, .cal-mgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .cal-mhead { border-bottom: 1px solid var(--color-line); }
+  .cal-mhead span { padding: 0.65rem 0.6rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-muted); }
+  .cal-mcell { display: flex; min-width: 0; min-height: 120px; flex-direction: column; gap: 3px; padding: 6px; border-right: 1px solid #f0f1f3; border-bottom: 1px solid #f0f1f3; }
+  .cal-mcell:nth-child(7n) { border-right: 0; }
+  .cal-mcell:nth-last-child(-n + 7) { border-bottom: 0; }
+  .cal-mcell.is-outside { background: #fafbfc; }
+  .cal-mcell.is-outside .cal-mday { color: var(--color-muted); font-weight: 500; }
+  .cal-mday { display: grid; min-width: 1.85rem; height: 1.85rem; place-items: center; align-self: flex-start; padding: 0 0.35rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700; color: var(--color-ink); text-decoration: none; }
+  .cal-mday:hover { background: var(--color-mist); }
+  .cal-mcell.is-today .cal-mday { background: var(--color-lime); color: #111; }
+  .cal-chip.cal-chip-1 { padding: 2px 6px; font-size: 0.72rem; }
+  .cal-chip-1 b { display: inline; margin-right: 0.15em; }
+  .cal-more { padding: 1px 6px; font-size: 0.72rem; font-weight: 600; color: var(--color-body); text-decoration: none; }
+  .cal-more:hover { color: var(--color-ink); text-decoration: underline; }
+  .cal-who { width: 12rem; }
+  /* The date button is the calendar's title. */
+  .cal-date { margin-left: 0.35rem; }
+  /* The date boxes measure their width from the form (container queries); this one sizes to its words. */
+  .cal-date .af { container-type: normal; }
+  .cal-date .af-value { flex: none; }
+  .cal-date .af-trigger { min-height: 2.75rem; padding-right: 0.75rem; border-color: transparent; background: transparent; }
+  .cal-date .af-trigger:hover, .cal-date .af.is-open .af-trigger { border-color: var(--color-line); background: var(--color-mist); }
+  .cal-date .af-value { font-family: var(--font-display, inherit); font-size: 1.2rem; font-weight: 700; color: var(--color-ink); }
+  .cal-today-on { border-color: var(--color-lime); background: var(--color-lime-50); }
+  /* The date button's label is for screen readers; the button says the dates. */
+  .cal-date .a-field > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  @media (max-width: 639px) {
+    .cal { --label: 118px; --col: 92px; }
+    .cal.cal-v-day { --col: 72px; }
+    .cal-label { padding-left: 0.75rem; }
+    .cal-mhead span { padding: 0.5rem 0.25rem; text-align: center; font-size: 0.68rem; letter-spacing: 0.02em; }
+    .cal-mcell { min-height: 92px; padding: 3px; }
+    .cal-mday { min-width: 1.6rem; height: 1.6rem; font-size: 0.78rem; }
+    .cal-chip.cal-chip-1 { padding: 1px 4px; font-size: 0.64rem; }
+    .cal-more { padding: 0 4px; font-size: 0.64rem; }
+    .cal-who { width: 100%; }
+    .cal-date { margin-left: 0; }
+    .cal-date .af-value { font-size: 1.05rem; }
+  }
+  [data-theme='dark'] .cal-head, [data-theme='dark'] .cal-label { background: var(--a-surface); }
+  [data-theme='dark'] .cal-group { background: var(--a-raised); }
+  [data-theme='dark'] .cal-col, [data-theme='dark'] .cal-row { border-color: #262b32; }
+  [data-theme='dark'] .cal-track { background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(100% / var(--cols) - 1px), #262b32 calc(100% / var(--cols) - 1px), #262b32 calc(100% / var(--cols))); }
+  [data-theme='dark'] .cal-head .cal-track { background: none; }
+  [data-theme='dark'] .cal-cell, [data-theme='dark'] .cal-mcell, [data-theme='dark'] .cal-mhead { border-color: #262b32; }
+  [data-theme='dark'] .cal-mcell.is-outside { background: #13161a; }
+  [data-theme='dark'] .is-solid { background: #000; color: #eef0f3; }
+  [data-theme='dark'] .is-waiting { background: #33270a; border-color: #6b5214; color: #ffcb57; }
+  [data-theme='dark'] .is-pending { background: transparent; border-color: #a57a14; color: #ffcb57; }
+  [data-theme='dark'] .is-done { background: #2a2f37; color: var(--color-body); }
+  [data-theme='dark'] .is-off { background: repeating-linear-gradient(135deg, #1f2329 0, #1f2329 6px, #2a2f37 6px, #2a2f37 12px); border-color: #343a43; }
+  [data-theme='dark'] .cal-row-waiting .cal-label { color: #ffcb57; }
+</style>
