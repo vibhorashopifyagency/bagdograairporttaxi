@@ -349,24 +349,22 @@ const hasAny = groups.some((g) => g.rows.length);
         <h1 class="m-0 font-display text-[28px] font-bold lg:text-3xl">Calendar</h1>
         <p class="m-0 mt-1 text-sm text-muted">Who is driving when. A trip keeps its car busy until it is back: the drive there and back plus an hour, or the whole tour.</p>
       </div>
-      <button type="button" class="btn-book min-h-12 px-5" data-open="dlg-off">Mark time off</button>
+      <button type="button" class="btn-ghost min-h-11 px-4 py-2 text-sm" data-open="dlg-off">Mark time off</button>
     </div>
 
     {doneText[done] && <p class="a-msg a-msg-ok m-0" role="status">{doneText[done]}</p>}
     {error && open !== 'off' && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
 
     {unset.length > 0 && (
-      <div class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-[20px] bg-[#fff4d6] px-5 py-4" role="status">
-        <span class="flex min-w-0 flex-[1_1_320px] flex-col gap-0.5">
-          <strong class="font-display text-lg text-[#5c3b00]">{ownCount.length ? `${unset.length} of your drivers ${unset.length === 1 ? 'has' : 'have'} no car type` : 'The calendar does not know your cars yet'}</strong>
-          <span class="text-sm text-[#5c3b00]">
-            {ownCount.length
-              ? `${unset.map((d) => d.name.split(' ')[0]).join(', ')} ${unset.length === 1 ? 'is' : 'are'} not counted, so a car type can show as free when it is not.`
-              : 'Tell it which car each driver drives, and which are outside cars. Until then the booking form never shows a car as booked.'}
-          </span>
+      <p class="a-msg m-0 flex flex-wrap items-center gap-x-3 gap-y-1 bg-[#fff4d6] text-[#8a5300]" role="status">
+        <span>
+          <strong>{ownCount.length ? `${unset.length} of your drivers ${unset.length === 1 ? 'has' : 'have'} no car type.` : 'The calendar does not know your cars yet.'}</strong>{' '}
+          {ownCount.length
+            ? `${unset.map((d) => d.name.split(' ')[0]).join(', ')} ${unset.length === 1 ? 'is' : 'are'} not counted, so a car type can show as free when it is not.`
+            : 'Until it does, the booking form never shows a car as booked.'}
         </span>
-        <button type="button" class="btn-book min-h-12 px-5" data-open="dlg-cars">Set up your cars</button>
-      </div>
+        <button type="button" class="cal-setup" data-open="dlg-cars"><span class="font-semibold underline">Set up your cars</span></button>
+      </p>
     )}
 
     {/* Right now */}
@@ -381,11 +379,7 @@ const hasAny = groups.some((g) => g.rows.length);
           <div class="a-card flex flex-col-reverse gap-0.5 p-4 lg:p-5">
             <dt class="text-sm text-muted">{v.name} {n.tracked ? 'free now' : ''}</dt>
             <dd class:list={['m-0 font-display leading-tight font-bold', n.tracked ? 'text-[26px]' : 'text-base text-muted']}>
-              {n.tracked ? (
-                <>{n.free} <span class="text-base font-semibold text-muted">of {n.own}</span></>
-              ) : (
-                <button type="button" class="cal-setup flex flex-col" data-open="dlg-cars">No own car set<span class="text-sm font-semibold text-ink underline">Set up</span></button>
-              )}
+              {n.tracked ? <>{n.free} <span class="text-base font-semibold text-muted">of {n.own}</span></> : 'No own car set'}
             </dd>
           </div>
         );
