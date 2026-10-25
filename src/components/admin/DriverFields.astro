@@ -24,7 +24,7 @@ const n = (k: string) => `${prefix}${k}`;
   <label class="a-field">Car number<input name={n('vehicleNumber')} maxlength="20" value={f.vehicleNumber} placeholder="WB 73 F 5560" autocapitalize="characters" autocomplete="off" /></label>
   <label class="a-field">Usual car
     <select name={n('vehicle')}>
-      <option value="">Any</option>
+      <option value="">Not set</option>
       {VEHICLES.map((v) => <option value={v.key} selected={f.vehicle === v.key}>{v.name}</option>)}
     </select>
   </label>

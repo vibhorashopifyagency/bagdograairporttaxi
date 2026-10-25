@@ -17,6 +17,7 @@
  *   (Monday to Sunday) or month that holds it
  *   ?driver=<id>  the month view shows only that driver
  *   ?do=off&driver=<id>  opens "Mark time off", for that driver
+ *   ?do=cars  opens "Set up your cars": each driver's car type, ours or outside
  *   ?trip= ?date= ?time=  "Is a car free?"
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
@@ -46,6 +47,7 @@ import {
   type TimeOffForm,
 } from '../../../server/calendar';
 import { STATUS_LABEL, addDays, isDay, istMidnight, todayIST } from '../../../server/dashboard';
+import { setCars } from '../../../server/drivers';
 import { ipHash } from '../../../server/security';
 import { firstName } from '../../../lib/itinerary-text';
 
@@ -98,7 +100,8 @@ const here = (change: Record<string, string | null> = {}, done?: string) => {
 };
 const showsToday = today >= start && today < viewEnd;
 
-let open = url.searchParams.get('do') === 'off' ? 'off' : '';
+const doParam = url.searchParams.get('do');
+let open = doParam === 'off' || doParam === 'cars' ? doParam : '';
 let error = '';
 let off: TimeOffForm = { driverId: url.searchParams.get('driver') ?? '', fromDate: picked, fromTime: '', toDate: picked, toTime: '', reason: 'leave', note: '' };
 
@@ -122,6 +125,11 @@ if (Astro.request.method === 'POST') {
       // Back to this stretch if the time off starts in it, otherwise to where it starts.
       return Astro.redirect(here({ start: off.fromDate >= start && off.fromDate < viewEnd ? picked : off.fromDate }, 'off'), 303);
     }
+  } else if (intent === 'cars') {
+    // One car type and "ours or outside" per active driver, from "Set up your cars".
+    const rows = span.drivers.filter((d) => d.active).map((d) => ({ id: d.id, vehicle: str(`car_${d.id}`), partner: str(`who_${d.id}`) === 'partner' }));
+    await setCars(rows, ctx);
+    return Astro.redirect(here({}, 'cars'), 303);
   } else if (intent === 'off-remove') {
     await removeTimeOff(str('id'), ctx);
     return Astro.redirect(here({}, 'off-removed'), 303);
@@ -317,8 +325,14 @@ const STEP = { day: ['The day before', 'The next day'], week: ['The week before'
 const hours = view === 'day' ? Array.from({ length: 12 }, (_, i) => i * 2) : [];
 const nowPct = nowInRange ? pct(now) : null;
 const activeDrivers = span.drivers.filter((d) => d.active).sort((a, b) => Number(a.partner) - Number(b.partner) || a.name.localeCompare(b.name));
+/** Drivers of ours with no car type: the calendar cannot count them. */
+const unset = activeDrivers.filter((d) => !d.partner && !d.vehicle);
+const ownCount = VEHICLES.map((v) => ({ name: v.name, n: activeDrivers.filter((d) => ownCar(d) && d.vehicle === v.key).length })).filter((x) => x.n);
 const done = url.searchParams.get('done') ?? '';
 const doneText: Record<string, string> = {
+  cars: ownCount.length
+    ? `Saved. Your own cars: ${ownCount.map((x) => `${x.n} ${x.name}`).join(', ')}. The calendar and the booking form count these.`
+    : 'Saved. No driver has a car type yet, so the booking form still never shows a car as booked.',
   off: 'Time off marked. That driver is not offered for those times.',
   'off-removed': 'Time off removed.',
   site: siteOn ? 'The booking form checks the calendar again.' : 'The booking form no longer checks the calendar: every car can be booked at any time.',
@@ -341,6 +355,20 @@ const hasAny = groups.some((g) => g.rows.length);
     {doneText[done] && <p class="a-msg a-msg-ok m-0" role="status">{doneText[done]}</p>}
     {error && open !== 'off' && <p class="a-msg a-msg-error m-0" role="alert">{error}</p>}
 
+    {unset.length > 0 && (
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-[20px] bg-[#fff4d6] px-5 py-4" role="status">
+        <span class="flex min-w-0 flex-[1_1_320px] flex-col gap-0.5">
+          <strong class="font-display text-lg text-[#5c3b00]">{ownCount.length ? `${unset.length} of your drivers ${unset.length === 1 ? 'has' : 'have'} no car type` : 'The calendar does not know your cars yet'}</strong>
+          <span class="text-sm text-[#5c3b00]">
+            {ownCount.length
+              ? `${unset.map((d) => d.name.split(' ')[0]).join(', ')} ${unset.length === 1 ? 'is' : 'are'} not counted, so a car type can show as free when it is not.`
+              : 'Tell it which car each driver drives, and which are outside cars. Until then the booking form never shows a car as booked.'}
+          </span>
+        </span>
+        <button type="button" class="btn-book min-h-12 px-5" data-open="dlg-cars">Set up your cars</button>
+      </div>
+    )}
+
     {/* Right now */}
     <dl class="m-0 grid grid-cols-2 gap-3 lg:grid-cols-5">
       <div class="flex flex-col-reverse gap-0.5 rounded-[20px] bg-ink p-4 text-white lg:p-5">
@@ -353,7 +381,11 @@ const hasAny = groups.some((g) => g.rows.length);
           <div class="a-card flex flex-col-reverse gap-0.5 p-4 lg:p-5">
             <dt class="text-sm text-muted">{v.name} {n.tracked ? 'free now' : ''}</dt>
             <dd class:list={['m-0 font-display leading-tight font-bold', n.tracked ? 'text-[26px]' : 'text-base text-muted']}>
-              {n.tracked ? <>{n.free} <span class="text-base font-semibold text-muted">of {n.own}</span></> : 'No own car listed'}
+              {n.tracked ? (
+                <>{n.free} <span class="text-base font-semibold text-muted">of {n.own}</span></>
+              ) : (
+                <button type="button" class="cal-setup flex flex-col" data-open="dlg-cars">No own car set<span class="text-sm font-semibold text-ink underline">Set up</span></button>
+              )}
             </dd>
           </div>
         );
@@ -548,7 +580,7 @@ const hasAny = groups.some((g) => g.rows.length);
                   <li class:list={['flex flex-col gap-0.5 rounded-2xl p-3.5', !n.tracked ? 'bg-mist' : n.free > 0 ? 'bg-lime-50' : 'bg-[#fde8e7]']}>
                     <span class="font-semibold">{v.name}</span>
                     <span class:list={['text-sm', !n.tracked ? 'text-muted' : n.free > 0 ? 'text-[#3f6200]' : 'text-[#b42318]']}>
-                      {!n.tracked ? 'No own car listed: always open on the website' : n.free > 0 ? `${n.free} of ${n.own} free${names.length ? `: ${names.join(', ')}` : ''}` : `All ${n.own} busy: an outside car is needed`}
+                      {!n.tracked ? 'No own car set up: always open on the website' : n.free > 0 ? `${n.free} of ${n.own} free${names.length ? `: ${names.join(', ')}` : ''}` : `All ${n.own} busy: an outside car is needed`}
                     </span>
                   </li>
                 );
@@ -578,10 +610,57 @@ const hasAny = groups.some((g) => g.rows.length);
         ) : (
           <p class="m-0 text-[13px] text-muted">Only the admin can switch it off or on.</p>
         )}
-        <p class="m-0 text-[13px] text-muted">Your own cars are the drivers marked “Our car” with a usual car set. <a href="/admin/drivers/" class="text-muted">Drivers</a></p>
+        <p class="m-0 text-[13px] text-muted">Your own cars are the drivers marked “Our car” with a car type set. <button type="button" class="cal-setup text-[13px] text-muted underline" data-open="dlg-cars">Set up your cars</button></p>
       </section>
     </div>
   </div>
+
+  {/* Set up your cars */}
+  <dialog id="dlg-cars" class="a-dialog" aria-labelledby="dlg-cars-h" data-autoopen={open === 'cars' ? '' : undefined}>
+    <form method="post" class="a-dialog-body">
+      <input type="hidden" name="intent" value="cars" />
+      <header class="a-dialog-head">
+        <h2 id="dlg-cars-h" class="m-0 font-display text-xl font-bold">Set up your cars</h2>
+        <button type="button" data-close class="a-icon-btn" aria-label="Close" set:html={closeIcon} />
+      </header>
+      <div class="a-dialog-main flex flex-col gap-4">
+        <div class="flex flex-col gap-1.5 text-sm text-body">
+          <p class="m-0">Each driver is one car: the one they drive. Choose its type, and whether it is yours.</p>
+          <p class="m-0"><strong class="text-ink">Our car</strong>: the office’s own or attached car. It counts on the calendar, and when all of one type are busy the website stops taking bookings for it then.</p>
+          <p class="m-0"><strong class="text-ink">Outside car</strong>: a partner you call when yours are full. Give them a trip like any driver; it never counts as one of yours.</p>
+        </div>
+        {activeDrivers.length === 0 ? (
+          <p class="m-0 rounded-2xl bg-mist p-4 text-body">No drivers yet. <a href="/admin/drivers/" class="font-semibold text-ink">Add your drivers</a> first.</p>
+        ) : (
+          <ul class="m-0 flex list-none flex-col gap-2 p-0">
+            {activeDrivers.map((d) => (
+              <li class:list={['grid items-center gap-x-3 gap-y-2 rounded-2xl p-3 sm:grid-cols-[minmax(0,1fr)_11rem_auto]', !d.partner && !d.vehicle ? 'bg-[#fff4d6]' : 'bg-mist']}>
+                <span class="flex min-w-0 flex-col">
+                  <strong class="truncate">{d.name}</strong>
+                  <span class="truncate text-[13px] text-muted">{d.vehicleNumber ?? 'No car number'}</span>
+                </span>
+                <label class="a-field"><span class="sr-only">Car type for {d.name}</span>
+                  <select name={`car_${d.id}`}>
+                    <option value="">Car type not set</option>
+                    {VEHICLES.map((v) => <option value={v.key} selected={d.vehicle === v.key}>{v.name}</option>)}
+                  </select>
+                </label>
+                <span class="flex gap-1.5" role="radiogroup" aria-label={`Whose car is ${d.name}’s`}>
+                  <label class="a-pill"><input type="radio" name={`who_${d.id}`} value="own" checked={!d.partner} class="sr-only" /><span>Our car</span></label>
+                  <label class="a-pill"><input type="radio" name={`who_${d.id}`} value="partner" checked={d.partner} class="sr-only" /><span>Outside</span></label>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p class="m-0 text-[13px] text-muted">A driver who drives more than one car: choose the one they usually drive; a booking can still carry another car number. New drivers are added in <a href="/admin/drivers/" class="text-muted">Drivers</a>.</p>
+      </div>
+      <footer class="a-dialog-foot">
+        <button type="button" data-close class="btn-ghost">Cancel</button>
+        <button type="submit" class="btn-book" disabled={activeDrivers.length === 0}>Save</button>
+      </footer>
+    </form>
+  </dialog>
 
   {/* Mark time off */}
   <dialog id="dlg-off" class="a-dialog" aria-labelledby="dlg-off-h" data-autoopen={open === 'off' ? '' : undefined}>
@@ -729,6 +808,7 @@ const hasAny = groups.some((g) => g.rows.length);
   .cal-more { padding: 1px 6px; font-size: 0.72rem; font-weight: 600; color: var(--color-body); text-decoration: none; }
   .cal-more:hover { color: var(--color-ink); text-decoration: underline; }
   .cal-who { width: 12rem; }
+  .cal-setup { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
   /* The date button is the calendar's title. */
   .cal-date { margin-left: 0.35rem; }
   /* The date boxes measure their width from the form (container queries); this one sizes to its words. */

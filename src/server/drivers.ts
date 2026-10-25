@@ -133,6 +133,29 @@ export async function restoreDriver(id: string, ctx: Ctx): Promise<void> {
   await audit({ actorId: ctx.actorId, action: 'driver_restored', entity: 'driver', entityId: id, ipHash: ctx.ipHash });
 }
 
+/**
+ * The calendar's "Set up your cars": each driver's usual car and whether it
+ * is an outside car, saved for all of them at once. Only changed drivers are
+ * written. Returns how many changed.
+ */
+export async function setCars(rows: { id: string; vehicle: string; partner: boolean }[], ctx: Ctx): Promise<number> {
+  const db = getDb();
+  const t = schema.drivers;
+  const ids = rows.map((r) => r.id).filter((id) => /^[0-9a-f-]{36}$/.test(id));
+  if (!ids.length) return 0;
+  const current = new Map((await db.select({ id: t.id, vehicle: t.vehicle, partner: t.partner }).from(t).where(inArray(t.id, ids))).map((d) => [d.id, d]));
+  let changed = 0;
+  for (const r of rows) {
+    const was = current.get(r.id);
+    const vehicle = vehicleByKey(r.vehicle) ? r.vehicle : null;
+    if (!was || (was.vehicle === vehicle && was.partner === r.partner)) continue;
+    await db.update(t).set({ vehicle, partner: r.partner }).where(eq(t.id, r.id));
+    changed++;
+  }
+  if (changed) await audit({ actorId: ctx.actorId, action: 'drivers_cars_set', entity: 'drivers', detail: { changed }, ipHash: ctx.ipHash });
+  return changed;
+}
+
 /* ---------------- Assigning to a booking ---------------- */
 
 type BookingForAssign = Pick<typeof schema.bookings.$inferSelect, 'id' | 'status' | 'fareTotal' | 'driverId' | 'driverName' | 'driverPhone' | 'vehicleNumber' | 'driverPay'>;

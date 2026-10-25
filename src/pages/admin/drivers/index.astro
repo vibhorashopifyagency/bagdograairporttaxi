@@ -61,6 +61,8 @@ const owed = [...acc.values()].reduce((s, a) => s + Math.max(0, a.owed), 0);
 const held = [...acc.values()].reduce((s, a) => s + Math.max(0, a.holds), 0);
 const monthTrips = [...acc.values()].reduce((s, a) => s + a.monthTrips, 0);
 const unpriced = all.filter((d) => d.active && d.payValue === null).length;
+/** Our drivers with no car type: the calendar and the booking form's check cannot count them. */
+const untyped = all.filter((d) => d.active && !d.partner && !d.vehicle).length;
 const monthName = new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', month: 'long' }).format(new Date(`${todayIST()}T00:00:00Z`));
 const stats = [
   { label: 'Drivers hold, to hand over', value: inrShort(held), sub: 'balances collected from guests' },
@@ -100,6 +102,13 @@ const callIcon =
       <p class="a-msg m-0 bg-[#fff4d6] text-[#8a5300]">{unpriced} {unpriced === 1 ? 'driver has' : 'drivers have'} no pay set, so their trips count as ₹0. Open each one and set their pay.</p>
     )}
 
+    {untyped > 0 && (
+      <p class="a-msg m-0 flex flex-wrap items-center gap-x-3 gap-y-1 bg-[#fff4d6] text-[#8a5300]">
+        <span>{untyped} {untyped === 1 ? 'driver has' : 'drivers have'} no car type, so the calendar does not count {untyped === 1 ? 'that car' : 'those cars'}.</span>
+        <a href="/admin/calendar/?do=cars" class="font-semibold text-inherit">Set up your cars</a>
+      </p>
+    )}
+
     <nav aria-label="Which drivers" class="flex gap-1 self-start rounded-xl border border-line bg-white p-1">
       <a href="/admin/drivers/" aria-current={showOff ? undefined : 'page'} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showOff ? 'font-medium text-body' : 'bg-ink font-semibold text-white']}>Active · {all.filter((d) => d.active).length}</a>
       <a href="/admin/drivers/?show=off" aria-current={showOff ? 'page' : undefined} class:list={['rounded-[9px] px-3.5 py-1.5 text-sm no-underline', showOff ? 'bg-ink font-semibold text-white' : 'font-medium text-body']}>Switched off · {all.filter((d) => !d.active).length}</a>
@@ -127,7 +136,11 @@ const callIcon =
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <span class:list={['a-badge', d.payValue === null ? 'bg-[#fff4d6] text-[#8a5300]' : 'bg-lime-50 text-[#3f6200]']}>{payLabel(d)}</span>
-                {d.partner && <span class="a-badge bg-[#e7f0ff] text-[#1d4ed8]">Outside car</span>}
+                {d.partner ? (
+                  <span class="a-badge bg-[#e7f0ff] text-[#1d4ed8]">Outside car</span>
+                ) : (
+                  d.active && !d.vehicle && <span class="a-badge bg-[#fff4d6] text-[#8a5300]">Car type not set</span>
+                )}
                 {d.phone && <span class="text-sm text-muted">{phoneLabel(d.phone)}</span>}
               </div>
               <dl class="m-0 grid grid-cols-2 gap-x-2 gap-y-3 rounded-2xl bg-[#f7f8fa] p-3 text-sm">
